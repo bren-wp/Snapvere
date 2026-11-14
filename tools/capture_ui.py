@@ -118,7 +118,7 @@ with sync_playwright() as p:
 
     # Language selector must work across all 12 locales without clipping controls.
     settings.get_by_role("navigation").get_by_role("button", name="General settings").click()
-    selector = settings.get_by_role("combobox", name="Language")
+    selector = settings.get_by_role("combobox")  # name changes when the locale changes
     assert selector.locator("option").count() == 12, "Expected 12 selectable languages"
     for language in ("hr", "de", "es", "fr", "it", "pt", "nl", "pl", "cs", "sk", "sl", "en"):
         selector.select_option(language)
