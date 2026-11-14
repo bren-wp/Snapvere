@@ -5,6 +5,8 @@ import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { ipc } from "../lib/ipc";
+import { LANGUAGES, type Language } from "../lib/i18n";
+import { useLanguage } from "../lib/LanguageProvider";
 import type { ImageFormat, RecordFormat } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
 import { DEFAULTS, normalizeSettings, type AppSettings } from "./settings/preferences";
@@ -34,14 +36,15 @@ const TABS: { id: Tab; label: string; icon: typeof SlidersHorizontal }[] = [
 const TAB_DESCRIPTIONS: Record<Tab, string> = {
   capture: "Choose the format and quality of your screenshots.",
   recording: "Control video quality, audio sources and capture limits.",
-  save: "Choose where local captures are stored on this device.",
+  save: "Choose where captures are saved.",
   hotkeys: "Customize keyboard shortcuts for quick capture and recording.",
   general: "Make Snapvere feel right on your desktop.",
-  privacy: "Review local storage and your privacy controls.",
+  privacy: "Review your privacy and storage controls.",
   about: "Version, product information, licensing and diagnostics.",
 };
 
 export default function Settings() {
+  const { language, changeLanguage, t } = useLanguage();
   const [tab, setTab] = useState<Tab>("capture");
   const [s, setS] = useState<AppSettings>(DEFAULTS);
   const [store, setStore] = useState<Store | null>(null);
@@ -179,7 +182,7 @@ export default function Settings() {
     <WindowFrame title="Settings">
       <div className="snapvere-settings-layout flex min-h-0 flex-1">
         <nav
-          aria-label="Settings sections"
+          aria-label={t("Settings")}
           onKeyDown={onSidebarKeyDown}
           className="snapvere-settings-sidebar flex w-48 shrink-0 flex-col gap-1 overflow-y-auto border-r border-white/10 bg-elevated/20 p-3"
         >
@@ -187,7 +190,7 @@ export default function Settings() {
             <Fragment key={item.id}>
               {(index === 0 || index === 4) && (
                 <div className="snapvere-section-eyebrow snapvere-settings-group-label">
-                  {index === 0 ? "CAPTURE TOOLS" : "APPLICATION"}
+                  {index === 0 ? t("Capture tools") : t("Application")}
                 </div>
               )}
               <button
@@ -195,13 +198,13 @@ export default function Settings() {
                 data-settings-tab={item.id}
                 onClick={() => { setTab(item.id); setNotice(null); setStatus(null); }}
                 aria-current={tab === item.id ? "page" : undefined}
-                aria-label={`${item.label} settings`}
+                aria-label={`${t(item.label)} ${t("Settings")}`}
                 className={`snapvere-settings-tab flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:ring-accent ${
                   tab === item.id ? "bg-accent text-white" : "text-muted hover:bg-elevated hover:text-text"
                 }`}
               >
                 <item.icon size={17} strokeWidth={1.8} aria-hidden="true" className="shrink-0" />
-                <span>{item.label}</span>
+                <span>{t(item.label)}</span>
               </button>
             </Fragment>
           ))}
@@ -209,47 +212,62 @@ export default function Settings() {
 
         <div className="snapvere-settings-content min-h-0 flex-1 overflow-auto p-6">
           <div className="snapvere-settings-heading">
-            <p className="snapvere-section-eyebrow">PREFERENCES / {tab.toUpperCase()}</p>
-            <p>{TAB_DESCRIPTIONS[tab]}</p>
+            <p className="snapvere-section-eyebrow">{t("PREFERENCES")} / {t(TABS.find((item) => item.id === tab)?.label ?? tab).toLocaleUpperCase(language)}</p>
+            <p>{t(TAB_DESCRIPTIONS[tab])}</p>
           </div>
           {notice && <p role="alert" className="mb-4 rounded-xl border border-danger/40 bg-danger/10 p-3 text-sm">{notice}</p>}
           {status && <p role="status" aria-live="polite" className="mb-4 rounded-xl border border-accent/30 bg-accent/10 p-3 text-sm">{status}</p>}
         {tab === "general" && (
-          <Section title="General">
-            <Row label="Theme" hint="Light or dark interface scheme.">
+          <Section title={t("General")}>
+            <Row label={t("Theme")} hint={t("Light or dark interface scheme.")}>
               <Segmented
                 value={s.theme}
                 options={[
-                  { v: "dark", l: "Dark" },
-                  { v: "light", l: "Light" },
+                  { v: "dark", l: t("Dark") },
+                  { v: "light", l: t("Light") },
                 ]}
                 onChange={(v) => applyTheme(v as "dark" | "light")}
               />
             </Row>
+            <Row label={t("Language")} hint={t("Choose the interface language.")}>
+              <select
+                value={language}
+                aria-label={t("Language")}
+                onChange={(event) => {
+                  void changeLanguage(event.target.value as Language)
+                    .catch((error) => setNotice(`Could not change language: ${String(error)}`));
+                }}
+                className="min-w-44 rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent focus:ring-2 focus:ring-accent"
+              >
+                {LANGUAGES.map(({ code, label }) => (
+                  <option key={code} value={code}>{label}</option>
+                ))}
+              </select>
+            </Row>
             <Row
-              label="Launch on startup"
+              label={t("Launch on startup")}
               hint="Optional. Start Snapvere when you sign in (off by default)."
             >
-              <Toggle label="Launch on startup" checked={autostart} onChange={toggleAutostart} />
+              <Toggle label={t("Launch on startup")} checked={autostart} onChange={toggleAutostart} />
             </Row>
           </Section>
         )}
 
         {tab === "hotkeys" && (
-          <Section title="Hotkeys">
-            <Row label="Region capture" hint="Freeze the screen and pick an area.">
+          <Section title={t("Hotkeys")}>
+            <Row label={t("Region capture")} hint="Freeze the screen and pick an area.">
               <HotkeyInput
-                label="Screenshot shortcut"
+                label={t("Screenshot shortcut")}
                 value={s.hotkey}
                 onChange={(accel) => void applyHotkey("hotkey", accel)}
               />
             </Row>
             <Row
-              label="Screen recording"
+              label={t("Screen recording")}
               hint="Press once to pick an area, again to stop the recording."
             >
               <HotkeyInput
-                label="Recording shortcut"
+                label={t("Recording shortcut")}
                 value={s.recordHotkey}
                 onChange={(accel) => void applyHotkey("recordHotkey", accel)}
               />
@@ -268,8 +286,8 @@ export default function Settings() {
         )}
 
         {tab === "capture" && (
-          <Section title="Capture">
-            <Row label="Default format" hint="Format new screenshots are saved in.">
+          <Section title={t("Capture")}>
+            <Row label={t("Default format")} hint="Format new screenshots are saved in.">
               <Segmented
                 value={s.format}
                 options={[
@@ -280,7 +298,7 @@ export default function Settings() {
                 onChange={(v) => set("format", v as ImageFormat)}
               />
             </Row>
-            <Row label={`Quality (${s.quality})`}>
+            <Row label={`${t("Quality")} (${s.quality})`}>
               <input
                 type="range"
                 min={50}
@@ -296,7 +314,7 @@ export default function Settings() {
         )}
 
         {tab === "recording" && (
-          <Section title="Recording">
+          <Section title={t("Recording")}>
             <Row label="Format" hint="MP4 (H.264) plays everywhere; GIF drops straight into chat.">
               <Segmented
                 value={s.recordFormat}
@@ -307,7 +325,7 @@ export default function Settings() {
                 onChange={(v) => set("recordFormat", v as RecordFormat)}
               />
             </Row>
-            <Row label="Frame rate" hint="Higher is smoother; 24 is plenty for UI walkthroughs.">
+            <Row label={t("Frame rate")} hint="Higher is smoother; 24 is plenty for UI walkthroughs.">
               <Segmented
                 value={String(s.recordFps)}
                 options={[
@@ -319,7 +337,7 @@ export default function Settings() {
                 onChange={(v) => set("recordFps", Number(v))}
               />
             </Row>
-            <Row label={`Quality (${s.recordQuality})`} hint="Drives the video bitrate.">
+            <Row label={`${t("Quality")} (${s.recordQuality})`} hint="Drives the video bitrate.">
               <input
                 type="range"
                 min={30}
@@ -330,35 +348,35 @@ export default function Settings() {
                 className="w-48"
               />
             </Row>
-            <Row label="Include the mouse cursor">
+            <Row label={t("Include the mouse cursor")}>
               <Toggle
-                label="Include the mouse cursor"
+                label={t("Include the mouse cursor")}
                 checked={s.recordCursor}
                 onChange={(v) => set("recordCursor", v)}
               />
             </Row>
             <Row
-              label="Record microphone"
+              label={t("Record microphone")}
               hint="Default input device. You can also flip this per recording, right in the capture bar."
             >
               <Toggle
-                label="Record microphone"
+                label={t("Record microphone")}
                 checked={s.recordMic}
                 onChange={(v) => set("recordMic", v)}
               />
             </Row>
             <Row
-              label="Record system audio"
+              label={t("Record system audio")}
               hint="Whatever your speakers play — app sounds, calls, music. MP4 only."
             >
               <Toggle
-                label="Record system audio"
+                label={t("Record system audio")}
                 checked={s.recordSystemAudio}
                 onChange={(v) => set("recordSystemAudio", v)}
               />
             </Row>
             <Row
-              label="Stop after"
+              label={t("Stop after")}
               hint="A safety limit so a forgotten recording cannot fill the disk."
             >
               <Segmented
@@ -367,7 +385,7 @@ export default function Settings() {
                   { v: "300", l: "5 min" },
                   { v: "1800", l: "30 min" },
                   { v: "7200", l: "2 h" },
-                  { v: "0", l: "Never" },
+                  { v: "0", l: t("Never") },
                 ]}
                 onChange={(v) => set("recordMaxSeconds", Number(v))}
               />
@@ -382,12 +400,12 @@ export default function Settings() {
         )}
 
         {tab === "save" && (
-          <Section title="Save">
-            <Row label="Folder">
+          <Section title={t("Save")}>
+            <Row label={t("Folder")}>
               <div className="flex items-center gap-2">
                 <code className="max-w-xs truncate rounded bg-elevated px-2 py-1 text-xs">{s.saveFolder}</code>
                 <button onClick={pickFolder} className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-elevated">
-                  Change
+                  {t("Change")}
                 </button>
               </div>
             </Row>
@@ -395,7 +413,7 @@ export default function Settings() {
         )}
 
         {tab === "privacy" && (
-          <Section title="Privacy & local storage">
+          <Section title={t("Privacy")}>
             <div className="rounded-2xl border border-accent/25 bg-accent/5 p-5">
               <h2 className="text-base font-semibold">Your captures stay on your computer</h2>
               <p className="mt-2 text-sm leading-relaxed text-muted">
@@ -407,13 +425,13 @@ export default function Settings() {
                   try { await ipc.openCaptureFolder(); }
                   catch (error) { setNotice(`Cannot open capture folder: ${String(error)}`); }
                 }} className="rounded-xl border border-border bg-elevated px-4 py-2 text-sm font-medium hover:border-accent focus-visible:ring-2 focus-visible:ring-accent">
-                  Open capture folder
+                  {t("Open capture folder")}
                 </button>
                 <button type="button" onClick={async () => {
                   try { await ipc.openDataFolder(); }
                   catch (error) { setNotice(`Cannot open data folder: ${String(error)}`); }
                 }} className="rounded-xl border border-border bg-elevated px-4 py-2 text-sm font-medium hover:border-accent focus-visible:ring-2 focus-visible:ring-accent">
-                  Open local data
+                  {t("Open data folder")}
                 </button>
               </div>
             </div>
@@ -424,7 +442,7 @@ export default function Settings() {
         )}
 
         {tab === "about" && (
-          <Section title="About">
+          <Section title={t("About")}>
             <p className="text-sm text-muted">Snapvere · version {appVersion}</p>
             <p className="mt-2 text-sm text-muted">
               Secure capture and screen recording by Brendigo.
@@ -462,7 +480,7 @@ export default function Settings() {
               </button>
             </div>
             <div className="mt-6 rounded-xl border border-border/60 p-4">
-              <div className="mb-1 text-sm font-medium">Diagnostics</div>
+              <div className="mb-1 text-sm font-medium">{t("Diagnostics")}</div>
               <p className="mb-3 text-xs text-muted">
                 If something crashes or a recording fails, the log has the reason.
               </p>
