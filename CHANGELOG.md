@@ -2,6 +2,14 @@
 
 SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO**.
 
+## v0.2.12 — recorder failure integrity (unreleased Draft PR)
+
+- Wait for DXGI/xcap, Media Foundation, audio, encoder and frame-buffer initialization before reporting READY; return startup errors immediately.
+- Propagate capture, video encoding, audio writing and finalization errors; do not register incomplete recordings.
+- Attempt finalization and release native file handles even after a failure; retain both root and finalization errors.
+- Add hardware-independent Rust regression tests and bump Cargo, Tauri, npm and lockfile version metadata.
+- **Pending:** Windows CI, actual-device failure injection, security and visual acceptance. No new release has been published.
+
 ## v0.2.9 — premium stability candidate (unreleased)
 
 - Split the gallery viewer into image/video/error modules; extracted Settings controls and validated preference model.

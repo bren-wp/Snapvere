@@ -448,3 +448,53 @@ mod windows_only {
         assert_eq!(frame.len(), (w * h * 4) as usize);
     }
 }
+
+#[test]
+fn recorder_startup_reports_source_and_encoder_initialization_errors() {
+    for reason in ["DXGI init failed", "Media Foundation init failed", "encoder open failed"] {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let outcome: Result<(), String> = Err(reason.to_string());
+        report_start_failure(&sender, &outcome);
+        assert_eq!(receiver.try_recv().unwrap(), Err(reason.to_string()));
+    }
+}
+
+#[test]
+fn recording_readiness_requires_explicit_signal() {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    assert_eq!(
+        receiver.try_recv(),
+        Err(std::sync::mpsc::TryRecvError::Empty)
+    );
+    sender.send(Ok(())).unwrap();
+    assert_eq!(receiver.try_recv().unwrap(), Ok(()));
+}
+
+#[test]
+fn recorder_runtime_failures_never_report_success() {
+    for failure in [
+        "DXGI grab failed",
+        "encoder write failed: disk full",
+        "audio write failed",
+        "audio tail failed",
+    ] {
+        assert_eq!(
+            recording_completion(Some(failure.to_string()), Ok(())).unwrap_err(),
+            failure
+        );
+    }
+}
+
+#[test]
+fn recorder_finalization_errors_are_preserved() {
+    let error = recording_completion(None, Err("MP4 Finalize: disk full".into())).unwrap_err();
+    assert!(error.contains("disk full"));
+    let both = recording_completion(
+        Some("DXGI disconnected".into()),
+        Err("GIF trailer failure".into()),
+    )
+    .unwrap_err();
+    assert!(both.contains("DXGI disconnected"));
+    assert!(both.contains("GIF trailer failure"));
+    assert!(recording_completion(None, Ok(())).is_ok());
+}

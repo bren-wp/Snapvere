@@ -25,7 +25,7 @@ A focused Windows capture workspace from **[BRENDIGO](https://brendigo.com)**.
 
 > **Distribution notice:** snapvere.com currently publishes SNAPVERE v0.0.8 built with
 > .NET / WinUI 3. This repository builds the separate Tauri 2 / Rust Windows edition
-> (v0.2.11 development branch). Do not mix their installers, licenses, versions or upgrade paths.
+> (v0.2.12 development candidate; latest published GitHub release: v0.2.11). Do not mix their installers, licenses, versions or upgrade paths.
 > The production website, email download flow, and its binaries are not modified
 > by this GitHub release.
 >
