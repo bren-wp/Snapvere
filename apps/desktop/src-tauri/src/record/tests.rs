@@ -465,7 +465,7 @@ fn recorder_startup_reports_source_and_encoder_initialization_errors() {
 
 #[test]
 fn recording_readiness_requires_explicit_signal() {
-    let (sender, receiver) = std::sync::mpsc::channel();
+    let (sender, receiver) = std::sync::mpsc::channel::<Result<(), String>>();
     assert_eq!(
         receiver.try_recv(),
         Err(std::sync::mpsc::TryRecvError::Empty)
