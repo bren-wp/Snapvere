@@ -52,9 +52,19 @@ with sync_playwright() as p:
                 else:
                     diff = ImageChops.difference(live, proposed)
                     diff.save(OUT / f"{name}-diff.png")
-                    changed = sum(1 for rgb in diff.getdata() if max(rgb) > 0)
-                    row["changed_pixels"] = changed
-                    row["difference_percent"] = round(100 * changed / (w * h), 3)
+                    # Exact RGB differences over-report antialiasing and font rasterization.
+                    # Report more useful perceptual magnitudes alongside the strict score.
+                    thresholds = {0: 0, 8: 0, 16: 0, 32: 0}
+                    for rgb in diff.getdata():
+                        maximum = max(rgb)
+                        for threshold in thresholds:
+                            if maximum > threshold:
+                                thresholds[threshold] += 1
+                    row["changed_pixels"] = thresholds[0]
+                    row["difference_percent"] = round(100 * thresholds[0] / (w * h), 3)
+                    row["difference_over_8_percent"] = round(100 * thresholds[8] / (w * h), 3)
+                    row["difference_over_16_percent"] = round(100 * thresholds[16] / (w * h), 3)
+                    row["difference_over_32_percent"] = round(100 * thresholds[32] / (w * h), 3)
                     row["mean_rgb_error"] = round(sum(ImageStat.Stat(diff).mean) / 3, 3)
             except Exception as error:
                 row["error"] = str(error)

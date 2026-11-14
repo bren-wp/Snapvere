@@ -252,13 +252,17 @@ export default function Editor({ pathB64 }: { pathB64: string }) {
       {notice && <p role="status" aria-live="polite" className="snapvere-editor-notice px-4 py-2 text-xs">{notice}</p>}
       {/* kontekstni bar */}
       <div className="snapvere-editor-toolbar flex flex-wrap items-center gap-3 px-3 py-2">
-        <span className="font-mono text-sm text-muted">Editor</span>
-        <div className="mx-1 h-5 w-px bg-border" />
+        <div className="snapvere-editor-heading" aria-label="Image editor">
+          <span className="snapvere-section-eyebrow">IMAGE EDITOR</span>
+          <strong>Refine your capture</strong>
+        </div>
+        <div className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
         {/* boje */}
-        <div className="flex items-center gap-1">
+        <div role="group" aria-label="Annotation colors" className="flex items-center gap-1">
           {COLORS.map((c) => (
             <button
               key={c}
+              type="button"
               onClick={() => setColor(c)}
               aria-label={`Use annotation color ${c}`}
               aria-pressed={color === c}
@@ -283,13 +287,13 @@ export default function Editor({ pathB64 }: { pathB64: string }) {
             <Redo2 size={18} />
           </IconBtn>
           <div className="mx-1 h-5 w-px bg-border" />
-          <button onClick={onCopy} disabled={!ready} className="snapvere-btn-secondary flex items-center gap-2 rounded-full px-3 py-1.5 text-sm hover:bg-elevated">
+          <button type="button" onClick={onCopy} disabled={!ready} className="snapvere-btn-secondary flex items-center gap-2 rounded-full px-3 py-1.5 text-sm hover:bg-elevated">
             <Copy size={16} /> Copy
           </button>
-          <button onClick={onSaveAs} disabled={!ready || exporting} aria-label="Save image as a new file" className="snapvere-btn-secondary flex items-center gap-2 rounded-full px-3 py-1.5 text-sm hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-40">
+          <button type="button" onClick={onSaveAs} disabled={!ready || exporting} aria-label="Save image as a new file" className="snapvere-btn-secondary flex items-center gap-2 rounded-full px-3 py-1.5 text-sm hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-40">
             <FileDown size={16} /> {exporting ? "Exporting…" : "Save As"}
           </button>
-          <button onClick={onSave} disabled={!ready} className="snapvere-btn-primary flex items-center gap-2 rounded-full bg-accent px-3 py-1.5 text-sm text-white hover:opacity-90">
+          <button type="button" onClick={onSave} disabled={!ready} className="snapvere-btn-primary flex items-center gap-2 rounded-full bg-accent px-3 py-1.5 text-sm text-white hover:opacity-90">
             <Save size={16} /> Save
           </button>
         </div>
@@ -297,15 +301,16 @@ export default function Editor({ pathB64 }: { pathB64: string }) {
 
       <div className="flex min-h-0 flex-1">
         {/* paleta alata */}
-        <div className="flex w-14 flex-col items-center gap-1 border-r border-border bg-surface py-2">
+        <div role="group" aria-label="Annotation tools" className="snapvere-editor-tool-rail flex w-14 flex-col items-center gap-1 border-r border-border bg-surface py-2">
           {TOOLS.map((t) => (
             <button
               key={t.id}
+              type="button"
               onClick={() => setTool(t.id)}
               title={t.label}
               aria-label={t.label}
               aria-pressed={tool === t.id}
-              className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
+              className={`snapvere-editor-tool flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
                 tool === t.id ? "bg-accent text-white" : "text-muted hover:bg-elevated hover:text-text"
               }`}
             >
@@ -315,7 +320,7 @@ export default function Editor({ pathB64 }: { pathB64: string }) {
         </div>
 
         {/* canvas */}
-        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-bg p-6">
+        <div className="snapvere-editor-stage flex min-h-0 flex-1 items-center justify-center overflow-auto bg-bg p-6">
           {!ready && <div className="text-muted">Loading image…</div>}
           <canvas
             ref={canvasRef}
@@ -391,6 +396,7 @@ function IconBtn({
 }) {
   return (
     <button
+      type="button"
       title={title}
       onClick={onClick}
       disabled={disabled}

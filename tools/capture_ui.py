@@ -125,6 +125,12 @@ with sync_playwright() as p:
         "() => document.querySelector('canvas')?.width >= 900"
         " && !document.body.textContent.includes('could not be loaded')", timeout=20000
     )
+    assert editor.get_by_role("group", name="Annotation tools").get_by_role("button").count() == 8
+    assert editor.get_by_role("group", name="Annotation colors").get_by_role("button").count() == 7
+    assert editor.get_by_role("button", name="Save image as a new file").is_disabled is False
+    assert not editor.evaluate("() => document.documentElement.scrollWidth > window.innerWidth + 2"), (
+        "Editor overflows horizontally"
+    )
     editor.screenshot(path=str(OUTPUT / "editor.png"))
     app.close()
     compact = browser.new_context(viewport={"width": 920, "height": 650},

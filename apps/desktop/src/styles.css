@@ -691,3 +691,25 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .snapvere-action-card { transition: none; }
   .snapvere-action-card:not(:disabled):hover { transform: none; }
 }
+
+/* Consistent visual language for the annotation editor.
+   The canvas drawing and pixel coordinate calculations are unchanged. */
+.snapvere-editor-heading { display: flex; flex-direction: column; gap: 3px; min-width: 138px; }
+.snapvere-editor-heading strong { color: rgb(var(--snapvere-text)); font-weight: 750; font-size: 13px; letter-spacing: -.018em; }
+.snapvere-editor-toolbar { background: rgba(11,16,34,.94); min-height: 62px; }
+.snapvere-editor-tool-rail { border-right: 1px solid var(--brand-border); background: rgba(16,23,44,.92); }
+.snapvere-editor-tool { border: 1px solid transparent; }
+.snapvere-editor-tool[aria-pressed="true"] { border-color: rgba(167,139,250,.52); box-shadow: 0 3px 12px rgba(118,72,235,.18); }
+.snapvere-editor-stage {
+  background: radial-gradient(circle at 50% 24%, rgba(118,72,235,.12), transparent 60%), rgb(var(--snapvere-bg));
+}
+.snapvere-editor-stage canvas { border: 1px solid var(--brand-border); }
+[data-theme="light"] .snapvere-editor-toolbar { background: rgba(255,255,255,.96); }
+[data-theme="light"] .snapvere-editor-tool-rail { background: rgb(var(--snapvere-surface)); }
+@media (max-width: 900px) {
+  .snapvere-editor-heading { min-width: 110px; }
+  .snapvere-editor-toolbar { gap: 8px; padding: 8px 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .snapvere-editor-tool { transition: none; }
+}
