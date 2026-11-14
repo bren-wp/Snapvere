@@ -26,6 +26,17 @@ impl Db {
         Ok(db)
     }
 
+    /// Isolated test fixture: production must never silently substitute an
+    /// ephemeral database when the on-disk gallery cannot be opened.
+    #[cfg(test)]
+    fn open_in_memory() -> anyhow::Result<Self> {
+        let conn = Connection::open_in_memory()?;
+        conn.pragma_update(None, "foreign_keys", "ON")?;
+        let db = Self { conn };
+        db.migrate()?;
+        Ok(db)
+    }
+
     fn migrate(&self) -> anyhow::Result<()> {
         self.conn.execute_batch(
             r#"
