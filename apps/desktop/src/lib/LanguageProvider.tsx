@@ -22,6 +22,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       changedByEvent = true;
       if (mounted) setLanguage(normalizeLanguage(event.payload));
     });
+    // Prevent an unavailable native event bridge from producing an unhandled rejection.
+    void subscription.catch(() => {});
     void ipc.getAppLanguage()
       .then((saved) => {
         if (mounted && !changedByEvent) setLanguage(normalizeLanguage(saved));

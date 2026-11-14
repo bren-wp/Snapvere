@@ -417,7 +417,7 @@ export default function Settings() {
             <div className="rounded-2xl border border-accent/25 bg-accent/5 p-5">
               <h2 className="text-base font-semibold">Your captures stay on your computer</h2>
               <p className="mt-2 text-sm leading-relaxed text-muted">
-                Screenshots, recordings, preferences and the local gallery database stay on your device.
+                Screenshots, recordings, preferences and the gallery database are stored on your device.
                 Snapvere does not need an account or an upload to capture the screen.
               </p>
               <div className="mt-4 flex flex-wrap gap-3">

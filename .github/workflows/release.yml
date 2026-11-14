@@ -179,6 +179,8 @@ jobs:
             - Limit redact regions and clip dimensions to the active recording canvas to bound per-frame work and reject invalid geometry.
             - Stop safely with a visible warning when an existing SQLite database cannot be opened, instead of silently switching to volatile history.
             - Add regression tests for recorder failures, IPC caller roles, redact validation and preservation of an unreadable database.
+            - Add an English-first 12-language selector with persistent settings, cross-window updates and translation regression checks.
+            - Simplify user-facing text by removing LOCAL-FIRST and LOCAL LIBRARY badges.
             - Build portable, NSIS and MSI packages from a single revision with SHA-256 hashes.
 
             **Preview release.** Native Windows 10/11 capture, recorder, audio, multi-monitor,

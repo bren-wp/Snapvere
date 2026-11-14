@@ -59,7 +59,7 @@ export default function Home() {
     } finally {
       if (request === galleryRequest.current) setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadMore = useCallback(async () => {
     if (pagingBusy.current || loading || !hasMore) return;
@@ -149,7 +149,7 @@ export default function Home() {
       setToast(`Could not delete capture: ${String(e)}`);
       return false;
     }
-  }, []);
+  }, [t]);
 
   const reveal = useCallback(async (s: Screenshot) => {
     try {

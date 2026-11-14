@@ -31,7 +31,7 @@ export default class AppErrorBoundary extends React.Component<
           <h1 className="mt-3 text-xl font-bold">The interface needs to recover</h1>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-muted">
             An unexpected display error occurred. Your saved screenshots and recordings
-            remain in your local folders. Reloading may discard unsaved edits.
+            remain on your device. Reloading may discard unsaved edits.
           </p>
           <button
             type="button"

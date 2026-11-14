@@ -98,8 +98,7 @@ export function HotkeyInput({ label, value, onChange }: { label: string; value: 
       />
       {silent && (
         <span className="max-w-52 text-right text-[11px] leading-snug text-warn">
-          Nothing arrived. Your keyboard is handling that combination itself — Windows never
-          sees it, so no app can bind it.
+          This shortcut was not detected. Try another key combination.
         </span>
       )}
     </div>
