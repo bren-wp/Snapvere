@@ -13,6 +13,8 @@ import {
   X,
 } from "lucide-react";
 import { ipc } from "../lib/ipc";
+import { useLanguage } from "../lib/LanguageProvider";
+import { formatMediaSize, formatMediaDate } from "../lib/mediaFormatting";
 import type { Screenshot } from "../lib/types";
 import ImageStage from "./viewer/ImageStage";
 import VideoStage from "./viewer/VideoStage";
@@ -43,6 +45,7 @@ const IDLE_MS = 2400;
 const playsAsVideo = (s: Screenshot) => s.format === "mp4";
 
 export default function Viewer({ items, id, onNavigate, onClose, onDelete, onToast }: Props) {
+  const { t, language } = useLanguage();
   const index = items.findIndex((s) => s.id === id);
   const shot = index >= 0 ? items[index] : null;
   const prev = index > 0 ? items[index - 1] : null;
@@ -98,21 +101,21 @@ export default function Viewer({ items, id, onNavigate, onClose, onDelete, onToa
     if (!shot || playsAsVideo(shot)) return;
     try {
       await ipc.copyMediaImage(shot.id);
-      onToast("Copied to clipboard");
+      onToast(t("Copied to clipboard"));
     } catch (e) {
       onToast(String(e));
     }
-  }, [shot, onToast]);
+  }, [shot, onToast, t]);
 
   const copyPath = useCallback(async () => {
     if (!shot) return;
     try {
       await ipc.copyMediaPath(shot.id);
-      onToast("File path copied");
+      onToast(t("File path copied"));
     } catch (error) {
       onToast(`Could not copy file path: ${String(error)}`);
     }
-  }, [shot, onToast]);
+  }, [shot, onToast, t]);
 
   const run = useCallback(
     (fn: (id: string) => Promise<void>) => async () => {
@@ -186,8 +189,8 @@ export default function Viewer({ items, id, onNavigate, onClose, onDelete, onToa
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium">{shot.name}</div>
           <div className="truncate font-mono text-[11px] text-muted">
-            {shot.format.toUpperCase()} · {shot.width}×{shot.height} · {fmtBytes(shot.sizeBytes)} ·{" "}
-            {fmtDate(shot.createdAt)}
+            {shot.format.toUpperCase()} · {shot.width}×{shot.height} · {formatMediaSize(shot.sizeBytes, language)} ·{" "}
+            {formatMediaDate(shot.createdAt, language)}
           </div>
         </div>
 
@@ -199,35 +202,36 @@ export default function Viewer({ items, id, onNavigate, onClose, onDelete, onToa
 
         <div className="lg lg-bar shrink-0">
           {!video && (
-            <button className="lg-btn" title="Copy image (Ctrl+C)" onClick={copy}>
+            <button className="lg-btn" title={`${t("Copy image")} (Ctrl+C)`} aria-label={t("Copy image")} onClick={copy}>
               <Copy size={16} />
             </button>
           )}
-          <button className="lg-btn" title="Copy file path (Ctrl+Shift+C)" aria-label="Copy file path" onClick={() => void copyPath()}>
+          <button className="lg-btn" title={`${t("Copy file path")} (Ctrl+Shift+C)`} aria-label={t("Copy file path")} onClick={() => void copyPath()}>
             <FileText size={16} />
           </button>
-          <button className="lg-btn" title="Show in folder" onClick={run(ipc.revealMedia)}>
+          <button className="lg-btn" title={t("Show in folder")} aria-label={t("Show in folder")} onClick={run(ipc.revealMedia)}>
             <FolderOpen size={16} />
           </button>
-          <button className="lg-btn" title="Open in default app" onClick={run(ipc.openMedia)}>
+          <button className="lg-btn" title={t("Open in default app")} aria-label={t("Open in default app")} onClick={run(ipc.openMedia)}>
             <ExternalLink size={16} />
           </button>
           <span className="lg-sep" />
           <button
             className="lg-btn"
-            title={fullscreen ? "Exit full screen (F)" : "Full screen (F)"}
+            title={`${t(fullscreen ? "Exit full screen" : "Full screen")} (F)`}
+            aria-label={t(fullscreen ? "Exit full screen" : "Full screen")}
             onClick={() => void setWindowFullscreen(!fullscreen)}
           >
             {fullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
           </button>
-          <button className="lg-btn hover:!bg-danger/80" title="Delete (Del)" onClick={() => void remove()}>
+          <button className="lg-btn hover:!bg-danger/80" title={`${t("Delete")} (Del)`} aria-label={t("Delete")} onClick={() => void remove()}>
             <Trash2 size={16} />
           </button>
         </div>
 
         <button
           className="lg grid h-10 w-10 shrink-0 place-items-center !rounded-full transition hover:brightness-125 active:scale-95"
-          title="Close (Esc)"
+          title={`${t("Close")} (Esc)`} aria-label={t("Close")}
           onClick={onClose}
         >
           <X size={18} />
@@ -261,6 +265,7 @@ export default function Viewer({ items, id, onNavigate, onClose, onDelete, onToa
 }
 
 function NavButton({ side, hidden, onClick }: { side: "left" | "right"; hidden: boolean; onClick: () => void }) {
+  const { t } = useLanguage();
   const Icon = side === "left" ? ChevronLeft : ChevronRight;
   return (
     <div
@@ -270,7 +275,8 @@ function NavButton({ side, hidden, onClick }: { side: "left" | "right"; hidden: 
     >
       <button
         onClick={onClick}
-        title={side === "left" ? "Previous (←)" : "Next (→)"}
+        title={`${t(side === "left" ? "Previous" : "Next")} (${side === "left" ? "←" : "→"})`}
+        aria-label={t(side === "left" ? "Previous" : "Next")}
         className="lg grid h-11 w-11 place-items-center !rounded-full transition hover:brightness-125 active:scale-95"
       >
         <Icon size={20} />
@@ -279,18 +285,3 @@ function NavButton({ side, hidden, onClick }: { side: "left" | "right"; hidden: 
   );
 }
 
-export function fmtBytes(n: number) {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function fmtDate(ms: number) {
-  return new Date(ms).toLocaleString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}

@@ -118,7 +118,7 @@ export default function Home() {
     return () => {
       subs.forEach((x) => void x.then((un) => un()));
     };
-  }, [load, query]);
+  }, [load, query, t]);
 
   useEffect(() => {
     if (!toast) return;
@@ -133,9 +133,8 @@ export default function Home() {
   }, [items, filter]);
 
   const onDelete = useCallback(async (s: Screenshot) => {
-    const what = isVideo(s) ? "recording" : "screenshot";
-    const ok = await ask(`"${s.name}" will be removed from the gallery and deleted from disk.`, {
-      title: `${t("Delete")} ${what}?`,
+    const ok = await ask(`"${s.name}" — ${t("This item will be removed from the gallery and deleted from disk.")}`, {
+      title: t(isVideo(s) ? "Delete recording?" : "Delete screenshot?"),
       kind: "warning",
       okLabel: t("Delete"),
       cancelLabel: t("Cancel"),

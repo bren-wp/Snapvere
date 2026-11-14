@@ -2,7 +2,8 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { FolderOpen, Trash2, Video, Play } from "lucide-react";
 import type { Screenshot } from "../../lib/types";
 import { isVideo } from "../../lib/types";
-import { fmtBytes } from "../Viewer";
+import { useLanguage } from "../../lib/LanguageProvider";
+import { formatMediaSize } from "../../lib/mediaFormatting";
 
 export default function CaptureCard({
   shot,
@@ -15,6 +16,7 @@ export default function CaptureCard({
   onReveal: () => void;
   onDelete: () => void;
 }) {
+  const { t, language } = useLanguage();
   const video = isVideo(shot);
   // MP4 se ne moze prikazati u <img>; bez thumbnaila ide placeholder.
   const src = shot.thumbPath ?? (video ? null : shot.filePath);
@@ -28,7 +30,7 @@ export default function CaptureCard({
       <button
         type="button"
         onClick={onOpen}
-        aria-label={`${video ? "Play recording" : "View screenshot"}: ${shot.name}`}
+        aria-label={`${t(video ? "Play recording" : "View screenshot")}: ${shot.name}`}
         className="absolute inset-0 z-[1] cursor-pointer rounded-[inherit] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent"
       />
       <div className="pointer-events-none relative aspect-video w-full bg-black/30">
@@ -62,7 +64,7 @@ export default function CaptureCard({
       <div className="pointer-events-none relative px-3 py-2">
         <div className="truncate text-[13px] font-medium">{shot.name}</div>
         <div className="font-mono text-[11px] text-muted">
-          {shot.width}×{shot.height} · {fmtBytes(shot.sizeBytes)}
+          {shot.width}×{shot.height} · {formatMediaSize(shot.sizeBytes, language)}
         </div>
       </div>
       <div
@@ -74,8 +76,8 @@ export default function CaptureCard({
             e.stopPropagation();
             onReveal();
           }}
-          title="Show in folder"
-          aria-label={`Show ${shot.name} in folder`}
+          title={t("Show in folder")}
+          aria-label={`${t("Show in folder")}: ${shot.name}`}
           className="grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white transition hover:bg-black/75"
         >
           <FolderOpen size={15} />
@@ -85,8 +87,8 @@ export default function CaptureCard({
             e.stopPropagation();
             onDelete();
           }}
-          title="Delete"
-          aria-label={`Delete ${shot.name}`}
+          title={t("Delete")}
+          aria-label={`${t("Delete")}: ${shot.name}`}
           className="grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white transition hover:bg-danger"
         >
           <Trash2 size={15} />
