@@ -571,3 +571,123 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .snapvere-btn-primary { background-color: #7045d4; border-color: #9570ed; }
 .snapvere-btn-primary:hover { background-color: #875cf2; }
 [data-theme="light"] .snapvere-app-shell { background: rgb(var(--snapvere-bg)); }
+
+/* v0.2.11: web-aligned workspace hierarchy.
+   Use the same --brand-* palette, radii and responsive rhythm as the
+   first-party landing page; leave overlay/HUD pixel coordinates untouched. */
+.snapvere-workspace-header {
+  background:
+    radial-gradient(circle at 92% -30%, rgba(118,72,235,.16), transparent 43%),
+    linear-gradient(180deg, rgba(16,23,44,.92), rgba(16,23,44,.62));
+  border-bottom: 1px solid var(--brand-border);
+}
+.snapvere-workspace-heading {
+  display: flex; align-items: center; justify-content: space-between; gap: 24px;
+  margin-bottom: 19px;
+}
+.snapvere-workspace-title {
+  margin-top: 4px;
+  color: rgb(var(--snapvere-text));
+  font-size: clamp(23px, 2.6vw, 32px);
+  line-height: 1.13;
+  font-weight: 800;
+  letter-spacing: -.046em;
+}
+.snapvere-workspace-subtitle {
+  margin-top: 7px;
+  color: rgb(var(--snapvere-muted));
+  font-size: 12px;
+  line-height: 1.5;
+}
+.snapvere-workspace-settings {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  flex: 0 0 auto; padding: 10px 14px; border-radius: var(--brand-control-radius);
+  color: rgb(var(--snapvere-text)); font-size: 12px; font-weight: 650;
+}
+.snapvere-workspace-actions { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+.snapvere-action-card {
+  display: flex; align-items: center; gap: 12px;
+  min-width: 0; min-height: 88px; padding: 14px;
+  text-align: left; border: 1px solid var(--brand-border);
+  border-radius: var(--brand-control-radius);
+  color: rgb(var(--snapvere-text));
+  background: linear-gradient(135deg, rgba(118,72,235,.06), transparent 65%), rgba(16,23,44,.85);
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+.snapvere-action-card:not(:disabled):hover { border-color: rgba(167,139,250,.58); transform: translateY(-2px); }
+.snapvere-action-card--primary {
+  border-color: rgba(167,139,250,.55);
+  background: linear-gradient(125deg, #7045d4, #562aa9);
+  box-shadow: 0 8px 24px rgba(77,44,148,.22);
+}
+.snapvere-action-card--primary:not(:disabled):hover { background: linear-gradient(125deg, #875cf2, #6334c7); }
+.snapvere-action-icon {
+  display: grid; place-items: center;
+  flex: 0 0 42px; width: 42px; height: 42px;
+  border: 1px solid rgba(167,139,250,.24); border-radius: 12px;
+  background: rgba(118,72,235,.14); color: var(--brand-accent-hi);
+}
+.snapvere-action-card--primary .snapvere-action-icon { border-color: rgba(255,255,255,.24); background: rgba(255,255,255,.15); color: white; }
+.snapvere-action-copy { display: flex; flex: 1; flex-direction: column; min-width: 0; gap: 3px; }
+.snapvere-action-copy strong { font-size: 13px; font-weight: 750; line-height: 1.2; }
+.snapvere-action-copy small { color: rgb(var(--snapvere-muted)); font-size: 10.5px; line-height: 1.4; }
+.snapvere-action-card--primary .snapvere-action-copy small { color: rgba(255,255,255,.82); }
+.snapvere-action-arrow { flex: 0 0 auto; align-self: flex-start; color: rgb(var(--snapvere-muted)); }
+.snapvere-action-card--primary .snapvere-action-arrow { color: rgba(255,255,255,.84); }
+.snapvere-gallery-controls {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+}
+.snapvere-gallery-overview { min-width: 0; }
+.snapvere-gallery-title { margin-top: 2px; }
+.snapvere-gallery-count { color: rgb(var(--snapvere-muted)); font-size: 11px; margin-top: 3px; }
+.snapvere-gallery-tools { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex: 1; min-width: 0; }
+.snapvere-gallery-search { width: min(100%, 300px); min-width: 145px; }
+.snapvere-gallery-search input { color: rgb(var(--snapvere-text)); border: 1px solid var(--brand-border); }
+.snapvere-gallery-search input::placeholder { color: rgb(var(--snapvere-muted)); }
+.snapvere-gallery-filters {
+  display: flex; align-items: center; gap: 3px; padding: 3px;
+  border-radius: var(--brand-control-radius); border: 1px solid var(--brand-border);
+  background: rgba(16,23,44,.55); flex: 0 0 auto;
+}
+.snapvere-gallery-filter {
+  padding: 7px 11px; border-radius: 10px; text-transform: capitalize;
+  color: rgb(var(--snapvere-muted)); font-size: 11px; font-weight: 650;
+}
+.snapvere-gallery-filter:hover { color: rgb(var(--snapvere-text)); }
+.snapvere-gallery-filter.is-active { color: #fff; background: var(--brand-accent); }
+.snapvere-settings-group-label { padding: 13px 9px 8px; }
+.snapvere-settings-tab { min-height: 41px; }
+.snapvere-settings-heading { margin-bottom: 18px; padding-bottom: 15px; border-bottom: 1px solid var(--brand-border); }
+.snapvere-settings-heading p:last-child { color: rgb(var(--snapvere-muted)); font-size: 12px; line-height: 1.5; margin-top: 6px; }
+.snapvere-preference-row { min-height: 60px; }
+.snapvere-preference-row > div:first-child { flex: 1; min-width: 160px; }
+[data-theme="light"] .snapvere-workspace-header {
+  background: linear-gradient(135deg, rgba(118,72,235,.08), rgba(255,255,255,.92));
+}
+[data-theme="light"] .snapvere-action-card:not(.snapvere-action-card--primary) {
+  background: rgba(255,255,255,.82);
+}
+[data-theme="light"] .snapvere-gallery-filters { background: rgba(255,255,255,.75); }
+@media (max-width: 1050px) {
+  .snapvere-gallery-controls { align-items: stretch; flex-wrap: wrap; }
+  .snapvere-gallery-tools { justify-content: space-between; flex-basis: 100%; }
+  .snapvere-gallery-search { width: min(100%, 420px); }
+}
+@media (max-width: 760px) {
+  .snapvere-workspace-header { padding: 14px; }
+  .snapvere-workspace-heading { margin-bottom: 14px; }
+  .snapvere-workspace-actions { grid-template-columns: 1fr; gap: 8px; }
+  .snapvere-action-card { min-height: 56px; padding: 9px 12px; }
+  .snapvere-gallery-controls { padding: 12px 14px; }
+  .snapvere-settings-group-label { display: none; }
+}
+@media (max-width: 500px) {
+  .snapvere-workspace-settings span { display: none; }
+  .snapvere-workspace-settings { width: 40px; height: 40px; padding: 0; }
+  .snapvere-gallery-tools { flex-wrap: wrap; }
+  .snapvere-gallery-search { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .snapvere-action-card { transition: none; }
+  .snapvere-action-card:not(:disabled):hover { transform: none; }
+}

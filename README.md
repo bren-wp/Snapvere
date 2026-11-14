@@ -13,7 +13,7 @@ A focused Windows capture workspace from **[BRENDIGO](https://brendigo.com)**.
 [![Product](https://img.shields.io/badge/Product-SNAPVERE-7648eb?style=flat-square)](https://snapvere.com)
 [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-141416?style=flat-square)](https://snapvere.com/download/)
 [![Privacy](https://img.shields.io/badge/Storage-Local--first-141416?style=flat-square)](https://snapvere.com/privacy/)
-[![Release](https://img.shields.io/badge/Repository--candidate-v0.2.10-141416?style=flat-square)](https://github.com/bren-wp/Snapvere/releases)
+[![Release](https://img.shields.io/badge/Repository--candidate-v0.2.11-141416?style=flat-square)](https://github.com/bren-wp/Snapvere/releases)
 
 [**🌐 Public SNAPVERE website (.NET edition)**](https://snapvere.com/) · [**⬇️ Tauri / Rust Windows releases**](https://github.com/bren-wp/Snapvere/releases) · [**🔐 Website privacy**](https://snapvere.com/privacy/)
 
@@ -25,7 +25,7 @@ A focused Windows capture workspace from **[BRENDIGO](https://brendigo.com)**.
 
 > **Distribution notice:** snapvere.com currently publishes SNAPVERE v0.0.8 built with
 > .NET / WinUI 3. This repository builds the separate Tauri 2 / Rust Windows edition
-> (v0.2.10 release candidate). Do not mix their installers, licenses, versions or upgrade paths.
+> (v0.2.11 development branch). Do not mix their installers, licenses, versions or upgrade paths.
 > The production website, email download flow, and its binaries are not modified
 > by this GitHub release.
 >
@@ -92,6 +92,12 @@ The screenshots below come from **actual rendered React application screens in t
 </table>
 
 </details>
+
+## SNAPVERE v0.2.11 — workspace and settings redesign (in development)
+
+The desktop interface now follows the repository website's navy/violet palette and interaction hierarchy more closely. The Home window presents three dedicated quick actions in order: **Capture region**, **Record screen**, **Full screen**, followed by gallery search and filters. Settings now groups the four capture-related sections first, then application-wide preferences, with keyboard navigation and responsive horizontal tabs in narrow windows.
+
+The underlying screenshot, recording, gallery and export Rust commands are unchanged. Release v0.2.11 is a **candidate** until the PR has passed Windows CI and the UI previews have been inspected. Renderer screenshots validate composition, not exact pixel-parity with the separately deployed live WinUI website or real Windows hardware.
 
 ## What's improved in v0.2.10 (release candidate)
 

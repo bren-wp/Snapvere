@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState, type KeyboardEvent } from "react";
 import { SlidersHorizontal, Keyboard, Crop, Video, FolderOpen, ShieldCheck, Info } from "lucide-react";
 import { load, type Store } from "@tauri-apps/plugin-store";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
@@ -20,18 +20,29 @@ type Tab =
   | "privacy"
   | "about";
 
+// Match the website's capture-first product story while keeping all existing options.
 const TABS: { id: Tab; label: string; icon: typeof SlidersHorizontal }[] = [
-  { id: "general", label: "General", icon: SlidersHorizontal },
-  { id: "hotkeys", label: "Hotkeys", icon: Keyboard },
   { id: "capture", label: "Capture", icon: Crop },
   { id: "recording", label: "Recording", icon: Video },
   { id: "save", label: "Save", icon: FolderOpen },
+  { id: "hotkeys", label: "Hotkeys", icon: Keyboard },
+  { id: "general", label: "General", icon: SlidersHorizontal },
   { id: "privacy", label: "Privacy", icon: ShieldCheck },
   { id: "about", label: "About", icon: Info },
 ];
 
+const TAB_DESCRIPTIONS: Record<Tab, string> = {
+  capture: "Choose the format and quality of your screenshots.",
+  recording: "Control video quality, audio sources and capture limits.",
+  save: "Choose where local captures are stored on this device.",
+  hotkeys: "Customize keyboard shortcuts for quick capture and recording.",
+  general: "Make Snapvere feel right on your desktop.",
+  privacy: "Review local storage and your privacy controls.",
+  about: "Version, product information, licensing and diagnostics.",
+};
+
 export default function Settings() {
-  const [tab, setTab] = useState<Tab>("general");
+  const [tab, setTab] = useState<Tab>("capture");
   const [s, setS] = useState<AppSettings>(DEFAULTS);
   const [store, setStore] = useState<Store | null>(null);
   const [autostart, setAutostart] = useState(false);
@@ -145,31 +156,64 @@ export default function Settings() {
     }
   };
 
+  // Arrow keys navigate only the settings sidebar, never hotkey input fields.
+  const onSidebarKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-settings-tab]");
+    if (!button) return;
+    const current = TABS.findIndex((item) => item.id === button.dataset.settingsTab);
+    if (current < 0) return;
+    let next = current;
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") next = (current + 1) % TABS.length;
+    else if (event.key === "ArrowUp" || event.key === "ArrowLeft") next = (current - 1 + TABS.length) % TABS.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = TABS.length - 1;
+    else return;
+    event.preventDefault();
+    setTab(TABS[next].id);
+    setNotice(null);
+    setStatus(null);
+    event.currentTarget.querySelectorAll<HTMLButtonElement>("button[data-settings-tab]")[next]?.focus();
+  };
+
   return (
     <WindowFrame title="Settings">
       <div className="snapvere-settings-layout flex min-h-0 flex-1">
-        {/* tabovi */}
-        <nav aria-label="Settings sections" className="snapvere-settings-sidebar flex w-48 shrink-0 flex-col gap-1 overflow-y-auto border-r border-white/10 bg-elevated/20 p-3">
-        <div className="snapvere-section-eyebrow px-2 pb-2 pt-2">PREFERENCES</div>
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => { setTab(t.id); setNotice(null); setStatus(null); }}
-            aria-current={tab === t.id ? "page" : undefined}
-            aria-label={`${t.label} settings`}
-            className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:ring-accent ${
-              tab === t.id ? "bg-accent text-white" : "text-muted hover:bg-elevated hover:text-text"
-            }`}
-          >
-            <t.icon size={17} strokeWidth={1.8} aria-hidden="true" className="shrink-0" />
-            <span>{t.label}</span>
-          </button>
-        ))}
-      </nav>
+        <nav
+          aria-label="Settings sections"
+          onKeyDown={onSidebarKeyDown}
+          className="snapvere-settings-sidebar flex w-48 shrink-0 flex-col gap-1 overflow-y-auto border-r border-white/10 bg-elevated/20 p-3"
+        >
+          {TABS.map((item, index) => (
+            <Fragment key={item.id}>
+              {(index === 0 || index === 4) && (
+                <div className="snapvere-section-eyebrow snapvere-settings-group-label">
+                  {index === 0 ? "CAPTURE TOOLS" : "APPLICATION"}
+                </div>
+              )}
+              <button
+                type="button"
+                data-settings-tab={item.id}
+                onClick={() => { setTab(item.id); setNotice(null); setStatus(null); }}
+                aria-current={tab === item.id ? "page" : undefined}
+                aria-label={`${item.label} settings`}
+                className={`snapvere-settings-tab flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:ring-accent ${
+                  tab === item.id ? "bg-accent text-white" : "text-muted hover:bg-elevated hover:text-text"
+                }`}
+              >
+                <item.icon size={17} strokeWidth={1.8} aria-hidden="true" className="shrink-0" />
+                <span>{item.label}</span>
+              </button>
+            </Fragment>
+          ))}
+        </nav>
 
-      <div className="snapvere-settings-content min-h-0 flex-1 overflow-auto p-6">
-        {notice && <p role="alert" className="mb-4 rounded-xl border border-danger/40 bg-danger/10 p-3 text-sm">{notice}</p>}
-        {status && <p role="status" aria-live="polite" className="mb-4 rounded-xl border border-accent/30 bg-accent/10 p-3 text-sm">{status}</p>}
+        <div className="snapvere-settings-content min-h-0 flex-1 overflow-auto p-6">
+          <div className="snapvere-settings-heading">
+            <p className="snapvere-section-eyebrow">PREFERENCES / {tab.toUpperCase()}</p>
+            <p>{TAB_DESCRIPTIONS[tab]}</p>
+          </div>
+          {notice && <p role="alert" className="mb-4 rounded-xl border border-danger/40 bg-danger/10 p-3 text-sm">{notice}</p>}
+          {status && <p role="status" aria-live="polite" className="mb-4 rounded-xl border border-accent/30 bg-accent/10 p-3 text-sm">{status}</p>}
         {tab === "general" && (
           <Section title="General">
             <Row label="Theme" hint="Light or dark interface scheme.">

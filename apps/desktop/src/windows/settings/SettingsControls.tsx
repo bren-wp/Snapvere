@@ -11,7 +11,7 @@ export function Section({ title, children }: { title: string; children: React.Re
 }
 export function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-4">
+    <div className="snapvere-preference-row flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-4">
       <div className="min-w-0">
         <div className="text-sm">{label}</div>
         {hint && <div className="mt-1 text-xs leading-snug text-muted">{hint}</div>}
@@ -23,6 +23,7 @@ export function Row({ label, hint, children }: { label: string; hint?: string; c
 export function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
+      type="button"
       onClick={() => onChange(!checked)}
       role="switch"
       aria-label={label}
@@ -39,10 +40,12 @@ export function Toggle({ label, checked, onChange }: { label: string; checked: b
 }
 export function Segmented({ value, options, onChange }: { value: string; options: { v: string; l: string }[]; onChange: (v: string) => void }) {
   return (
-    <div className="flex rounded-lg border border-border p-0.5">
+    <div role="group" className="flex rounded-lg border border-border p-0.5">
       {options.map((o) => (
         <button
+          type="button"
           key={o.v}
+          aria-pressed={value === o.v}
           onClick={() => onChange(o.v)}
           className={`rounded-md px-3 py-1 text-sm transition-colors ${value === o.v ? "bg-accent text-white" : "text-muted hover:text-text"}`}
         >

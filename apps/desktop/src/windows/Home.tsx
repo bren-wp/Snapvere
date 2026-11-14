@@ -5,6 +5,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { readCapturePreferences } from "../lib/capturePreferencesStore";
 import { listen } from "@tauri-apps/api/event";
 import {
+  ArrowUpRight,
   Crop,
   Monitor,
   Settings as SettingsIcon,
@@ -212,63 +213,112 @@ export default function Home() {
 
   return (
     <WindowFrame title="Snapvere">
-      {/* toolbar */}
-      <header className="snapvere-app-toolbar flex shrink-0 flex-wrap items-center gap-3 px-5 py-3">
-        <div className="relative min-w-[200px] flex-1 max-w-lg">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
-          <input
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setHasMore(false);
-              pageOffset.current = 0;
-            }}
-            placeholder="Search by name or tag…"
-            maxLength={128}
-            aria-label="Search captures by name or tag"
-            className="w-full rounded-full bg-elevated/80 py-2 pl-10 pr-4 text-sm outline-none ring-1 ring-white/10 transition focus:ring-2 focus:ring-accent"
-          />
+      {/* Keep native capture commands unchanged; only their visual priority changes. */}
+      <header className="snapvere-workspace-header shrink-0 px-5 pb-5 pt-5">
+        <div className="snapvere-workspace-heading">
+          <div className="min-w-0">
+            <p className="snapvere-section-eyebrow">YOUR PRIVATE WORKSPACE</p>
+            <h1 className="snapvere-workspace-title">Capture what matters.</h1>
+            <p className="snapvere-workspace-subtitle">
+              Take a screenshot, record a walkthrough, then make it yours.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={openSettings}
+            aria-label="Open settings"
+            className="snapvere-btn-secondary snapvere-workspace-settings"
+          >
+            <SettingsIcon size={17} aria-hidden="true" />
+            <span>Settings</span>
+          </button>
         </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <button disabled={captureBusy} onClick={captureRegion} className="snapvere-btn-primary flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110 active:scale-95">
-            <Crop size={16} /> Capture region
+        <div role="group" aria-label="Capture actions" className="snapvere-workspace-actions">
+          <button
+            type="button"
+            aria-label="Capture region"
+            disabled={captureBusy}
+            onClick={captureRegion}
+            className="snapvere-action-card snapvere-action-card--primary"
+          >
+            <span className="snapvere-action-icon"><Crop size={21} aria-hidden="true" /></span>
+            <span className="snapvere-action-copy">
+              <strong>Capture region</strong>
+              <small>Choose exactly what to show</small>
+            </span>
+            <ArrowUpRight className="snapvere-action-arrow" size={17} aria-hidden="true" />
           </button>
-          <button disabled={captureBusy} onClick={recordArea} className="snapvere-btn-secondary flex items-center gap-2 rounded-full px-3.5 py-2 text-sm transition hover:bg-elevated active:scale-95">
-            <Video size={16} /> Record
+          <button
+            type="button"
+            aria-label="Record screen"
+            disabled={captureBusy}
+            onClick={recordArea}
+            className="snapvere-action-card"
+          >
+            <span className="snapvere-action-icon"><Video size={21} aria-hidden="true" /></span>
+            <span className="snapvere-action-copy">
+              <strong>Record screen</strong>
+              <small>Capture motion and audio</small>
+            </span>
+            <ArrowUpRight className="snapvere-action-arrow" size={17} aria-hidden="true" />
           </button>
-          <button disabled={captureBusy} onClick={captureFull} className="snapvere-btn-secondary flex items-center gap-2 rounded-full px-3.5 py-2 text-sm transition hover:bg-elevated active:scale-95">
-            <Monitor size={16} /> {captureBusy ? "Capturing…" : "Full screen"}
-          </button>
-          <button onClick={openSettings} title="Settings" aria-label="Open settings" className="snapvere-btn-secondary grid h-9 w-9 place-items-center rounded-full transition hover:bg-elevated active:scale-95">
-            <SettingsIcon size={18} />
+          <button
+            type="button"
+            aria-label="Full screen"
+            disabled={captureBusy}
+            onClick={captureFull}
+            className="snapvere-action-card"
+          >
+            <span className="snapvere-action-icon"><Monitor size={21} aria-hidden="true" /></span>
+            <span className="snapvere-action-copy">
+              <strong>{captureBusy ? "Capturing…" : "Full screen"}</strong>
+              <small>Save the entire display</small>
+            </span>
+            <ArrowUpRight className="snapvere-action-arrow" size={17} aria-hidden="true" />
           </button>
         </div>
       </header>
 
-      <div className="flex shrink-0 flex-wrap items-end justify-between gap-3 px-5 pb-3 pt-4">
-        <div>
-          <p className="snapvere-section-eyebrow">LOCAL GALLERY</p>
-          <h1 className="snapvere-gallery-title">Your captures</h1>
+      <section className="snapvere-gallery-controls shrink-0 px-5 py-4" aria-label="Gallery controls">
+        <div className="snapvere-gallery-overview">
+          <p className="snapvere-section-eyebrow">LOCAL LIBRARY</p>
+          <h2 className="snapvere-gallery-title">Your captures</h2>
+          <p className="snapvere-gallery-count" aria-live="polite">
+            {loading ? "Updating…" : `${visible.length}${hasMore ? "+" : ""} ${visible.length === 1 ? "item" : "items"} loaded`}
+          </p>
         </div>
-        <p className="text-xs text-muted" aria-live="polite">
-          {loading ? "Updating…" : `${visible.length}${hasMore ? "+" : ""} ${visible.length === 1 ? "item" : "items"} loaded`}
-        </p>
-      </div>
-      {/* filter */}
-      <div className="flex shrink-0 items-center gap-1 px-5 pb-3">
-        {(["all", "images", "videos"] as Filter[]).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            aria-pressed={filter === f}
-            className={`rounded-full px-3 py-1 text-xs capitalize transition-colors ${
-              filter === f ? "bg-accent text-white" : "text-muted hover:bg-elevated"
-            }`}
-          >
-            {f}
-          </button>
-        ))}
-      </div>
+        <div className="snapvere-gallery-tools">
+          <div className="snapvere-gallery-search relative">
+            <Search size={16} aria-hidden="true" className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setHasMore(false);
+                pageOffset.current = 0;
+              }}
+              placeholder="Search names and tags…"
+              maxLength={128}
+              aria-label="Search captures by name or tag"
+              className="w-full rounded-full bg-elevated/80 py-2.5 pl-10 pr-4 text-sm outline-none ring-1 ring-white/10 transition focus:ring-2 focus:ring-accent"
+            />
+          </div>
+          <div role="group" aria-label="Filter gallery" className="snapvere-gallery-filters">
+            {(["all", "images", "videos"] as Filter[]).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFilter(f)}
+                aria-pressed={filter === f}
+                className={`snapvere-gallery-filter ${filter === f ? "is-active" : ""}`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* galerija */}
       <main className="min-h-0 flex-1 overflow-auto px-5 pb-5">
