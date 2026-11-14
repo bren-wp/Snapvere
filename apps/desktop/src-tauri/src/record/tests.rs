@@ -451,7 +451,11 @@ mod windows_only {
 
 #[test]
 fn recorder_startup_reports_source_and_encoder_initialization_errors() {
-    for reason in ["DXGI init failed", "Media Foundation init failed", "encoder open failed"] {
+    for reason in [
+        "DXGI init failed",
+        "Media Foundation init failed",
+        "encoder open failed",
+    ] {
         let (sender, receiver) = std::sync::mpsc::channel();
         let outcome: Result<(), String> = Err(reason.to_string());
         report_start_failure(&sender, &outcome);
