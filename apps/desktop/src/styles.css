@@ -474,17 +474,6 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .snapvere-app-context {
   color: rgb(var(--snapvere-muted)); font-size: 10px; font-weight: 750; letter-spacing: .14em;
 }
-.snapvere-app-local {
-  display: inline-flex; align-items: center; gap: 7px;
-  border-radius: var(--brand-control-radius); padding: 6px 11px;
-  border: 1px solid var(--brand-border); background: rgba(167,139,250,.045);
-  color: rgb(var(--snapvere-text)); font-size: 10px; font-weight: 750;
-  letter-spacing: .08em; white-space: nowrap;
-}
-.snapvere-app-local-dot {
-  width: 6px; height: 6px; border-radius: 50%; background: #30d158;
-  box-shadow: 0 0 0 3px rgba(48,209,88,.1);
-}
 .snapvere-app-toolbar { border-bottom: 1px solid var(--brand-border); background: rgba(20,20,22,.48); }
 [data-theme="light"] .snapvere-app-toolbar { background: rgba(240,240,242,.45); }
 .snapvere-btn-primary {
@@ -512,7 +501,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .snapvere-editor-toolbar { background: rgba(20,20,22,.68); border-bottom: 1px solid var(--brand-border); }
 [data-theme="light"] .snapvere-editor-toolbar { background: rgba(248,248,250,.95); }
 @media (max-width: 940px) { .snapvere-app-brandbar-end { gap: 8px; } .snapvere-app-context { display: none; } }
-@media (max-width: 700px) { .snapvere-app-local { display: none; } .snapvere-app-brandbar { padding-inline: 14px; } }
+@media (max-width: 700px) { .snapvere-app-brandbar { padding-inline: 14px; } }
 @media (prefers-reduced-motion: reduce) {
   .snapvere-gallery-card,.snapvere-btn-primary,.snapvere-btn-secondary { transition: none !important; transform: none !important; }
 }
@@ -566,7 +555,6 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 /* Native shell with the same navy / violet identity as the published site. */
 .snapvere-app-brandbar { background: rgba(11,16,34,.92); min-height: 76px; }
 .snapvere-app-shell { background: linear-gradient(148deg,#151831, #101629 80%); }
-.snapvere-app-local { border-color: rgba(164,141,255,.24); background: rgba(118,72,235,.08); }
 .snapvere-app-toolbar { background: rgba(16,23,44,.84); }
 .snapvere-btn-primary { background-color: #7045d4; border-color: #9570ed; }
 .snapvere-btn-primary:hover { background-color: #875cf2; }
@@ -656,7 +644,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .snapvere-gallery-filter:hover { color: rgb(var(--snapvere-text)); }
 .snapvere-gallery-filter.is-active { color: #fff; background: var(--brand-accent); }
 .snapvere-settings-group-label { padding: 13px 9px 8px; }
-.snapvere-settings-tab { min-height: 41px; }
+.snapvere-settings-tab { min-height: 41px; line-height: 1.3; overflow-wrap: anywhere; }
 .snapvere-settings-heading { margin-bottom: 18px; padding-bottom: 15px; border-bottom: 1px solid var(--brand-border); }
 .snapvere-settings-heading p:last-child { color: rgb(var(--snapvere-muted)); font-size: 12px; line-height: 1.5; margin-top: 6px; }
 .snapvere-preference-row { min-height: 60px; }

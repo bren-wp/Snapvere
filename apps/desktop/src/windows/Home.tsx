@@ -13,6 +13,7 @@ import {
   Video,
 } from "lucide-react";
 import { ipc } from "../lib/ipc";
+import { useLanguage } from "../lib/LanguageProvider";
 import { isVideo } from "../lib/types";
 import { mergeUniqueById } from "../lib/galleryPaging";
 import type { RecordDone, Screenshot } from "../lib/types";
@@ -25,6 +26,7 @@ type Filter = "all" | "images" | "videos";
 const PAGE_SIZE = 120;
 
 export default function Home() {
+  const { t } = useLanguage();
   const [items, setItems] = useState<Screenshot[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -53,11 +55,11 @@ export default function Home() {
       }
     } catch (e) {
       console.error(e);
-      if (request === galleryRequest.current) setToast("Could not load the gallery");
+      if (request === galleryRequest.current) setToast(t("Could not load the gallery"));
     } finally {
       if (request === galleryRequest.current) setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadMore = useCallback(async () => {
     if (pagingBusy.current || loading || !hasMore) return;
@@ -106,7 +108,7 @@ export default function Home() {
         const { error, cancelled } = e.payload;
         if (error) setToast(`Recording failed: ${error}`);
         else if (!cancelled) {
-          setToast("Recording saved");
+          setToast(t("Recording saved"));
           void load(query);
         }
       }),
@@ -133,10 +135,10 @@ export default function Home() {
   const onDelete = useCallback(async (s: Screenshot) => {
     const what = isVideo(s) ? "recording" : "screenshot";
     const ok = await ask(`"${s.name}" will be removed from the gallery and deleted from disk.`, {
-      title: `Delete ${what}?`,
+      title: `${t("Delete")} ${what}?`,
       kind: "warning",
-      okLabel: "Delete",
-      cancelLabel: "Cancel",
+      okLabel: t("Delete"),
+      cancelLabel: t("Cancel"),
     });
     if (!ok) return false;
     try {
@@ -147,7 +149,7 @@ export default function Home() {
       setToast(`Could not delete capture: ${String(e)}`);
       return false;
     }
-  }, []);
+  }, [t]);
 
   const reveal = useCallback(async (s: Screenshot) => {
     try {
@@ -181,7 +183,7 @@ export default function Home() {
       const { format, quality } = await readCapturePreferences();
       await ipc.captureFullscreen(format, quality);
       await load(query);
-      setToast("Full-screen screenshot saved.");
+      setToast(t("Full-screen screenshot saved."));
     } catch (e) {
       setToast(`Screenshot failed: ${String(e)}`);
     } finally {
@@ -204,7 +206,7 @@ export default function Home() {
     if (existing) return existing.setFocus();
     new WebviewWindow("settings", {
       url: "index.html#settings",
-      title: "Snapvere — Settings",
+      title: `Snapvere — ${t("Settings")}`,
       width: 860,
       height: 660,
       center: true,
@@ -217,8 +219,8 @@ export default function Home() {
       <header className="snapvere-workspace-header shrink-0 px-5 pb-5 pt-5">
         <div className="snapvere-workspace-heading">
           <div className="min-w-0">
-            <p className="snapvere-section-eyebrow">YOUR PRIVATE WORKSPACE</p>
-            <h1 className="snapvere-workspace-title">Capture what matters.</h1>
+            <p className="snapvere-section-eyebrow">SNAPVERE</p>
+            <h1 className="snapvere-workspace-title">{t("Capture what matters.")}</h1>
             <p className="snapvere-workspace-subtitle">
               Take a screenshot, record a walkthrough, then make it yours.
             </p>
@@ -226,53 +228,53 @@ export default function Home() {
           <button
             type="button"
             onClick={openSettings}
-            aria-label="Open settings"
+            aria-label={t("Settings")}
             className="snapvere-btn-secondary snapvere-workspace-settings"
           >
             <SettingsIcon size={17} aria-hidden="true" />
-            <span>Settings</span>
+            <span>{t("Settings")}</span>
           </button>
         </div>
         <div role="group" aria-label="Capture actions" className="snapvere-workspace-actions">
           <button
             type="button"
-            aria-label="Capture region"
+            aria-label={t("Capture region")}
             disabled={captureBusy}
             onClick={captureRegion}
             className="snapvere-action-card snapvere-action-card--primary"
           >
             <span className="snapvere-action-icon"><Crop size={21} aria-hidden="true" /></span>
             <span className="snapvere-action-copy">
-              <strong>Capture region</strong>
-              <small>Choose exactly what to show</small>
+              <strong>{t("Capture region")}</strong>
+              <small>{t("Choose exactly what to show")}</small>
             </span>
             <ArrowUpRight className="snapvere-action-arrow" size={17} aria-hidden="true" />
           </button>
           <button
             type="button"
-            aria-label="Record screen"
+            aria-label={t("Record screen")}
             disabled={captureBusy}
             onClick={recordArea}
             className="snapvere-action-card"
           >
             <span className="snapvere-action-icon"><Video size={21} aria-hidden="true" /></span>
             <span className="snapvere-action-copy">
-              <strong>Record screen</strong>
-              <small>Capture motion and audio</small>
+              <strong>{t("Record screen")}</strong>
+              <small>{t("Capture motion and audio")}</small>
             </span>
             <ArrowUpRight className="snapvere-action-arrow" size={17} aria-hidden="true" />
           </button>
           <button
             type="button"
-            aria-label="Full screen"
+            aria-label={t("Full screen")}
             disabled={captureBusy}
             onClick={captureFull}
             className="snapvere-action-card"
           >
             <span className="snapvere-action-icon"><Monitor size={21} aria-hidden="true" /></span>
             <span className="snapvere-action-copy">
-              <strong>{captureBusy ? "Capturing…" : "Full screen"}</strong>
-              <small>Save the entire display</small>
+              <strong>{captureBusy ? t("Capturing…") : t("Full screen")}</strong>
+              <small>{t("Save the entire display")}</small>
             </span>
             <ArrowUpRight className="snapvere-action-arrow" size={17} aria-hidden="true" />
           </button>
@@ -281,10 +283,10 @@ export default function Home() {
 
       <section className="snapvere-gallery-controls shrink-0 px-5 py-4" aria-label="Gallery controls">
         <div className="snapvere-gallery-overview">
-          <p className="snapvere-section-eyebrow">LOCAL LIBRARY</p>
-          <h2 className="snapvere-gallery-title">Your captures</h2>
+          <p className="snapvere-section-eyebrow">{t("Library")}</p>
+          <h2 className="snapvere-gallery-title">{t("Your captures")}</h2>
           <p className="snapvere-gallery-count" aria-live="polite">
-            {loading ? "Updating…" : `${visible.length}${hasMore ? "+" : ""} ${visible.length === 1 ? "item" : "items"} loaded`}
+            {loading ? t("Updating…") : `${visible.length}${hasMore ? "+" : ""} ${visible.length === 1 ? "item" : "items"} loaded`}
           </p>
         </div>
         <div className="snapvere-gallery-tools">
@@ -298,9 +300,9 @@ export default function Home() {
                 setHasMore(false);
                 pageOffset.current = 0;
               }}
-              placeholder="Search names and tags…"
+              placeholder={t("Search names and tags…")}
               maxLength={128}
-              aria-label="Search captures by name or tag"
+              aria-label={t("Search names and tags…")}
               className="w-full rounded-full bg-elevated/80 py-2.5 pl-10 pr-4 text-sm outline-none ring-1 ring-white/10 transition focus:ring-2 focus:ring-accent"
             />
           </div>
@@ -313,7 +315,7 @@ export default function Home() {
                 aria-pressed={filter === f}
                 className={`snapvere-gallery-filter ${filter === f ? "is-active" : ""}`}
               >
-                {f}
+                {t(f === "all" ? "All" : f === "images" ? "Images" : "Videos")}
               </button>
             ))}
           </div>
@@ -323,7 +325,7 @@ export default function Home() {
       {/* galerija */}
       <main className="min-h-0 flex-1 overflow-auto px-5 pb-5">
         {loading && items.length === 0 ? (
-          <div className="grid h-full place-items-center text-muted">Loading…</div>
+          <div className="grid h-full place-items-center text-muted">{t("Loading…")}</div>
         ) : visible.length === 0 ? (
           <EmptyGallery onCapture={captureRegion} hasQuery={!!query.trim() || filter !== "all"} />
         ) : (
@@ -348,7 +350,7 @@ export default function Home() {
               aria-label="Load older captures"
               className="snapvere-btn-secondary rounded-full px-5 py-2.5 text-sm font-semibold transition hover:bg-elevated disabled:opacity-60"
             >
-              {loadingMore ? "Loading older captures…" : "Load more captures"}
+              {loadingMore ? t("Loading…") : t("Load more captures")}
             </button>
           </div>
         )}

@@ -252,13 +252,15 @@ pub fn start(
                     opts,
                     fps,
                     (ox, oy, ow, oh),
-                    ready_tx,
+                    ready_tx.clone(),
                 )
             }));
             let outcome = match result {
                 Ok(r) => r,
                 Err(_) => Err("snimanje: interna greška (panic uhvaćen)".to_string()),
             };
+            // Propagate startup failures and panic before the UI displays recording HUD.
+            report_start_failure(&ready_tx, &outcome);
             finish_session(&thread_app, &thread_ctl, &thread_path, outcome);
         })
         .map_err(|e| format!("ne mogu pokrenuti dretvu snimanja: {e}"))?;
@@ -270,9 +272,13 @@ pub fn start(
             ctl.phase.store(PHASE_IDLE, Ordering::SeqCst);
             return Err(e);
         }
-        Err(_) => {
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
             ctl.cancel.store(true, Ordering::SeqCst);
             return Err("snimanje se nije pokrenulo na vrijeme".into());
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            ctl.cancel.store(true, Ordering::SeqCst);
+            return Err("dretva snimanja završila je bez potvrde inicijalizacije".into());
         }
     }
 
@@ -312,10 +318,47 @@ pub fn cancel(app: &AppHandle) -> Result<(), String> {
 }
 
 /// Zamijeni skup redact pravokutnika. Prazan popis = ništa se ne pikselizira.
+const MAX_BLUR_REGIONS: usize = 32;
+
+/// Bound redact work per video frame and clamp hostile/overflowing rectangles
+/// to physical recording dimensions before passing them to the pixel loop.
+fn bounded_blur_rects(
+    rects: &[PixelRect],
+    width: u32,
+    height: u32,
+) -> Result<Vec<PixelRect>, String> {
+    if rects.len() > MAX_BLUR_REGIONS {
+        return Err(format!(
+            "Too many redact areas (maximum {MAX_BLUR_REGIONS})"
+        ));
+    }
+    Ok(rects
+        .iter()
+        .filter_map(|rect| {
+            let x = rect.x.min(width);
+            let y = rect.y.min(height);
+            let w = rect.width.min(width.saturating_sub(x));
+            let h = rect.height.min(height.saturating_sub(y));
+            (w > 0 && h > 0).then_some(PixelRect {
+                x,
+                y,
+                width: w,
+                height: h,
+            })
+        })
+        .collect())
+}
+
 pub fn set_blur_regions(app: &AppHandle, rects: Vec<PixelRect>) -> Result<(), String> {
-    with_ctl(app, |ctl| {
-        *crate::state::lock(&ctl.blur) = rects;
-    })
+    let state = app.state::<AppState>();
+    let guard = crate::state::lock(&state.recorder);
+    let Some(session) = guard.as_ref() else {
+        return Err("nema aktivnog snimanja".into());
+    };
+    let ctl = &session.ctl;
+    let bounded = bounded_blur_rects(&rects, ctl.width, ctl.height)?;
+    *crate::state::lock(&ctl.blur) = bounded;
+    Ok(())
 }
 
 pub fn set_paused(app: &AppHandle, paused: bool) -> Result<RecordStatus, String> {
@@ -471,6 +514,33 @@ impl Encoder {
     }
 }
 
+/// Report startup failures to the waiting caller; after READY the receiver is gone.
+fn report_start_failure<T>(
+    ready: &std::sync::mpsc::Sender<Result<(), String>>,
+    outcome: &Result<T, String>,
+) {
+    if let Err(error) = outcome {
+        let _ = ready.send(Err(error.clone()));
+    }
+}
+
+/// A successful container finalization never masks a frame/audio capture failure.
+fn recording_completion(
+    recording_error: Option<String>,
+    finalize_result: Result<(), String>,
+) -> Result<(), String> {
+    match (recording_error, finalize_result) {
+        (Some(recording), Err(finalize)) => Err(format!(
+            "{recording}; završavanje snimke također nije uspjelo: {finalize}"
+        )),
+        (Some(recording), Ok(())) => Err(recording),
+        (None, Err(finalize)) => Err(format!(
+            "snimanje: završavanje datoteke nije uspjelo — {finalize}"
+        )),
+        (None, Ok(())) => Ok(()),
+    }
+}
+
 /// Rezultat snimanja koji ide u `finish_session`.
 struct Recorded {
     cancelled: bool,
@@ -493,11 +563,6 @@ fn run(
 ) -> Result<Recorded, String> {
     let (ox, oy, ow, oh) = crop;
     let t0 = Instant::now();
-
-    // READY ide ODMAH: HUD se pojavi u par desetaka ms, a DXGI (~170 ms) i Media
-    // Foundation (~180 ms) se dižu dok korisnik već vidi kontrole. Padne li nešto od
-    // toga, `finish_session` javi grešku kroz `rec-done` i HUD se sam skloni.
-    let _ = ready.send(Ok(()));
 
     let mut source = Source::open(&target)?;
     let (src_w, src_h) = source.size();
@@ -584,8 +649,17 @@ fn run(
     let mut last_time_100ns = -1i64;
 
     let mut frame_buf = vec![0u8; (ow as usize) * (oh as usize) * 4];
+    // Do not report READY before DXGI, Media Foundation, mixer, encoder and
+    // frame buffers exist. A timed-out caller must not leave a live session.
+    if ctl.cancel.load(Ordering::Acquire) {
+        return Err("snimanje: inicijalizacija je otkazana".into());
+    }
+    ready
+        .send(Ok(()))
+        .map_err(|_| "snimanje: pozivatelj više ne čeka inicijalizaciju".to_string())?;
     let mut thumb: Option<image::RgbaImage> = None;
     let mut cancelled = false;
+    let mut recording_error: Option<String> = None;
     // Dijagnostika: koliko obrada framea (grab+crop+kursor+blur+encode) stvarno traje.
     let mut work_total = Duration::ZERO;
 
@@ -635,7 +709,9 @@ fn run(
         let full = match source.grab(2) {
             Ok(f) => f,
             Err(e) => {
-                log(&format!("snimanje: greška pri hvatanju framea — {e}"));
+                let error = format!("snimanje: greška pri hvatanju framea — {e}");
+                log(&error);
+                recording_error = Some(error);
                 break;
             }
         };
@@ -679,7 +755,9 @@ fn run(
         last_time_100ns = time_100ns;
 
         if let Err(e) = encoder.write(&frame_buf, time_100ns, dur_100ns) {
-            log(&format!("snimanje: enkoder je odbio frame — {e}"));
+            let error = format!("snimanje: enkoder je odbio frame — {e}");
+            log(&error);
+            recording_error = Some(error);
             break;
         }
 
@@ -687,7 +765,10 @@ fn run(
         if let Some(m) = &mixer {
             let due = ((media.saturating_sub(AUDIO_LAG)).as_secs_f64() * audio::RATE as f64) as i64;
             if let Err(e) = write_audio_until(&mut encoder, m, &mut audio_written, due) {
-                log(&format!("snimanje: audio je odbijen — {e}"));
+                let error = format!("snimanje: audio je odbijen — {e}");
+                log(&error);
+                recording_error = Some(error);
+                break;
             }
         }
 
@@ -719,9 +800,13 @@ fn run(
     let _ = app.emit("snapvere:rec-state", ctl.status());
     #[cfg(windows)]
     if let Some(m) = &mixer {
-        // Rep: zvuk do zadnjeg framea (WASAPI ga već ima u redu, samo ga još nismo povukli).
-        let end = ((last_time_100ns.max(0) as f64 / 1e7) * audio::RATE as f64) as i64;
-        let _ = write_audio_until(&mut encoder, m, &mut audio_written, end);
+        if !cancelled && recording_error.is_none() {
+            // Treat even the final audio write as a recording failure.
+            let end = ((last_time_100ns.max(0) as f64 / 1e7) * audio::RATE as f64) as i64;
+            if let Err(e) = write_audio_until(&mut encoder, m, &mut audio_written, end) {
+                recording_error = Some(format!("snimanje: završni audio zapis nije uspio — {e}"));
+            }
+        }
     }
     let frames = ctl.frames.load(Ordering::Relaxed).max(1);
     log(&format!(
@@ -729,8 +814,10 @@ fn run(
         work_total.as_secs_f64() * 1000.0 / frames as f64,
         1000.0 / fps as f64
     ));
-    encoder.finish()?;
+    // Finalize to release native file handles, but never commit a partial recording.
+    let finalize_result = encoder.finish();
     drop(encoder);
+    recording_completion(recording_error, finalize_result)?;
 
     Ok(Recorded {
         cancelled,

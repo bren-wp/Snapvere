@@ -25,7 +25,6 @@
     "core:window:allow-set-size",
     "core:window:allow-set-fullscreen",
     "core:window:allow-current-monitor",
-    "core:event:default",
-    "store:default"
+    "core:event:default"
   ]
 }

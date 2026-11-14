@@ -2,6 +2,21 @@
 
 SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO**.
 
+## v0.2.12 — recorder failure integrity (unreleased Draft PR)
+
+- Wait for DXGI/xcap, Media Foundation, audio, encoder and frame-buffer initialization before reporting READY; return startup errors immediately.
+- Propagate capture, video encoding, audio writing and finalization errors; do not register incomplete recordings.
+- Attempt finalization and release native file handles even after a failure; retain both root and finalization errors.
+- Add hardware-independent Rust regression tests and bump Cargo, Tauri, npm and lockfile version metadata.
+- Restricted Settings Store permissions to Settings only; all capture windows now use typed, origin-checked Rust IPC snapshots and overlay audio toggle commands.
+- Enforced native IPC caller window roles for capture startup, recorder controls, redact commands, gallery deletion and clipboard export; bounded redact rectangles to 32 within the active recording frame.
+- Refuse startup instead of silently replacing an unreadable on-disk SQLite gallery with volatile in-memory history; display a native Windows error dialog and preserve database/media for manual recovery. Added corruption regression test.
+- Fixed Rust test channel type inference (E0282) and removed the unused SQLite in-memory fallback reported by Clippy/dead-code checks.
+- Added a cross-window language selector with English default and 11 optional languages; settings are validated and persisted via window-restricted Rust IPC, and capture/Settings core copy is translated.
+- Removed the customer-visible LOCAL-FIRST and LOCAL LIBRARY marketing/dev labels, streamlined saved-gallery copy, simplified hotkey diagnostic wording and adjusted Settings UI for longer translations.
+- Added translation catalog tests and frontend CI gate; unreviewed copy falls back safely to English.
+- **Pending:** Windows CI, actual-device failure injection, tested backup/migration recovery, remaining IPC/security audit and visual acceptance. No new release has been published.
+
 ## v0.2.9 — premium stability candidate (unreleased)
 
 - Split the gallery viewer into image/video/error modules; extracted Settings controls and validated preference model.

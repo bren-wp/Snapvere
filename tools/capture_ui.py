@@ -116,6 +116,22 @@ with sync_playwright() as p:
         "Snapvere · version " + expected_version, exact=True
     ).wait_for(timeout=20000)
 
+    # Language selector must work across all 12 locales without clipping controls.
+    settings.get_by_role("navigation").get_by_role("button", name="General settings").click()
+    selector = settings.get_by_role("combobox")  # name changes when the locale changes
+    assert selector.locator("option").count() == 12, "Expected 12 selectable languages"
+    for language in ("hr", "de", "es", "fr", "it", "pt", "nl", "pl", "cs", "sk", "sl", "en"):
+        selector.select_option(language)
+        settings.wait_for_function(
+            "(code) => document.documentElement.lang === code",
+            arg=language,
+            timeout=5000,
+        )
+        assert not settings.evaluate("() => document.documentElement.scrollWidth > window.innerWidth + 2"), (
+            f"Settings interface overflows for language {language}"
+        )
+    settings.screenshot(path=str(OUTPUT / "settings-languages.png"))
+
     # The editor shows an existing, real React UI screenshot as its test image.
     # The preview transport is mocked: this is a UI render, not a native capture test.
     editor = app.new_page()

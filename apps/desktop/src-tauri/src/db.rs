@@ -26,9 +26,10 @@ impl Db {
         Ok(db)
     }
 
-    /// Baza samo u memoriji — zadnja linija obrane kad se datoteka ne da otvoriti.
-    /// Povijest se tada ne pamti između pokretanja, ali capture i snimanje rade.
-    pub fn open_in_memory() -> anyhow::Result<Self> {
+    /// Isolated test fixture: production must never silently substitute an
+    /// ephemeral database when the on-disk gallery cannot be opened.
+    #[cfg(test)]
+    fn open_in_memory() -> anyhow::Result<Self> {
         let conn = Connection::open_in_memory()?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         let db = Self { conn };
@@ -407,5 +408,24 @@ mod gallery_tests {
             .query_row("SELECT COUNT(*) FROM screenshot_tags", [], |r| r.get(0))?;
         assert_eq!(count, 0);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod database_corruption_tests {
+    use super::*;
+
+    #[test]
+    fn invalid_existing_database_is_preserved_for_recovery() {
+        let path = std::env::temp_dir().join(format!(
+            "snapvere-broken-db-{}.sqlite",
+            uuid::Uuid::new_v4()
+        ));
+        let original = b"This is not an SQLite database. User files must survive.";
+        std::fs::write(&path, original).unwrap();
+
+        assert!(Db::open(&path).is_err(), "Corrupt DB must not open");
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+        std::fs::remove_file(&path).unwrap();
     }
 }

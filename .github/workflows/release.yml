@@ -173,11 +173,15 @@ jobs:
             All three Windows executables originate from the same Tauri build and were verified before publication.
 
             ### Changes in v${{ steps.version.outputs.value }}
-            - Capture-first home workspace with clearly separated region, screen recording and full-screen actions.
-            - Searchable local gallery toolbar, improved responsive layout, and accessible keyboard navigation.
-            - Grouped Capture / Recording / Save / Hotkeys / General / Privacy / About settings, with the official Snapvere site's matching brand tokens.
-            - Native picker Save As and isolated Tauri WebView privileges remain enforced, with frontend, Windows Rust and RustSec quality gates.
-            - Portable, NSIS and MSI packages built from one revision, alongside SHA-256 checksums.
+            - Correct recording startup handshake: DXGI/xcap, Media Foundation, optional audio mixer and encoder must initialize before success is reported.
+            - Prevent damaged recordings from entering the gallery when frame capture, encoding, audio writing or container finalization fails.
+            - Restrict Tauri Store access to the Settings WebView; use window-authorized Rust IPC for capture preferences, overlay audio toggles, recorder controls, deletion and clipboard export.
+            - Limit redact regions and clip dimensions to the active recording canvas to bound per-frame work and reject invalid geometry.
+            - Stop safely with a visible warning when an existing SQLite database cannot be opened, instead of silently switching to volatile history.
+            - Add regression tests for recorder failures, IPC caller roles, redact validation and preservation of an unreadable database.
+            - Add an English-first 12-language selector with persistent settings, cross-window updates and translation regression checks.
+            - Simplify user-facing text by removing LOCAL-FIRST and LOCAL LIBRARY badges.
+            - Build portable, NSIS and MSI packages from a single revision with SHA-256 hashes.
 
             **Preview release.** Native Windows 10/11 capture, recorder, audio, multi-monitor,
             accessibility, install/upgrade/uninstall and 1:1 visual comparisons are not yet

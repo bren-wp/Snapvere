@@ -25,7 +25,7 @@ A focused Windows capture workspace from **[BRENDIGO](https://brendigo.com)**.
 
 > **Distribution notice:** snapvere.com currently publishes SNAPVERE v0.0.8 built with
 > .NET / WinUI 3. This repository builds the separate Tauri 2 / Rust Windows edition
-> (v0.2.11 development branch). Do not mix their installers, licenses, versions or upgrade paths.
+> (v0.2.12 development candidate; latest published GitHub release: v0.2.11). Do not mix their installers, licenses, versions or upgrade paths.
 > The production website, email download flow, and its binaries are not modified
 > by this GitHub release.
 >
@@ -34,6 +34,21 @@ A focused Windows capture workspace from **[BRENDIGO](https://brendigo.com)**.
 > presented for acceptance before installation. Business use does not require an
 > activation key. Existing MIT-licensed source and third-party license grants
 > remain valid. The separate public WinUI distribution has its own release path.
+
+## Languages · 12 available
+
+Snapvere starts in **English**. Select a language in **Settings → General → Language**:
+English, Hrvatski, Deutsch, Español, Français, Italiano, Português,
+Nederlands, Polski, Čeština, Slovenčina or Slovenščina.
+
+The selection is stored in the existing on-device Settings file through an
+allowlisted Rust command and broadcast to all open desktop windows. The navigation,
+capture actions and principal Settings controls have reviewed translations in all
+12 languages. **Remaining UI copy falls back to English** while translations are
+reviewed; this is not yet a claim of complete end-to-end localization. Locale
+normalization, fallback, supported languages and core translations are covered
+by automated tests. Hardware, visual alignment and translated layout QA are still
+required before final release acceptance.
 
 ## Your screen. Your story. One streamlined workflow.
 

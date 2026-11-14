@@ -2,6 +2,7 @@
 // Tauri v2 automatski mapira camelCase (JS) → snake_case (Rust) argumente.
 
 import { invoke } from "@tauri-apps/api/core";
+import type { CapturePreferences } from "./capturePreferences";
 import type {
   CaptureAction,
   ImageFormat,
@@ -15,6 +16,18 @@ import type {
 } from "./types";
 
 export const ipc = {
+  // Language preferences are read-only to non-settings windows.
+  getAppLanguage: () => invoke<string>("get_app_language"),
+  setAppLanguage: (language: string) =>
+    invoke<void>("set_app_language", { language }),
+  // ── least-privilege settings snapshots ──
+  readCapturePreferences: () => invoke<CapturePreferences>("get_capture_preferences"),
+  getOverlayRecordingPreferences: () =>
+    invoke<{ recordMic: boolean; recordSystemAudio: boolean; recordFormat: "mp4" | "gif" }>(
+      "get_overlay_recording_preferences",
+    ),
+  setOverlayAudioPreference: (key: "recordMic" | "recordSystemAudio", enabled: boolean) =>
+    invoke<void>("set_overlay_audio_preference", { key, enabled }),
   // ── capture ──
   listMonitors: () => invoke<MonitorInfo[]>("list_monitors"),
   beginRegionCapture: (mode: "shot" | "record" = "shot") =>

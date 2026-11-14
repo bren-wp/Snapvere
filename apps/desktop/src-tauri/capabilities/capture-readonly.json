@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "capture-readonly",
+  "description": "Capture windows may not directly mutate settings.json; reading now goes through origin-checked Rust IPC.",
+  "windows": [
+    "home",
+    "overlay",
+    "overlay-*",
+    "editor"
+  ],
+  "permissions": []
+}

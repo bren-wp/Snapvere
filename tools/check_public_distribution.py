@@ -61,8 +61,13 @@ privileged = json.loads(
 )
 assert privileged["windows"] == ["settings"]
 assert set(privileged["permissions"]) == {
-    "autostart:default", "opener:default", "dialog:allow-open"
-}, "Settings permissions must be restricted to startup, opener and folder picker"
+    "autostart:default", "opener:default", "dialog:allow-open",
+    "store:allow-load", "store:allow-get-store", "store:allow-get",
+    "store:allow-set", "store:allow-save",
+}, "Settings permissions must stay restricted to startup, dialogs and settings persistence"
+assert not any(permission.startswith("store:") for permission in caps["permissions"]), (
+    "Shared WebViews must not have direct Store access"
+)
 app_src = (APP / "src")
 for source in app_src.rglob("*.tsx"):
     if source.name == "Settings.tsx":

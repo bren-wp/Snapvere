@@ -203,7 +203,7 @@ export default function Editor({ pathB64 }: { pathB64: string }) {
     try {
       const { format, quality } = await readCapturePreferences();
       await ipc.saveEditedImage(exportBase64(), format, quality);
-      setNotice("Saved to your local Snapvere gallery.");
+      setNotice("Saved to your gallery.");
     } catch (e) {
       setNotice(`Could not save the screenshot: ${String(e)}`);
       console.error(e);

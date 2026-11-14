@@ -1,4 +1,4 @@
-import { load } from "@tauri-apps/plugin-store";
+import { ipc } from "./ipc";
 import {
   DEFAULT_CAPTURE_PREFERENCES,
   normalizeCapturePreferences,
@@ -11,11 +11,7 @@ import {
  */
 export async function readCapturePreferences(): Promise<CapturePreferences> {
   try {
-    const store = await load("settings.json", { autoSave: true, defaults: {} });
-    const [format, quality] = await Promise.all([
-      store.get<unknown>("format"),
-      store.get<unknown>("quality"),
-    ]);
+    const { format, quality } = await ipc.readCapturePreferences();
     return normalizeCapturePreferences(format, quality);
   } catch (error) {
     // Capture/export must remain available if the local settings store fails.
