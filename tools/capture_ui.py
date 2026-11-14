@@ -127,7 +127,7 @@ with sync_playwright() as p:
     )
     assert editor.get_by_role("group", name="Annotation tools").get_by_role("button").count() == 8
     assert editor.get_by_role("group", name="Annotation colors").get_by_role("button").count() == 7
-    assert editor.get_by_role("button", name="Save image as a new file").is_disabled is False
+    assert editor.get_by_role("button", name="Save image as a new file").is_enabled()
     assert not editor.evaluate("() => document.documentElement.scrollWidth > window.innerWidth + 2"), (
         "Editor overflows horizontally"
     )
