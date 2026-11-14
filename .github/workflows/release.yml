@@ -173,10 +173,11 @@ jobs:
             All three Windows executables originate from the same Tauri build and were verified before publication.
 
             ### Changes in v${{ steps.version.outputs.value }}
-            - Native Save As chooser from the editor and capture overlay; the renderer no longer controls arbitrary export destinations.
-            - Per-window Tauri capability isolation for Home, Settings, editor, overlay and recording HUD with automated policy validation.
-            - Previous v0.2.9 recording, screenshot and dependency hardening, carried forward without replacing the existing release.
-            - Locked Rust/TypeScript tests, RustSec advisory review, three Windows packages and SHA-256 checksums.
+            - Capture-first home workspace with clearly separated region, screen recording and full-screen actions.
+            - Searchable local gallery toolbar, improved responsive layout, and accessible keyboard navigation.
+            - Grouped Capture / Recording / Save / Hotkeys / General / Privacy / About settings, with the official Snapvere site's matching brand tokens.
+            - Native picker Save As and isolated Tauri WebView privileges remain enforced, with frontend, Windows Rust and RustSec quality gates.
+            - Portable, NSIS and MSI packages built from one revision, alongside SHA-256 checksums.
 
             **Preview release.** Native Windows 10/11 capture, recorder, audio, multi-monitor,
             accessibility, install/upgrade/uninstall and 1:1 visual comparisons are not yet

@@ -80,11 +80,29 @@ with sync_playwright() as p:
     page = app.new_page()
     page.goto("http://127.0.0.1:1420/", wait_until="networkidle")
     page.get_by_role("banner").get_by_role("button", name="Capture region").wait_for(timeout=30000)
+    capture_actions = page.get_by_role("group", name="Capture actions").get_by_role("button")
+    assert capture_actions.count() == 3
+    assert [capture_actions.nth(i).get_attribute("aria-label") for i in range(3)] == [
+        "Capture region", "Record screen", "Full screen"
+    ], "Web-aligned capture workflow/action order drifted"
+    assert page.get_by_role("group", name="Filter gallery").get_by_role("button").count() == 3
+    assert not page.evaluate("() => document.documentElement.scrollWidth > window.innerWidth + 2"), (
+        "Desktop capture workspace overflows horizontally"
+    )
     page.wait_for_timeout(1200)
     page.screenshot(path=str(OUTPUT / "home.png"), full_page=False)
     settings = app.new_page()
     settings.goto("http://127.0.0.1:1420/#settings", wait_until="networkidle")
     settings.get_by_role("navigation").get_by_role("button", name="General").wait_for(timeout=30000)
+    assert settings.get_by_role("navigation").get_by_role(
+        "button", name="Capture settings", exact=True
+    ).get_attribute("aria-current") == "page", "Capture should be the default settings page"
+    settings.get_by_role("navigation").get_by_role("button", name="Capture settings").focus()
+    settings.keyboard.press("ArrowDown")
+    assert settings.get_by_role("navigation").get_by_role(
+        "button", name="Recording settings", exact=True
+    ).get_attribute("aria-current") == "page", "Keyboard sidebar navigation broke"
+    settings.get_by_role("navigation").get_by_role("button", name="Capture settings").click()
     settings.wait_for_timeout(1500)
     settings.screenshot(path=str(OUTPUT / "settings.png"), full_page=False)
     for tab in ("Hotkeys", "Capture", "Recording", "Save", "Privacy", "About"):
@@ -106,6 +124,12 @@ with sync_playwright() as p:
     editor.wait_for_function(
         "() => document.querySelector('canvas')?.width >= 900"
         " && !document.body.textContent.includes('could not be loaded')", timeout=20000
+    )
+    assert editor.get_by_role("group", name="Annotation tools").get_by_role("button").count() == 8
+    assert editor.get_by_role("group", name="Annotation colors").get_by_role("button").count() == 7
+    assert editor.get_by_role("button", name="Save image as a new file").is_enabled()
+    assert not editor.evaluate("() => document.documentElement.scrollWidth > window.innerWidth + 2"), (
+        "Editor overflows horizontally"
     )
     editor.screenshot(path=str(OUTPUT / "editor.png"))
     app.close()
