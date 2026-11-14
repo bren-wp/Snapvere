@@ -93,13 +93,16 @@ pub fn set_app_language(
     let store = app.store("settings.json").map_err(estr)?;
     store.set("language", language.clone());
     store.save().map_err(estr)?;
-    app.emit("snapvere:language-changed", language).map_err(estr)
+    app.emit("snapvere:language-changed", language)
+        .map_err(estr)
 }
 
 #[cfg(test)]
 #[test]
 fn language_codes_are_strictly_whitelisted() {
-    for code in ["en", "hr", "de", "es", "fr", "it", "pt", "nl", "pl", "cs", "sk", "sl"] {
+    for code in [
+        "en", "hr", "de", "es", "fr", "it", "pt", "nl", "pl", "cs", "sk", "sl",
+    ] {
         assert!(supported_language(code));
     }
     for code in ["", "EN", "en-US", "xx", "../settings.json", "hr\0"] {

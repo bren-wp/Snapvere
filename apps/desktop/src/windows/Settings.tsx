@@ -198,7 +198,7 @@ export default function Settings() {
                 data-settings-tab={item.id}
                 onClick={() => { setTab(item.id); setNotice(null); setStatus(null); }}
                 aria-current={tab === item.id ? "page" : undefined}
-                aria-label={`${t(item.label)} ${t("Settings")}`}
+                aria-label={`${t(item.label)} ${language === "en" ? "settings" : t("Settings")}`}
                 className={`snapvere-settings-tab flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:ring-accent ${
                   tab === item.id ? "bg-accent text-white" : "text-muted hover:bg-elevated hover:text-text"
                 }`}
