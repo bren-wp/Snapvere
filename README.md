@@ -13,7 +13,7 @@ A focused Windows capture workspace from **[BRENDIGO](https://brendigo.com)**.
 [![Product](https://img.shields.io/badge/Product-SNAPVERE-7648eb?style=flat-square)](https://snapvere.com)
 [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-141416?style=flat-square)](https://snapvere.com/download/)
 [![Privacy](https://img.shields.io/badge/Storage-Local--first-141416?style=flat-square)](https://snapvere.com/privacy/)
-[![Release](https://img.shields.io/badge/Repository--candidate-v0.2.11-141416?style=flat-square)](https://github.com/bren-wp/Snapvere/releases)
+[![Release](https://img.shields.io/github/v/release/bren-wp/Snapvere?style=flat-square)](https://github.com/bren-wp/Snapvere/releases)
 
 [**🌐 Public SNAPVERE website (.NET edition)**](https://snapvere.com/) · [**⬇️ Tauri / Rust Windows releases**](https://github.com/bren-wp/Snapvere/releases) · [**🔐 Website privacy**](https://snapvere.com/privacy/)
 
@@ -99,13 +99,13 @@ The desktop interface now follows the repository website's navy/violet palette a
 
 The underlying screenshot, recording, gallery and export Rust commands are unchanged. Release v0.2.11 is a **candidate** until the PR has passed Windows CI and the UI previews have been inspected. Renderer screenshots validate composition, not exact pixel-parity with the separately deployed live WinUI website or real Windows hardware.
 
-## What's improved in v0.2.10 (release candidate)
+## What's improved in v0.2.10
 
 - **Native, safer Save As:** the editor and capture overlay use the operating-system destination picker; the renderer no longer supplies an arbitrary path to native file-write IPC.
 - **Scoped Tauri permissions:** the Home window alone can create Settings and confirm deletes; Settings alone owns its folder picker, autostart and opener rights. Capture and recording windows do not inherit those grants.
 - **Stronger CI gates:** static per-window capability validation and a pre-merge check for duplicate Windows release tags reduce regressions and post-merge publishing failures.
 
-Until the v0.2.10 workflow has finished successfully, **v0.2.9 remains the latest published repository release**. The separately deployed WinUI website binaries are unchanged. Physical Windows and 1:1 reference-image QA remain open; this candidate is not an independently certified production release.
+**v0.2.10 was published on 14 November 2026** with the native Save As, scoped Tauri permissions and Windows installers. The separately deployed WinUI website binaries are unchanged. Physical Windows and 1:1 reference-image QA remain open.
 
 ## What's improved in v0.2.9
 
@@ -136,19 +136,19 @@ The source and interface images are built directly from the SNAPVERE project. Pr
 
 ## Get SNAPVERE for Windows
 
-**Latest published repository release: v0.2.9 (14 November 2026).** SNAPVERE provides three Windows package formats with a SHA-256 manifest. Obtain the Tauri/Rust edition from [GitHub Releases](https://github.com/bren-wp/Snapvere/releases/tag/v0.2.9). The downloads on snapvere.com are maintained separately for the .NET/WinUI edition and are **not** interchangeable. The repository packages remain unsigned preview builds.
+**Latest published repository release: v0.2.10 (14 November 2026).** SNAPVERE provides three Windows package formats with a SHA-256 manifest. Obtain the Tauri/Rust edition from [GitHub Releases](https://github.com/bren-wp/Snapvere/releases/tag/v0.2.10). The downloads on snapvere.com are maintained separately for the .NET/WinUI edition and are **not** interchangeable. The repository packages remain unsigned preview builds.
 
 | Package | Ideal for | Official download |
 |---|---|---|
-| 💻 **Portable EXE** | Run without installing SNAPVERE | [Snapvere-Portable.exe](https://github.com/bren-wp/Snapvere/releases/download/v0.2.9/Snapvere-Portable.exe) |
-| 📦 **EXE Setup** | Guided installation | [Snapvere-Setup.exe](https://github.com/bren-wp/Snapvere/releases/download/v0.2.9/Snapvere-Setup.exe) |
-| 🏢 **MSI Setup** | Windows managed installation | [Snapvere-Setup.msi](https://github.com/bren-wp/Snapvere/releases/download/v0.2.9/Snapvere-Setup.msi) |
+| 💻 **Portable EXE** | Run without installing SNAPVERE | [Snapvere-Portable.exe](https://github.com/bren-wp/Snapvere/releases/download/v0.2.10/Snapvere-Portable.exe) |
+| 📦 **EXE Setup** | Guided installation | [Snapvere-Setup.exe](https://github.com/bren-wp/Snapvere/releases/download/v0.2.10/Snapvere-Setup.exe) |
+| 🏢 **MSI Setup** | Windows managed installation | [Snapvere-Setup.msi](https://github.com/bren-wp/Snapvere/releases/download/v0.2.10/Snapvere-Setup.msi) |
 
 **Requires:** 64-bit Windows 10/11 and Microsoft WebView2 Runtime. Portable means the SNAPVERE installer is not needed; some systems may still need WebView2 installed. These are **unsigned preview builds** and Windows SmartScreen may display a warning.
 
 ### Verify what you install
 
-Download [SHA256SUMS.txt](https://github.com/bren-wp/Snapvere/releases/download/v0.2.9/SHA256SUMS.txt) **from the same package version**, then run:
+Download [SHA256SUMS.txt](https://github.com/bren-wp/Snapvere/releases/download/v0.2.10/SHA256SUMS.txt) **from the same package version**, then run:
 
 ```powershell
 Get-FileHash .\Snapvere-Portable.exe -Algorithm SHA256
