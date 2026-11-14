@@ -91,7 +91,6 @@ export const CORE_STRINGS = [
   "Open data folder",
   "Search names and tags…"
 ] as const;
-type CoreString = (typeof CORE_STRINGS)[number];
 
 // The shared navigation, capture and settings controls have human-reviewed
 // translations. Other copy intentionally falls back to English until reviewed.
