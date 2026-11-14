@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  ACTION_STRINGS,
   CORE_STRINGS,
   LANGUAGES,
   missingCoreTranslations,
@@ -22,9 +23,10 @@ test("English is the stable default and exactly 12 unique locales are offered", 
 test("Every offered language has complete nonempty core control translations", () => {
   assert.deepEqual(missingCoreTranslations(), []);
   assert.ok(CORE_STRINGS.length >= 35);
+  assert.ok(ACTION_STRINGS.length >= 35);
   for (const { code } of LANGUAGES) {
     assert.equal(normalizeLanguage(code), code);
-    for (const source of CORE_STRINGS) {
+    for (const source of [...CORE_STRINGS, ...ACTION_STRINGS]) {
       assert.ok(translate(code, source).trim(), `Missing ${code} translation for ${source}`);
     }
   }
@@ -34,6 +36,15 @@ test("User-critical settings and capture labels are actually translated", () => 
   for (const { code } of LANGUAGES.filter(({ code }) => code !== "en")) {
     for (const source of ["Settings", "Language", "Capture region", "Delete"]) {
       assert.notEqual(translate(code, source), source, `${code}: ${source}`);
+    }
+  }
+});
+
+test("gallery and recorder actions are translated in each non-English locale", () => {
+  for (const { code } of LANGUAGES.filter(({ code }) => code !== "en")) {
+    for (const key of ["Play recording", "Show in folder", "Stop and save", "Discard",
+      "Delete screenshot?", "Could not stop recording. Try again."]) {
+      assert.notEqual(translate(code, key), key, `${code}: ${key}`);
     }
   }
 });

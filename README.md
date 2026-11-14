@@ -50,6 +50,18 @@ normalization, fallback, supported languages and core translations are covered
 by automated tests. Hardware, visual alignment and translated layout QA are still
 required before final release acceptance.
 
+## v0.2.13 development quality improvements
+
+- Recording toolbar **Stop** and **Discard** are retryable if a native command fails;
+  the toolbar remains visible and offers a clear message instead of silently hiding.
+- The media gallery and recording toolbar now use localized accessible action names
+  in all 12 supported languages. File sizes and gallery dates use the chosen
+  language's number and date conventions.
+- Pure unit tests cover retry locks, corrupt metadata and translation completeness.
+  Automated browser preview tests inject a failed Stop command to ensure the
+  controls remain usable. Real Windows capture, audio and 1:1 visual QA are still
+  pending before a stable release.
+
 ## Your screen. Your story. One streamlined workflow.
 
 Capture the exact moment that matters. Add an arrow, label a detail, redact a private field, and save a result you can find again. Whether you are reporting a bug, showing a client a design, building a tutorial or documenting a process, SNAPVERE keeps the work simple.
