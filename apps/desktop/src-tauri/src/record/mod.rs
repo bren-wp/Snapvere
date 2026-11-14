@@ -322,9 +322,15 @@ const MAX_BLUR_REGIONS: usize = 32;
 
 /// Bound redact work per video frame and clamp hostile/overflowing rectangles
 /// to physical recording dimensions before passing them to the pixel loop.
-fn bounded_blur_rects(rects: &[PixelRect], width: u32, height: u32) -> Result<Vec<PixelRect>, String> {
+fn bounded_blur_rects(
+    rects: &[PixelRect],
+    width: u32,
+    height: u32,
+) -> Result<Vec<PixelRect>, String> {
     if rects.len() > MAX_BLUR_REGIONS {
-        return Err(format!("Too many redact areas (maximum {MAX_BLUR_REGIONS})"));
+        return Err(format!(
+            "Too many redact areas (maximum {MAX_BLUR_REGIONS})"
+        ));
     }
     Ok(rects
         .iter()

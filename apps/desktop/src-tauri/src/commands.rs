@@ -104,7 +104,12 @@ pub fn get_overlay_recording_preferences(
 ) -> Result<OverlayRecordingPreferences, String> {
     require_window_label(window.label(), &["overlay"])?;
     let store = app.store("settings.json").map_err(estr)?;
-    let get_flag = |key| store.get(key).and_then(|value| value.as_bool()).unwrap_or(false);
+    let get_flag = |key| {
+        store
+            .get(key)
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false)
+    };
     let record_format = match store
         .get("recordFormat")
         .and_then(|value| value.as_str().map(str::to_owned))
