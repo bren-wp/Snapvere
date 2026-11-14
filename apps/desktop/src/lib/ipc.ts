@@ -16,6 +16,10 @@ import type {
 } from "./types";
 
 export const ipc = {
+  // Language preferences are read-only to non-settings windows.
+  getAppLanguage: () => invoke<string>("get_app_language"),
+  setAppLanguage: (language: string) =>
+    invoke<void>("set_app_language", { language }),
   // ── least-privilege settings snapshots ──
   readCapturePreferences: () => invoke<CapturePreferences>("get_capture_preferences"),
   getOverlayRecordingPreferences: () =>
