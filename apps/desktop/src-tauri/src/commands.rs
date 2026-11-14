@@ -56,6 +56,57 @@ fn require_window_label(label: &str, allowed: &[&str]) -> Result<(), String> {
     }
 }
 
+// No arbitrary store keys or language identifiers may be supplied by a WebView.
+fn supported_language(code: &str) -> bool {
+    matches!(
+        code,
+        "en" | "hr" | "de" | "es" | "fr" | "it" | "pt" | "nl" | "pl" | "cs" | "sk" | "sl"
+    )
+}
+
+/// Expose only the saved UI language; no generic settings read permission.
+#[tauri::command]
+pub fn get_app_language(app: AppHandle) -> Result<String, String> {
+    let store = app.store("settings.json").map_err(estr)?;
+    let saved = store
+        .get("language")
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .unwrap_or_else(|| "en".to_owned());
+    Ok(if supported_language(&saved) {
+        saved
+    } else {
+        "en".to_owned()
+    })
+}
+
+/// Only the Settings window can persist a validated language change.
+#[tauri::command]
+pub fn set_app_language(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    language: String,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["settings"])?;
+    if !supported_language(&language) {
+        return Err("Unsupported application language".into());
+    }
+    let store = app.store("settings.json").map_err(estr)?;
+    store.set("language", language.clone());
+    store.save().map_err(estr)?;
+    app.emit("snapvere:language-changed", language).map_err(estr)
+}
+
+#[cfg(test)]
+#[test]
+fn language_codes_are_strictly_whitelisted() {
+    for code in ["en", "hr", "de", "es", "fr", "it", "pt", "nl", "pl", "cs", "sk", "sl"] {
+        assert!(supported_language(code));
+    }
+    for code in ["", "EN", "en-US", "xx", "../settings.json", "hr\0"] {
+        assert!(!supported_language(code));
+    }
+}
+
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CapturePreferenceSnapshot {
