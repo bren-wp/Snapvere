@@ -10,6 +10,7 @@ import RecBar from "./windows/RecBar";
 import RecDraw from "./windows/RecDraw";
 import RecFrame from "./windows/RecFrame";
 import AppErrorBoundary from "./components/AppErrorBoundary";
+import { LanguageProvider } from "./lib/LanguageProvider";
 
 /**
  * Window router.
@@ -69,5 +70,5 @@ switch (kind) {
 }
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <AppErrorBoundary>{node}</AppErrorBoundary>,
+  <AppErrorBoundary><LanguageProvider>{node}</LanguageProvider></AppErrorBoundary>,
 );
