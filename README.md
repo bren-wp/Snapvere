@@ -25,7 +25,7 @@ A focused Windows capture workspace from **[BRENDIGO](https://brendigo.com)**.
 
 > **Distribution notice:** snapvere.com currently publishes SNAPVERE v0.0.8 built with
 > .NET / WinUI 3. This repository builds the separate Tauri 2 / Rust Windows edition
-> (v0.2.12 development candidate; latest published GitHub release: v0.2.11). Do not mix their installers, licenses, versions or upgrade paths.
+> (v0.2.13 development candidate; latest published GitHub release: v0.2.12). Do not mix their installers, licenses, versions or upgrade paths.
 > The production website, email download flow, and its binaries are not modified
 > by this GitHub release.
 >
@@ -108,7 +108,7 @@ The screenshots below come from **actual rendered React application screens in t
 
 </details>
 
-## SNAPVERE v0.2.11 — workspace and settings redesign (in development)
+## SNAPVERE v0.2.12 — screenshot and recording workspace
 
 The desktop interface now follows the repository website's navy/violet palette and interaction hierarchy more closely. The Home window presents three dedicated quick actions in order: **Capture region**, **Record screen**, **Full screen**, followed by gallery search and filters. Settings now groups the four capture-related sections first, then application-wide preferences, with keyboard navigation and responsive horizontal tabs in narrow windows.
 
