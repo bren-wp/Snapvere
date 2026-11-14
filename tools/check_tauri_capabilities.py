@@ -16,6 +16,10 @@ settings = read("settings-privileged.json")
 
 expected = {"home", "overlay", "editor", "settings", "recbar", "recdraw", "recframe", "overlay-*"}
 assert set(shared["windows"]) == expected, "Shared window set changed; review new WebView security"
+assert not any(p.startswith("store:") for p in shared["permissions"]), "Shared WebViews may alter global settings"
+capture = read("capture-readonly.json")
+assert set(capture["windows"]) == {"home", "overlay", "overlay-*", "editor"}
+assert not capture["permissions"], "Capture windows must not get store write permissions"
 assert home["windows"] == ["home"], "Home capability leaked into another window"
 assert settings["windows"] == ["settings"], "Settings capability leaked into another window"
 
@@ -36,10 +40,12 @@ assert set(home["permissions"]) == {
     "dialog:allow-ask",
 }, "Home permissions expanded without review"
 assert set(settings["permissions"]) == {
-    "autostart:default", "opener:default", "dialog:allow-open"
+    "autostart:default", "opener:default", "dialog:allow-open",
+    "store:allow-load", "store:allow-get-store", "store:allow-get",
+    "store:allow-set", "store:allow-save"
 }, "Settings permissions expanded without review"
 
 for name in ("home-privileged.json", "settings-privileged.json"):
     assert "*" not in "".join(read(name)["windows"]), f"Wildcard privileged capability: {name}"
 
-print("Tauri capability boundary OK: shared UI, Home-only creation/confirmation, Settings-only folder/startup/opener")
+print("Tauri capability boundary OK: unprivileged capture, Settings-only store writes, Home-only dialogs")

@@ -38,14 +38,103 @@ use uuid::Uuid;
 use crate::capture;
 use crate::logging::{self, log};
 use crate::models::{
-    CaptureAction, CaptureSource, ImageFormat, MonitorInfo, PixelRect, RecFrameRect, RecordOptions,
-    RecordStatus, Region, Screenshot,
+    CaptureAction, CaptureSource, ImageFormat, MonitorInfo, PixelRect, RecFrameRect, RecordFormat,
+    RecordOptions, RecordStatus, Region, Screenshot,
 };
 use crate::record::{self, RecordTarget};
 use crate::state::{lock, AppState};
 
 fn estr<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
+}
+
+fn require_window_label(label: &str, allowed: &[&str]) -> Result<(), String> {
+    if allowed.contains(&label) {
+        Ok(())
+    } else {
+        Err(format!("Window {label} is not authorized for this action"))
+    }
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CapturePreferenceSnapshot {
+    format: ImageFormat,
+    quality: u8,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OverlayRecordingPreferences {
+    record_mic: bool,
+    record_system_audio: bool,
+    record_format: RecordFormat,
+}
+
+/// The caller never chooses a store path or can read arbitrary settings keys.
+#[tauri::command]
+pub fn get_capture_preferences(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+) -> Result<CapturePreferenceSnapshot, String> {
+    require_window_label(window.label(), &["home", "overlay", "editor"])?;
+    let store = app.store("settings.json").map_err(estr)?;
+    let format = match store
+        .get("format")
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .as_deref()
+    {
+        Some("jpg") => ImageFormat::Jpg,
+        Some("webp") => ImageFormat::Webp,
+        _ => ImageFormat::Png,
+    };
+    let quality = store
+        .get("quality")
+        .and_then(|value| value.as_f64())
+        .filter(|value| value.is_finite())
+        .map(|value| value.round().clamp(1.0, 100.0) as u8)
+        .unwrap_or(92);
+    Ok(CapturePreferenceSnapshot { format, quality })
+}
+
+#[tauri::command]
+pub fn get_overlay_recording_preferences(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+) -> Result<OverlayRecordingPreferences, String> {
+    require_window_label(window.label(), &["overlay"])?;
+    let store = app.store("settings.json").map_err(estr)?;
+    let get_flag = |key| store.get(key).and_then(|value| value.as_bool()).unwrap_or(false);
+    let record_format = match store
+        .get("recordFormat")
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .as_deref()
+    {
+        Some("gif") => RecordFormat::Gif,
+        _ => RecordFormat::Mp4,
+    };
+    Ok(OverlayRecordingPreferences {
+        record_mic: get_flag("recordMic"),
+        record_system_audio: get_flag("recordSystemAudio"),
+        record_format,
+    })
+}
+
+/// Only the recording overlay can persist these two boolean recording toggles.
+#[tauri::command]
+pub fn set_overlay_audio_preference(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    key: String,
+    enabled: bool,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["overlay"])?;
+    if key != "recordMic" && key != "recordSystemAudio" {
+        return Err("Recording overlay cannot modify this setting".into());
+    }
+    let store = app.store("settings.json").map_err(estr)?;
+    store.set(key, enabled);
+    store.save().map_err(estr)
 }
 
 /// Capture je "u letu" — sprječava da drugi pritisak hotkeya krene prije nego prvi
@@ -868,7 +957,12 @@ pub async fn save_image_as(
 
 /// Kopiraj base64 PNG (iz editora) u clipboard.
 #[tauri::command]
-pub fn copy_base64_to_clipboard(app: AppHandle, base64_png: String) -> Result<(), String> {
+pub fn copy_base64_to_clipboard(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    base64_png: String,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["overlay", "editor"])?;
     let img = decode_editor_png(&base64_png)?;
     copy_rgba_to_clipboard(&app, &img)
 }
@@ -881,11 +975,13 @@ pub fn copy_base64_to_clipboard(app: AppHandle, base64_png: String) -> Result<()
 /// Na glavnoj dretvi bi to zamrznulo UI na par stotina milisekundi.
 #[tauri::command]
 pub async fn start_recording(
+    window: tauri::WebviewWindow,
     app: AppHandle,
     region: Option<Region>,
     monitor_id: Option<u32>,
     options: Option<RecordOptions>,
 ) -> Result<RecordStatus, String> {
+    require_window_label(window.label(), &["overlay"])?;
     tauri::async_runtime::spawn_blocking(move || {
         let opts = options.unwrap_or_else(|| record_options(&app));
         start_recording_inner(&app, region, monitor_id, opts)
@@ -1011,17 +1107,24 @@ pub fn dispatch_record_fullscreen(app: &AppHandle) {
 }
 
 #[tauri::command]
-pub fn stop_recording(app: AppHandle) -> Result<(), String> {
+pub fn stop_recording(window: tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
+    require_window_label(window.label(), &["recbar"])?;
     record::stop(&app)
 }
 
 #[tauri::command]
-pub fn cancel_recording(app: AppHandle) -> Result<(), String> {
+pub fn cancel_recording(window: tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
+    require_window_label(window.label(), &["recbar"])?;
     record::cancel(&app)
 }
 
 #[tauri::command]
-pub fn pause_recording(app: AppHandle, paused: bool) -> Result<RecordStatus, String> {
+pub fn pause_recording(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    paused: bool,
+) -> Result<RecordStatus, String> {
+    require_window_label(window.label(), &["recbar"])?;
     record::set_paused(&app, paused)
 }
 
@@ -1148,7 +1251,12 @@ pub fn rec_frame_rect(state: State<AppState>) -> Option<RecFrameRect> {
 
 /// Propuštaj klikove kroz sloj za crtanje (true = sloj hvata miš).
 #[tauri::command]
-pub fn set_draw_interactive(app: AppHandle, interactive: bool) -> Result<(), String> {
+pub fn set_draw_interactive(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    interactive: bool,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["recdraw"])?;
     let Some(win) = app.get_webview_window("recdraw") else {
         return Ok(());
     };
@@ -1163,13 +1271,19 @@ pub fn set_draw_interactive(app: AppHandle, interactive: bool) -> Result<(), Str
 
 /// Postavi redact područja koja Rust pikselizira u svakom frameu.
 #[tauri::command]
-pub fn set_blur_regions(app: AppHandle, rects: Vec<PixelRect>) -> Result<(), String> {
+pub fn set_blur_regions(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    rects: Vec<PixelRect>,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["recdraw"])?;
     record::set_blur_regions(&app, rects)
 }
 
 /// Sakrij UI snimanja (HUD + sloj za crtanje). Zove ga frontend kad snimanje završi.
 #[tauri::command]
-pub fn close_rec_hud(app: AppHandle) -> Result<(), String> {
+pub fn close_rec_hud(window: tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
+    require_window_label(window.label(), &["recbar"])?;
     for label in ["recbar", "recdraw", "recframe"] {
         if let Some(win) = app.get_webview_window(label) {
             let _ = win.hide();
@@ -1261,7 +1375,12 @@ pub async fn copy_media_image(app: AppHandle, id: String) -> Result<(), String> 
 }
 
 #[tauri::command]
-pub fn delete_screenshot(state: State<AppState>, id: String) -> Result<(), String> {
+pub fn delete_screenshot(
+    window: tauri::WebviewWindow,
+    state: State<AppState>,
+    id: String,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["home"])?;
     // Only delete the path from an existing gallery record, never an arbitrary webview argument.
     let shot = lock(&state.db)
         .get(&id)
@@ -1430,5 +1549,20 @@ mod frozen_capture_transport_tests {
     fn rgba_packet_empty_image_has_only_header() {
         let packet = frame_to_rgba_packet(&RgbaImage::new(0, 0));
         assert_eq!(packet, vec![0u8; 8]);
+    }
+}
+
+#[cfg(test)]
+mod ipc_origin_tests {
+    use super::require_window_label;
+
+    #[test]
+    fn privileged_commands_reject_unrelated_windows() {
+        assert!(require_window_label("recbar", &["recbar"]).is_ok());
+        assert!(require_window_label("home", &["home"]).is_ok());
+        assert!(require_window_label("overlay", &["overlay"]).is_ok());
+        assert!(require_window_label("settings", &["home"]).is_err());
+        assert!(require_window_label("recdraw", &["recbar"]).is_err());
+        assert!(require_window_label("recframe", &["recdraw"]).is_err());
     }
 }

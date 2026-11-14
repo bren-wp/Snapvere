@@ -318,10 +318,41 @@ pub fn cancel(app: &AppHandle) -> Result<(), String> {
 }
 
 /// Zamijeni skup redact pravokutnika. Prazan popis = ništa se ne pikselizira.
+const MAX_BLUR_REGIONS: usize = 32;
+
+/// Bound redact work per video frame and clamp hostile/overflowing rectangles
+/// to physical recording dimensions before passing them to the pixel loop.
+fn bounded_blur_rects(rects: &[PixelRect], width: u32, height: u32) -> Result<Vec<PixelRect>, String> {
+    if rects.len() > MAX_BLUR_REGIONS {
+        return Err(format!("Too many redact areas (maximum {MAX_BLUR_REGIONS})"));
+    }
+    Ok(rects
+        .iter()
+        .filter_map(|rect| {
+            let x = rect.x.min(width);
+            let y = rect.y.min(height);
+            let w = rect.width.min(width.saturating_sub(x));
+            let h = rect.height.min(height.saturating_sub(y));
+            (w > 0 && h > 0).then_some(PixelRect {
+                x,
+                y,
+                width: w,
+                height: h,
+            })
+        })
+        .collect())
+}
+
 pub fn set_blur_regions(app: &AppHandle, rects: Vec<PixelRect>) -> Result<(), String> {
-    with_ctl(app, |ctl| {
-        *crate::state::lock(&ctl.blur) = rects;
-    })
+    let state = app.state::<AppState>();
+    let guard = crate::state::lock(&state.recorder);
+    let Some(session) = guard.as_ref() else {
+        return Err("nema aktivnog snimanja".into());
+    };
+    let ctl = &session.ctl;
+    let bounded = bounded_blur_rects(&rects, ctl.width, ctl.height)?;
+    *crate::state::lock(&ctl.blur) = bounded;
+    Ok(())
 }
 
 pub fn set_paused(app: &AppHandle, paused: bool) -> Result<RecordStatus, String> {

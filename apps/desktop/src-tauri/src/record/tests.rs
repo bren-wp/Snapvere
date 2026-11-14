@@ -502,3 +502,26 @@ fn recorder_finalization_errors_are_preserved() {
     assert!(both.contains("GIF trailer failure"));
     assert!(recording_completion(None, Ok(())).is_ok());
 }
+
+#[test]
+fn redact_regions_are_bounded_and_cannot_overflow_frame_dimensions() {
+    let huge = PixelRect {
+        x: 20,
+        y: 12,
+        width: u32::MAX,
+        height: u32::MAX,
+    };
+    let result = bounded_blur_rects(&[huge], 64, 48).unwrap();
+    assert_eq!(result.len(), 1);
+    assert_eq!((result[0].x, result[0].y), (20, 12));
+    assert_eq!((result[0].width, result[0].height), (44, 36));
+
+    let invalid = PixelRect {
+        x: u32::MAX,
+        y: u32::MAX,
+        width: 100,
+        height: 100,
+    };
+    assert!(bounded_blur_rects(&[invalid], 64, 48).unwrap().is_empty());
+    assert!(bounded_blur_rects(&vec![huge; 33], 64, 48).is_err());
+}

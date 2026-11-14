@@ -13,7 +13,6 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
-import { load as loadStore } from "@tauri-apps/plugin-store";
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ipc } from "../lib/ipc";
@@ -156,11 +155,11 @@ export default function Overlay() {
         // Record mode ne zamrzava ekran: prozor je proziran, ispod je živi desktop,
         // pa nema ni screenshota ni učitavanja — overlay se pojavi odmah.
         document.body.classList.add("rec-live");
-        void loadStore("settings.json", { autoSave: true, defaults: {} })
-          .then(async (st) => {
-            setMic((await st.get<boolean>("recordMic")) ?? false);
-            setSysAudio((await st.get<boolean>("recordSystemAudio")) ?? false);
-            setGifFormat(((await st.get<string>("recordFormat")) ?? "mp4") === "gif");
+        void ipc.getOverlayRecordingPreferences()
+          .then((settings) => {
+            setMic(settings.recordMic);
+            setSysAudio(settings.recordSystemAudio);
+            setGifFormat(settings.recordFormat === "gif");
           })
           .catch(() => undefined);
         const c = frozenRef.current;
@@ -492,8 +491,7 @@ export default function Overlay() {
     if (key === "recordMic") setMic(v);
     else setSysAudio(v);
     try {
-      const st = await loadStore("settings.json", { autoSave: true, defaults: {} });
-      await st.set(key, v);
+      await ipc.setOverlayAudioPreference(key, v);
     } catch (e) {
       console.error(e);
     }

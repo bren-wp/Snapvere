@@ -102,6 +102,9 @@ pub fn run() {
         })
         // ── komande dostupne frontendu ───────────────────────────
         .invoke_handler(tauri::generate_handler![
+            commands::get_capture_preferences,
+            commands::get_overlay_recording_preferences,
+            commands::set_overlay_audio_preference,
             commands::list_monitors,
             commands::begin_region_capture,
             commands::reveal_overlay,
