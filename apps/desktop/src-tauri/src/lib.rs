@@ -58,17 +58,20 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             logging::init(&data_dir);
 
-            // Baza koja se ne da otvoriti (zaključana datoteka, oštećen WAL) NE smije
-            // srušiti pokretanje — capture i snimanje rade i bez povijesti.
+            // Never silently replace a persistent gallery with a volatile DB:
+            // it could make recordings and tags appear saved until next launch.
             let db_path = data_dir.join("snapvere.db");
             let db = match Db::open(&db_path) {
                 Ok(db) => db,
                 Err(e) => {
-                    log(&format!(
-                        "baza {}: {e} — prelazim na in-memory",
+                    let warning = format!(
+                        "SNAPVERE cannot open its local gallery database:\n{}\n\nError: {e}\n\nYour existing database and captures were not deleted. The application will not start with a temporary replacement. Close other Snapvere processes, check folder permissions and storage, or restore a trusted backup before restarting.",
                         db_path.display()
-                    ));
-                    Db::open_in_memory().map_err(|e| e.to_string())?
+                    );
+                    log(&warning);
+                    #[cfg(windows)]
+                    show_database_error(&warning);
+                    return Err(e.to_string().into());
                 }
             };
             app.manage(AppState::new(db));
@@ -226,5 +229,28 @@ fn sync_autostart(app: &tauri::AppHandle) {
             if wants { "uključen" } else { "isključen" }
         )),
         Err(e) => log(&format!("autostart: {e}")),
+    }
+}
+
+// Show the failure before the primary Tauri window is available.
+#[cfg(windows)]
+fn show_database_error(message: &str) {
+    use windows::core::PCWSTR;
+    use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
+
+    let body: Vec<u16> = message.encode_utf16().chain(std::iter::once(0)).collect();
+    let title: Vec<u16> = "SNAPVERE — Gallery unavailable"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    // SAFETY: The buffers are live, NUL-terminated UTF-16 strings for the
+    // duration of the synchronous Windows call; no owner window exists yet.
+    unsafe {
+        let _ = MessageBoxW(
+            None,
+            PCWSTR(body.as_ptr()),
+            PCWSTR(title.as_ptr()),
+            MB_OK | MB_ICONERROR,
+        );
     }
 }

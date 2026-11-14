@@ -10,7 +10,8 @@ SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO
 - Add hardware-independent Rust regression tests and bump Cargo, Tauri, npm and lockfile version metadata.
 - Restricted Settings Store permissions to Settings only; all capture windows now use typed, origin-checked Rust IPC snapshots and overlay audio toggle commands.
 - Enforced native IPC caller window roles for capture startup, recorder controls, redact commands, gallery deletion and clipboard export; bounded redact rectangles to 32 within the active recording frame.
-- **Pending:** Windows CI, actual-device failure injection, remaining IPC/security audit and visual acceptance. No new release has been published.
+- Refuse startup instead of silently replacing an unreadable on-disk SQLite gallery with volatile in-memory history; display a native Windows error dialog and preserve database/media for manual recovery. Added corruption regression test.
+- **Pending:** Windows CI, actual-device failure injection, tested backup/migration recovery, remaining IPC/security audit and visual acceptance. No new release has been published.
 
 ## v0.2.9 — premium stability candidate (unreleased)
 

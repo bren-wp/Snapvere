@@ -409,3 +409,22 @@ mod gallery_tests {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod database_corruption_tests {
+    use super::*;
+
+    #[test]
+    fn invalid_existing_database_is_preserved_for_recovery() {
+        let path = std::env::temp_dir().join(format!(
+            "snapvere-broken-db-{}.sqlite",
+            uuid::Uuid::new_v4()
+        ));
+        let original = b"This is not an SQLite database. User files must survive.";
+        std::fs::write(&path, original).unwrap();
+
+        assert!(Db::open(&path).is_err(), "Corrupt DB must not open");
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+        std::fs::remove_file(&path).unwrap();
+    }
+}
