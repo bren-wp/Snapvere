@@ -108,6 +108,38 @@ test("dynamic annotation, player and capture instructions also have translations
   }
 });
 
+test("app TSX keeps visible labels and tooltips inside the localization layer", () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const sourcePaths = [
+    "windows/Settings.tsx", "windows/Home.tsx", "windows/Overlay.tsx",
+    "windows/Editor.tsx", "windows/RecBar.tsx", "windows/RecDraw.tsx",
+    "windows/RecFrame.tsx", "components/Viewer.tsx",
+    "components/WindowFrame.tsx", "components/AppErrorBoundary.tsx",
+    "components/home/CaptureCard.tsx", "components/home/EmptyGallery.tsx",
+    "components/viewer/VideoStage.tsx", "components/viewer/ImageStage.tsx",
+    "components/viewer/StageError.tsx", "windows/settings/SettingsControls.tsx",
+  ];
+  const hardcoded = [];
+  const branding = new Set(["Snapvere", "Snapvere — Editor", "Settings", "SNAPVERE"]);
+  const keyboardNames = new Set(["Enter", "Esc", "Fn", "PrintScreen"]);
+  for (const path of sourcePaths) {
+    const source = readFileSync(resolve(here, "../src", path), "utf8");
+    // Attribute literals are visible on hover or to screen readers. The
+    // WindowFrame title is an internal page discriminator, not a tooltip.
+    for (const match of source.matchAll(/(?:aria-label|title|placeholder|hint)\s*=\s*"([^"]+)"/g)) {
+      if (branding.has(match[1]) && source.slice(Math.max(0, match.index - 25), match.index).includes("WindowFrame")) continue;
+      hardcoded.push(`${path}: attribute: ${match[1]}`);
+    }
+    // Avoid false positives from generic type declarations and keyboard glyphs.
+    for (const match of source.matchAll(/>\s*([A-Za-zÀ-ž][^<>\n{}]*?)\s*</g)) {
+      const label = match[1].trim();
+      if (!label || branding.has(label) || keyboardNames.has(label) || label === "Promise") continue;
+      hardcoded.push(`${path}: JSX text: ${label}`);
+    }
+  }
+  assert.deepEqual(hardcoded, [], `Untranslated UI literals: ${hardcoded.join("; ")}`);
+});
+
 test("Unreviewed strings fall back to clear English, never placeholders or keys", () => {
   for (const { code } of LANGUAGES) {
     assert.equal(translate(code, "Audio device not available"), "Audio device not available");
