@@ -1,3 +1,8 @@
+import { GENERAL_KEYS, GENERAL_TRANSLATIONS } from "./i18nGeneral";
+import { EDITOR_KEYS, EDITOR_TRANSLATIONS } from "./i18nEditor";
+import { HELP_KEYS, HELP_TRANSLATIONS } from "./i18nHelp";
+import { FEEDBACK_KEYS, FEEDBACK_TRANSLATIONS } from "./i18nFeedback";
+
 /** SNAPVERE UI languages. English remains the authoritative fallback. */
 export const LANGUAGES = [
   {
@@ -162,6 +167,27 @@ const actionTranslations: Record<Exclude<Language, "en">, readonly string[]> = {
   sl: ["Predvajaj posnetek","Prikaži posnetek zaslona","Prikaži v mapi","Odpri v privzetem programu","Kopiraj sliko","Kopiraj pot do datoteke","Izhod iz celozaslonskega načina","Zapri","Prejšnji","Naslednji","Kopirano v odložišče","Pot do datoteke kopirana","Premor","Nadaljuj","Ustavi in shrani","Zavrzi","Shranjevanje…","Razveljavi","Počisti vse risbe","Barva","Velikost","Premora ni mogoče spremeniti. Poskusite znova.","Snemanja ni mogoče ustaviti. Poskusite znova.","Posnetka ni mogoče zavreči. Poskusite znova.","Izbrišem posnetek?","Izbrišem posnetek zaslona?","Element bo odstranjen iz galerije in z diska.","Dovoli klike (risanje izklopljeno)","Puščica","Pravokotnik","Elipsa","Črta","Pero","Označevalnik","Oštevilčen korak","Zamegli / skrij","Besedilo"],
 };
 
+const EXTENDED_CATALOGS = [
+  { keys: GENERAL_KEYS, translations: GENERAL_TRANSLATIONS },
+  { keys: EDITOR_KEYS, translations: EDITOR_TRANSLATIONS },
+  { keys: HELP_KEYS, translations: HELP_TRANSLATIONS },
+  { keys: FEEDBACK_KEYS, translations: FEEDBACK_TRANSLATIONS },
+] as const;
+
+export const ALL_TRANSLATION_KEYS: readonly string[] = [
+  ...CORE_STRINGS,
+  ...ACTION_STRINGS,
+  ...GENERAL_KEYS,
+  ...EDITOR_KEYS,
+  ...HELP_KEYS,
+  ...FEEDBACK_KEYS,
+];
+
+/** Static key existence check; unlike translate(), this cannot mask missing locales. */
+export function hasTranslationKey(source: string): boolean {
+  return ALL_TRANSLATION_KEYS.includes(source);
+}
+
 export function normalizeLanguage(value: unknown): Language {
   return typeof value === "string" && LANGUAGES.some((lang) => lang.code === value)
     ? value as Language : "en";
@@ -172,7 +198,12 @@ export function translate(language: Language, englishText: string): string {
   const index = (CORE_STRINGS as readonly string[]).indexOf(englishText);
   if (index >= 0) return translations[language][index] || englishText;
   const actionIndex = (ACTION_STRINGS as readonly string[]).indexOf(englishText);
-  return actionIndex < 0 ? englishText : actionTranslations[language][actionIndex] || englishText;
+  if (actionIndex >= 0) return actionTranslations[language][actionIndex] || englishText;
+  for (const catalog of EXTENDED_CATALOGS) {
+    const at = (catalog.keys as readonly string[]).indexOf(englishText);
+    if (at >= 0) return (catalog.translations[language] as readonly string[])[at] || englishText;
+  }
+  return englishText;
 }
 
 export function missingCoreTranslations(): string[] {
@@ -183,6 +214,10 @@ export function missingCoreTranslations(): string[] {
     return basic.length !== CORE_STRINGS.length
       || actions.length !== ACTION_STRINGS.length
       || basic.some((value) => !value.trim())
-      || actions.some((value) => !value.trim());
+      || actions.some((value) => !value.trim())
+      || EXTENDED_CATALOGS.some(({ keys, translations }) => {
+        const values: readonly string[] = translations[code];
+        return values.length !== keys.length || values.some((value) => !value.trim());
+      });
   }).map(({ code }) => code);
 }
