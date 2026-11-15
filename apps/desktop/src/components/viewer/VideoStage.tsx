@@ -9,7 +9,6 @@ import StageError from "./StageError";
 // ───────────────────────────────── video ─────────────────────────────────
 
 export default function VideoStage({
-  const { t } = useLanguage();
   shot,
   chromeHidden,
   onPlayingChange,
@@ -22,6 +21,7 @@ export default function VideoStage({
   onToggleFullscreen: () => void;
   onOpenExternal: () => void;
 }) {
+  const { t } = useLanguage();
   const ref = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [ended, setEnded] = useState(false);
