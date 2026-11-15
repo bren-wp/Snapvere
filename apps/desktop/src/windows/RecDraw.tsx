@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ipc } from "../lib/ipc";
+import { useLanguage } from "../lib/LanguageProvider";
 import { renderAnnotations } from "../lib/canvas";
 import type { Annotation, DrawToolMsg, Point, RecTool } from "../lib/types";
 
@@ -25,6 +26,7 @@ const textFont = (size: number) => Math.round(size * 3.5 + 8);
 const DRAG_TOOLS: RecTool[] = ["arrow", "rect", "ellipse", "line", "blur"];
 
 export default function RecDraw() {
+  const { t } = useLanguage();
   const [tool, setTool] = useState<RecTool>("off");
   const [color, setColor] = useState("#09BFD9");
   const [size, setSize] = useState(6);
@@ -272,7 +274,7 @@ export default function RecDraw() {
             }
             e.stopPropagation();
           }}
-          placeholder="Type…"
+          placeholder={t("Type…")}
           className="absolute z-40 border-0 bg-black/25 p-0 outline-none placeholder:text-white/45"
           style={{
             left: textEdit.x,
