@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ipc } from "../lib/ipc";
+import { useLanguage } from "../lib/LanguageProvider";
 import type { RecFrameRect, RecordPhase, RecordStatus } from "../lib/types";
 
 /**
@@ -13,6 +14,7 @@ import type { RecFrameRect, RecordPhase, RecordStatus } from "../lib/types";
  * vizualna povratna informacija; stanje (faza) stiže istim eventima kao HUD-u.
  */
 export default function RecFrame() {
+  const { t } = useLanguage();
   const [rect, setRect] = useState<RecFrameRect | null>(null);
   const [phase, setPhase] = useState<RecordPhase>("recording");
   const [scale, setScale] = useState(1);
@@ -95,7 +97,7 @@ export default function RecFrame() {
         >
           <div className="flex items-center gap-2 rounded-full bg-black/80 px-4 py-2 text-[13px] font-semibold text-white ring-1 ring-white/15 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#FFD60A" }} />
-            Paused
+            {t("Paused")}
           </div>
         </div>
       )}

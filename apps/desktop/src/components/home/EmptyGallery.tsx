@@ -11,7 +11,7 @@ export default function EmptyGallery({ onCapture, hasQuery }: { onCapture: () =>
         </div>
         <h2 className="mb-1 text-lg font-semibold tracking-tight">{hasQuery ? t("No results") : t("No screenshots yet")}</h2>
         <p className="mb-5 text-sm text-muted">
-          {hasQuery ? "Try a different term." : "Press the hotkey or button to capture your first screenshot."}
+          {t(hasQuery ? "Try a different term." : "Use a shortcut or the button to take your first screenshot.")}
         </p>
         {!hasQuery && (
           <button onClick={onCapture} className="snapvere-btn-primary rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 active:scale-95">

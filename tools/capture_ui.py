@@ -59,6 +59,11 @@ TAURI_PREVIEW = r"""
         if (command === "plugin:store|load" || command === "plugin:store|new") return 1;
         return null;
       }
+      if (command === "stop_recording") {
+        window.__SNAPVERE_TEST_STOP_ATTEMPTS = (window.__SNAPVERE_TEST_STOP_ATTEMPTS || 0) + 1;
+        if (window.__SNAPVERE_TEST_STOP_ATTEMPTS === 1) throw new Error("Simulated native stop failure");
+        return null;
+      }
       if (command === "recording_status") return { state: "idle" };
       if (command === "plugin:window|is_visible") return true;
       return null;
@@ -113,7 +118,7 @@ with sync_playwright() as p:
         (ROOT / "apps/desktop/package.json").read_text(encoding="utf-8")
     )["version"]
     settings.get_by_text(
-        "Snapvere · version " + expected_version, exact=True
+        "Snapvere · Version " + expected_version, exact=True
     ).wait_for(timeout=20000)
 
     # Language selector must work across all 12 locales without clipping controls.
@@ -131,6 +136,19 @@ with sync_playwright() as p:
             f"Settings interface overflows for language {language}"
         )
     settings.screenshot(path=str(OUTPUT / "settings-languages.png"))
+
+    # A failed native Stop must not hide the HUD or permanently disable its controls.
+    hud = app.new_page()
+    hud.goto("http://127.0.0.1:1420/#recbar", wait_until="networkidle")
+    stop = hud.get_by_role("button", name="Stop and save", exact=True)
+    stop.wait_for(timeout=30000)
+    stop.click()
+    hud.get_by_role("alert").get_by_text("Could not stop recording. Try again.").wait_for(timeout=5000)
+    assert stop.is_enabled(), "Recording HUD must remain usable after Stop IPC fails"
+    stop.click()
+    hud.wait_for_function("() => window.__SNAPVERE_TEST_STOP_ATTEMPTS === 2", timeout=5000)
+    assert hud.get_by_role("alert").count() == 0, "Retry should clear the previous failure"
+    hud.close()
 
     # The editor shows an existing, real React UI screenshot as its test image.
     # The preview transport is mocked: this is a UI render, not a native capture test.

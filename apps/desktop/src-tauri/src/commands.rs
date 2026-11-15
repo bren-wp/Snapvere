@@ -93,6 +93,7 @@ pub fn set_app_language(
     let store = app.store("settings.json").map_err(estr)?;
     store.set("language", language.clone());
     store.save().map_err(estr)?;
+    crate::tray::set_language(&app, &language);
     app.emit("snapvere:language-changed", language)
         .map_err(estr)
 }

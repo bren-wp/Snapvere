@@ -75,16 +75,16 @@ export default function Settings() {
       } catch {
         /* noop */
       }
-    })().catch((error) => setNotice(`Could not load settings: ${String(error)}`));
+    })().catch((error) => setNotice(`${t("Could not load settings:")} ${String(error)}`));
   }, []);
 
   function set<K extends keyof AppSettings>(key: K, val: AppSettings[K]) {
     if (!store) {
-      setNotice("Settings are not ready yet. Try again.");
+      setNotice(t("Settings are not ready yet. Try again."));
       return;
     }
     setS((prev) => ({ ...prev, [key]: val }));
-    void store.set(key, val).catch((error) => setNotice(`Could not save ${key}: ${String(error)}`));
+    void store.set(key, val).catch((error) => setNotice(`${t("Could not save setting:")} ${String(error)}`));
   }
 
   // Save a hotkey only after the operating system has accepted it. On failure,
@@ -98,20 +98,20 @@ export default function Settings() {
       const active = key === "hotkey" ? capture : recording;
       set(key, prettyAccel(active ?? accelerator));
       setNotice(null);
-      setStatus(`${key === "hotkey" ? "Screenshot" : "Recording"} shortcut updated.`);
+      setStatus(t(key === "hotkey" ? "Screenshot shortcut updated." : "Recording shortcut updated."));
     } catch (error) {
       const current = await ipc.activeHotkeys().catch(() => null);
       if (current) {
         const previous = key === "hotkey" ? current[0] : current[1];
         if (previous) setS((state) => ({ ...state, [key]: prettyAccel(previous) }));
       }
-      setNotice(`Shortcut was not changed: ${String(error)}`);
+      setNotice(`${t("Shortcut was not changed:")} ${String(error)}`);
     }
   };
 
   const applyTheme = (theme: "dark" | "light") => {
     if (!store) {
-      setNotice("Settings are not ready yet. Try again.");
+      setNotice(t("Settings are not ready yet. Try again."));
       return;
     }
     set("theme", theme);
@@ -119,13 +119,13 @@ export default function Settings() {
     try {
       localStorage.setItem("snapvere-theme", theme);
     } catch {
-      setNotice("Theme could not be saved to browser preferences.");
+      setNotice(t("Theme could not be saved."));
     }
   };
 
   const toggleAutostart = async (on: boolean) => {
     if (!store) {
-      setNotice("Settings are not ready yet. Try again.");
+      setNotice(t("Settings are not ready yet. Try again."));
       return;
     }
     const previous = autostart;
@@ -142,11 +142,11 @@ export default function Settings() {
         if (previous) await enable();
         else await disable();
       } catch (restoreError) {
-        setNotice(`Could not restore Windows startup: ${String(restoreError)}`);
+        setNotice(`${t("Could not restore startup:")} ${String(restoreError)}`);
         return;
       }
       setAutostart(previous);
-      setNotice(`Could not change startup preference: ${String(error)}`);
+      setNotice(`${t("Could not change startup preference:")} ${String(error)}`);
     }
   };
 
@@ -155,7 +155,7 @@ export default function Settings() {
       const dir = await openDialog({ directory: true, multiple: false });
       if (typeof dir === "string") set("saveFolder", dir);
     } catch (error) {
-      setNotice(`Could not select capture folder: ${String(error)}`);
+      setNotice(`${t("Could not select capture folder:")} ${String(error)}`);
     }
   };
 
@@ -235,7 +235,7 @@ export default function Settings() {
                 aria-label={t("Language")}
                 onChange={(event) => {
                   void changeLanguage(event.target.value as Language)
-                    .catch((error) => setNotice(`Could not change language: ${String(error)}`));
+                    .catch((error) => setNotice(`${t("Could not change language:")} ${String(error)}`));
                 }}
                 className="min-w-44 rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent focus:ring-2 focus:ring-accent"
               >
@@ -246,7 +246,7 @@ export default function Settings() {
             </Row>
             <Row
               label={t("Launch on startup")}
-              hint="Optional. Start Snapvere when you sign in (off by default)."
+              hint={t("Start Snapvere when you sign in (off by default).")}
             >
               <Toggle label={t("Launch on startup")} checked={autostart} onChange={toggleAutostart} />
             </Row>
@@ -255,7 +255,7 @@ export default function Settings() {
 
         {tab === "hotkeys" && (
           <Section title={t("Hotkeys")}>
-            <Row label={t("Region capture")} hint="Freeze the screen and pick an area.">
+            <Row label={t("Region capture")} hint={t("Select an area of the screen.")}>
               <HotkeyInput
                 label={t("Screenshot shortcut")}
                 value={s.hotkey}
@@ -264,7 +264,7 @@ export default function Settings() {
             </Row>
             <Row
               label={t("Screen recording")}
-              hint="Press once to pick an area, again to stop the recording."
+              hint={t("Choose an area and use the shortcut again to stop recording.")}
             >
               <HotkeyInput
                 label={t("Recording shortcut")}
@@ -273,13 +273,10 @@ export default function Settings() {
               />
             </Row>
             <p className="mt-3 text-xs leading-relaxed text-muted">
-              Click a field, then press the combination. Changes apply immediately.
+              {t("Click a field and press your shortcut. Changes apply immediately.")}
               <br />
               <span className="text-muted/80">
-                Note: <kbd>Fn</kbd> is handled inside the keyboard itself, so Windows never sees
-                it. It can only be part of a shortcut when the key it produces is a real key —
-                for example Fn+P sending <kbd>PrintScreen</kbd>. Pick a normal combination for
-                recording.
+                {t("The Fn key may be handled by your keyboard. Choose a shortcut Windows can detect.")}
               </span>
             </p>
           </Section>
@@ -287,7 +284,7 @@ export default function Settings() {
 
         {tab === "capture" && (
           <Section title={t("Capture")}>
-            <Row label={t("Default format")} hint="Format new screenshots are saved in.">
+            <Row label={t("Default format")} hint={t("Choose the file format for new screenshots.")}>
               <Segmented
                 value={s.format}
                 options={[
@@ -309,13 +306,13 @@ export default function Settings() {
                 className="w-48"
               />
             </Row>
-            {s.format === "png" && <p className="text-xs text-muted">PNG is lossless — quality doesn't apply.</p>}
+            {s.format === "png" && <p className="text-xs text-muted">{t("PNG is lossless; quality does not apply.")}</p>}
           </Section>
         )}
 
         {tab === "recording" && (
           <Section title={t("Recording")}>
-            <Row label="Format" hint="MP4 (H.264) plays everywhere; GIF drops straight into chat.">
+            <Row label={t("Format")} hint={t("MP4 supports video and audio; GIF is silent.")}>
               <Segmented
                 value={s.recordFormat}
                 options={[
@@ -325,7 +322,7 @@ export default function Settings() {
                 onChange={(v) => set("recordFormat", v as RecordFormat)}
               />
             </Row>
-            <Row label={t("Frame rate")} hint="Higher is smoother; 24 is plenty for UI walkthroughs.">
+            <Row label={t("Frame rate")} hint={t("Higher frame rates provide smoother video.")}>
               <Segmented
                 value={String(s.recordFps)}
                 options={[
@@ -337,7 +334,7 @@ export default function Settings() {
                 onChange={(v) => set("recordFps", Number(v))}
               />
             </Row>
-            <Row label={`${t("Quality")} (${s.recordQuality})`} hint="Drives the video bitrate.">
+            <Row label={`${t("Quality")} (${s.recordQuality})`} hint={t("Controls the video bitrate.")}>
               <input
                 type="range"
                 min={30}
@@ -357,7 +354,7 @@ export default function Settings() {
             </Row>
             <Row
               label={t("Record microphone")}
-              hint="Default input device. You can also flip this per recording, right in the capture bar."
+              hint={t("Uses the default microphone; adjustable before each recording.")}
             >
               <Toggle
                 label={t("Record microphone")}
@@ -367,7 +364,7 @@ export default function Settings() {
             </Row>
             <Row
               label={t("Record system audio")}
-              hint="Whatever your speakers play — app sounds, calls, music. MP4 only."
+              hint={t("Record sound played by the system (MP4 only).")}
             >
               <Toggle
                 label={t("Record system audio")}
@@ -377,14 +374,14 @@ export default function Settings() {
             </Row>
             <Row
               label={t("Stop after")}
-              hint="A safety limit so a forgotten recording cannot fill the disk."
+              hint={t("Limit recording duration to protect disk space.")}
             >
               <Segmented
                 value={String(s.recordMaxSeconds)}
                 options={[
-                  { v: "300", l: "5 min" },
-                  { v: "1800", l: "30 min" },
-                  { v: "7200", l: "2 h" },
+                  { v: "300", l: `5 ${t("min")}` },
+                  { v: "1800", l: `30 ${t("min")}` },
+                  { v: "7200", l: `2 ${t("h")}` },
                   { v: "0", l: t("Never") },
                 ]}
                 onChange={(v) => set("recordMaxSeconds", Number(v))}
@@ -392,8 +389,7 @@ export default function Settings() {
             </Row>
             {s.recordFormat === "gif" && (
               <p className="text-xs text-muted">
-                GIF is capped at 960px wide and 256 colours per frame — great for short clips,
-                large for long ones.
+                {t("GIF exports are limited to 960 px and 256 colors per frame.")}
               </p>
             )}
           </Section>
@@ -415,74 +411,72 @@ export default function Settings() {
         {tab === "privacy" && (
           <Section title={t("Privacy")}>
             <div className="rounded-2xl border border-accent/25 bg-accent/5 p-5">
-              <h2 className="text-base font-semibold">Your captures stay on your computer</h2>
+              <h2 className="text-base font-semibold">{t("Your captures stay on your computer")}</h2>
               <p className="mt-2 text-sm leading-relaxed text-muted">
-                Screenshots, recordings, preferences and the gallery database are stored on your device.
-                Snapvere does not need an account or an upload to capture the screen.
+                {t("Screenshots, recordings, and settings stay on your device. No account or upload is required.")}
               </p>
               <div className="mt-4 flex flex-wrap gap-3">
                 <button type="button" onClick={async () => {
                   try { await ipc.openCaptureFolder(); }
-                  catch (error) { setNotice(`Cannot open capture folder: ${String(error)}`); }
+                  catch (error) { setNotice(`${t("Cannot open capture folder:")} ${String(error)}`); }
                 }} className="rounded-xl border border-border bg-elevated px-4 py-2 text-sm font-medium hover:border-accent focus-visible:ring-2 focus-visible:ring-accent">
                   {t("Open capture folder")}
                 </button>
                 <button type="button" onClick={async () => {
                   try { await ipc.openDataFolder(); }
-                  catch (error) { setNotice(`Cannot open data folder: ${String(error)}`); }
+                  catch (error) { setNotice(`${t("Cannot open data folder:")} ${String(error)}`); }
                 }} className="rounded-xl border border-border bg-elevated px-4 py-2 text-sm font-medium hover:border-accent focus-visible:ring-2 focus-visible:ring-accent">
                   {t("Open data folder")}
                 </button>
               </div>
             </div>
             <p className="mt-4 text-xs leading-relaxed text-muted">
-              Use the gallery to review or delete individual captures. Closing Snapvere does not delete files.
+              {t("Review and delete captures in the gallery. Closing Snapvere does not delete files.")}
             </p>
           </Section>
         )}
 
         {tab === "about" && (
           <Section title={t("About")}>
-            <p className="text-sm text-muted">Snapvere · version {appVersion}</p>
+            <p className="text-sm text-muted">Snapvere · {t("Version")} {appVersion}</p>
             <p className="mt-2 text-sm text-muted">
-              Secure capture and screen recording by Brendigo.
+              {t("Screen capture and recording by Brendigo.")}
             </p>
             <div className="mt-3 flex flex-wrap gap-3 text-sm">
               <button
                 type="button"
                 onClick={() => void openUrl("https://brendigo.com").catch(console.error)}
                 className="font-medium text-accent underline-offset-4 hover:underline focus-visible:underline"
-                aria-label="Open author Brendigo website"
+                aria-label={t("Open Brendigo website")}
               >
-                Author: Brendigo
+                {t("Developer")}: Brendigo
               </button>
               <button
                 type="button"
                 onClick={() => void openUrl("https://snapvere.com").catch(console.error)}
                 className="font-medium text-accent underline-offset-4 hover:underline focus-visible:underline"
-                aria-label="Open official Snapvere website"
+                aria-label={t("Open Snapvere website")}
               >
-                Official website: snapvere.com
+                {t("Official website")}: snapvere.com
               </button>
             </div>
             <div className="mt-5 rounded-xl border border-border/60 bg-elevated/20 p-4">
-              <div className="text-sm font-medium">Commercial license agreement</div>
+              <div className="text-sm font-medium">{t("Commercial license agreement")}</div>
               <p className="mt-2 text-xs leading-relaxed text-muted">
-                Professional and commercial use are permitted. Existing open-source
-                licenses remain in effect. No account or activation key is required.
+                {t("Commercial use is permitted. Open-source licenses remain valid. No account or activation key is needed.")}
               </p>
               <button
                 type="button"
-                onClick={() => void openUrl("https://snapvere.com/license/").catch((error) => setNotice(`Cannot open license: ${String(error)}`))}
+                onClick={() => void openUrl("https://snapvere.com/license/").catch((error) => setNotice(`${t("Cannot open license:")} ${String(error)}`))}
                 className="mt-3 rounded-lg border border-border px-3 py-1.5 text-sm font-medium hover:bg-elevated focus-visible:ring-2 focus-visible:ring-accent"
               >
-                Read license terms
+                {t("Read license terms")}
               </button>
             </div>
             <div className="mt-6 rounded-xl border border-border/60 p-4">
               <div className="mb-1 text-sm font-medium">{t("Diagnostics")}</div>
               <p className="mb-3 text-xs text-muted">
-                If something crashes or a recording fails, the log has the reason.
+                {t("Check the log to investigate recording and application errors.")}
               </p>
               <button
                 onClick={async () => {
@@ -491,7 +485,7 @@ export default function Settings() {
                 }}
                 className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-elevated"
               >
-                Open log file
+                {t("Open log file")}
               </button>
             </div>
           </Section>

@@ -1,4 +1,5 @@
 import { AlertTriangle } from "lucide-react";
+import { useLanguage } from "../../lib/LanguageProvider";
 
 export default function StageError({
   video,
@@ -10,6 +11,7 @@ export default function StageError({
   detail?: string;
   onOpenExternal: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="grid h-full place-items-center p-8 text-center">
       <div className="max-w-sm">
@@ -17,15 +19,20 @@ export default function StageError({
           <AlertTriangle size={22} className="text-warn" />
         </div>
         <h2 className="mb-1 text-base font-semibold">
-          {video ? "This video can’t be played here" : "This image can’t be shown"}
+          {t(video ? "This video can’t be played here" : "This image can’t be shown")}
         </h2>
-        <p className="mb-5 text-sm text-muted">The file may have been moved, renamed or deleted.</p>
-        {detail && <p className="-mt-3 mb-5 font-mono text-[10px] text-white/35">{detail}</p>}
+        <p className="mb-5 text-sm text-muted">{t("The file may have been moved, renamed or deleted.")}</p>
+        {detail && (
+          <details className="-mt-3 mb-5 rounded-lg border border-white/15 px-3 py-2 text-left text-xs text-muted">
+            <summary className="cursor-pointer">{t("Technical details")}</summary>
+            <p className="mt-2 break-all font-mono text-[10px]">{detail}</p>
+          </details>
+        )}
         <button
           onClick={onOpenExternal}
           className="rounded-full px-4 py-2 text-sm ring-1 ring-white/15 transition hover:bg-white/10 active:scale-95"
         >
-          Open in default app
+          {t("Open in default app")}
         </button>
       </div>
     </div>

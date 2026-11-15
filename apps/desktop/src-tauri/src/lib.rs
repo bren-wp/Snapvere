@@ -10,6 +10,7 @@ mod record;
 mod shortcuts;
 mod state;
 mod tray;
+mod tray_locale;
 
 use tauri::Manager;
 

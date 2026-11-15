@@ -173,15 +173,14 @@ jobs:
             All three Windows executables originate from the same Tauri build and were verified before publication.
 
             ### Changes in v${{ steps.version.outputs.value }}
-            - Correct recording startup handshake: DXGI/xcap, Media Foundation, optional audio mixer and encoder must initialize before success is reported.
-            - Prevent damaged recordings from entering the gallery when frame capture, encoding, audio writing or container finalization fails.
-            - Restrict Tauri Store access to the Settings WebView; use window-authorized Rust IPC for capture preferences, overlay audio toggles, recorder controls, deletion and clipboard export.
-            - Limit redact regions and clip dimensions to the active recording canvas to bound per-frame work and reject invalid geometry.
-            - Stop safely with a visible warning when an existing SQLite database cannot be opened, instead of silently switching to volatile history.
-            - Add regression tests for recorder failures, IPC caller roles, redact validation and preservation of an unreadable database.
-            - Add an English-first 12-language selector with persistent settings, cross-window updates and translation regression checks.
-            - Simplify user-facing text by removing LOCAL-FIRST and LOCAL LIBRARY badges.
-            - Build portable, NSIS and MSI packages from a single revision with SHA-256 hashes.
+            - Preserve the recording HUD and allow a retry when Stop or Discard fails, preventing an active session from becoming headless.
+            - Display a clear, accessible recording control error without exposing internal diagnostics in the toolbar.
+            - Translate all 225 cataloged application interface strings across 12 languages, including privacy, help, tooltips, editor and capture settings.
+            - Localize the native Windows tray menu and active-recording tooltip, updating live when the selected language changes.
+            - Test static and dynamic localization coverage and reject visible untranslated React labels.
+            - Format media dates and sizes according to the selected language; guard against corrupt gallery metadata.
+            - Extend unit tests for retry locking, locale coverage and formatting and include browser-level Stop error injection.
+            - Keep version metadata consistent across Cargo, Tauri, npm and lockfiles and ship verified portable, NSIS and MSI binaries with SHA-256 checksums.
 
             **Preview release.** Native Windows 10/11 capture, recorder, audio, multi-monitor,
             accessibility, install/upgrade/uninstall and 1:1 visual comparisons are not yet

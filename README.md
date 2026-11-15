@@ -25,7 +25,7 @@ A focused Windows capture workspace from **[BRENDIGO](https://brendigo.com)**.
 
 > **Distribution notice:** snapvere.com currently publishes SNAPVERE v0.0.8 built with
 > .NET / WinUI 3. This repository builds the separate Tauri 2 / Rust Windows edition
-> (v0.2.12 development candidate; latest published GitHub release: v0.2.11). Do not mix their installers, licenses, versions or upgrade paths.
+> (v0.2.13 development candidate; latest published GitHub release: v0.2.12). Do not mix their installers, licenses, versions or upgrade paths.
 > The production website, email download flow, and its binaries are not modified
 > by this GitHub release.
 >
@@ -41,14 +41,35 @@ Snapvere starts in **English**. Select a language in **Settings → General → 
 English, Hrvatski, Deutsch, Español, Français, Italiano, Português,
 Nederlands, Polski, Čeština, Slovenčina or Slovenščina.
 
-The selection is stored in the existing on-device Settings file through an
-allowlisted Rust command and broadcast to all open desktop windows. The navigation,
-capture actions and principal Settings controls have reviewed translations in all
-12 languages. **Remaining UI copy falls back to English** while translations are
-reviewed; this is not yet a claim of complete end-to-end localization. Locale
-normalization, fallback, supported languages and core translations are covered
-by automated tests. Hardware, visual alignment and translated layout QA are still
-required before final release acceptance.
+The selection is stored in the on-device Settings file through a strict,
+window-scoped Rust command and broadcast to all open desktop windows. The
+**225-key application interface catalog** covers capture, settings, editor,
+recording HUD, media viewer, privacy, licensing, errors and accessibility
+labels in all 12 languages. The **native Windows tray menu** also follows the
+selected language, including live updates without restarting. English remains
+the source language and fallback for any future untranslated key.
+
+Automated tests reject missing or duplicated keys, missing translations,
+hard-coded visible labels and unexpected English strings in scanned React
+components. Real Windows 10/11 layout, spoken accessibility, native driver
+error messaging, third-party system dialogs and installer localization remain
+subject to device-specific QA; automated checks alone are not a guarantee of
+perfect translation or pixel-level visual equivalence.
+
+See [localization and QA guidance](docs/LOCALIZATION.md) for the catalog
+structure, supported language codes, native tray mapping and test commands.
+
+## v0.2.13 development quality improvements
+
+- Recording toolbar **Stop** and **Discard** are retryable if a native command fails;
+  the toolbar remains visible and offers a clear message instead of silently hiding.
+- The media gallery and recording toolbar now use localized accessible action names
+  in all 12 supported languages. File sizes and gallery dates use the chosen
+  language's number and date conventions.
+- Pure unit tests cover retry locks, corrupt metadata and translation completeness.
+  Automated browser preview tests inject a failed Stop command to ensure the
+  controls remain usable. Real Windows capture, audio and 1:1 visual QA are still
+  pending before a stable release.
 
 ## Your screen. Your story. One streamlined workflow.
 
@@ -108,7 +129,7 @@ The screenshots below come from **actual rendered React application screens in t
 
 </details>
 
-## SNAPVERE v0.2.11 — workspace and settings redesign (in development)
+## SNAPVERE v0.2.12 — screenshot and recording workspace
 
 The desktop interface now follows the repository website's navy/violet palette and interaction hierarchy more closely. The Home window presents three dedicated quick actions in order: **Capture region**, **Record screen**, **Full screen**, followed by gallery search and filters. Settings now groups the four capture-related sections first, then application-wide preferences, with keyboard navigation and responsive horizontal tabs in narrow windows.
 

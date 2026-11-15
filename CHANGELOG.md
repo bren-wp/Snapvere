@@ -2,7 +2,16 @@
 
 SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO**.
 
-## v0.2.12 — recorder failure integrity (unreleased Draft PR)
+## v0.2.13 — recording HUD recovery and localized gallery (development candidate)
+
+- Keep the recording HUD usable after a failed Stop/Discard/Pause call so the user can retry rather than losing access to recording controls.
+- Complete the catalog of 225 app-interface keys across English, Croatian, German, Spanish, French, Italian, Portuguese, Dutch, Polish, Czech, Slovak and Slovenian; translate all user-visible React screens, dialogs, tooltips, keyboard hints, privacy and About/license copy.
+- Localize the native Windows tray menu and recording tooltip; propagate saved-language changes immediately to native menus and all React windows.
+- Use localized date and size formatting and validate empty/missing/duplicate translations, dynamic labels, JSX text, tooltips and accessibility attributes in CI.
+- Test recorder UI action retries and translated editor, viewer, gallery and overlay controls.
+- Keep native recorder APIs and the Windows application identity unchanged until QA gates pass.
+
+## v0.2.12 — recorder failure integrity (published 2026-11-15, pre-release)
 
 - Wait for DXGI/xcap, Media Foundation, audio, encoder and frame-buffer initialization before reporting READY; return startup errors immediately.
 - Propagate capture, video encoding, audio writing and finalization errors; do not register incomplete recordings.
@@ -15,7 +24,7 @@ SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO
 - Added a cross-window language selector with English default and 11 optional languages; settings are validated and persisted via window-restricted Rust IPC, and capture/Settings core copy is translated.
 - Removed the customer-visible LOCAL-FIRST and LOCAL LIBRARY marketing/dev labels, streamlined saved-gallery copy, simplified hotkey diagnostic wording and adjusted Settings UI for longer translations.
 - Added translation catalog tests and frontend CI gate; unreviewed copy falls back safely to English.
-- **Pending:** Windows CI, actual-device failure injection, tested backup/migration recovery, remaining IPC/security audit and visual acceptance. No new release has been published.
+- **Pending:** Windows CI, actual-device failure injection, tested backup/migration recovery, remaining IPC/security audit and visual acceptance. The v0.2.12 Windows preview release passed GitHub CI; physical device QA remains pending.
 
 ## v0.2.9 — premium stability candidate (unreleased)
 

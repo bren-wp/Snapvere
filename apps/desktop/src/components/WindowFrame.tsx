@@ -11,12 +11,12 @@ export default function WindowFrame({
   title, children,
 }: { title?: string; children: React.ReactNode }) {
   const { t } = useLanguage();
-  const context = title?.includes("Editor") ? t("Editor")
+  const context = title?.startsWith("Snapvere —") ? t("Editor")
     : title === "Settings" ? t("PREFERENCES") : t("CAPTURE LIBRARY");
 
   return (
     <div className="snapvere-app-shell flex h-full w-full min-h-0 flex-col bg-bg text-text">
-      <div className="snapvere-app-brandbar" aria-label="Snapvere application header">
+      <div className="snapvere-app-brandbar" aria-label={t("Snapvere application header")}>
         <div className="snapvere-app-identity">
           <BrandMark className="snapvere-app-logo" />
           <div className="snapvere-app-identity-text">

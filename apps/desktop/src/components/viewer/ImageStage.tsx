@@ -1,3 +1,4 @@
+import { useLanguage } from "../../lib/LanguageProvider";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { ZoomIn, ZoomOut } from "lucide-react";
@@ -18,6 +19,7 @@ export default function ImageStage({
   chromeHidden: boolean;
   onOpenExternal: () => void;
 }) {
+  const { t } = useLanguage();
   const boxRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [natural, setNatural] = useState({ w: shot.width || 1, h: shot.height || 1 });
@@ -177,24 +179,24 @@ export default function ImageStage({
         onDoubleClick={(e) => e.stopPropagation()}
       >
         <div className="lg lg-bar">
-          <button className="lg-btn" title="Zoom out (−)" onClick={() => zoomTo(scale / STEP)}>
+          <button className="lg-btn" title={`${t("Zoom out")} (−)`} aria-label={t("Zoom out")} onClick={() => zoomTo(scale / STEP)}>
             <ZoomOut size={16} />
           </button>
           <span className="w-14 text-center font-mono text-xs tabular-nums">{Math.round(scale * 100)}%</span>
-          <button className="lg-btn" title="Zoom in (+)" onClick={() => zoomTo(scale * STEP)}>
+          <button className="lg-btn" title={`${t("Zoom in")} (+)`} aria-label={t("Zoom in")} onClick={() => zoomTo(scale * STEP)}>
             <ZoomIn size={16} />
           </button>
           <span className="lg-sep" />
           <button
             className={`h-8 rounded-full px-3 text-xs transition hover:bg-white/15 ${zoom === null ? "text-accent" : ""}`}
-            title="Fit to window (0)"
+            title={`${t("Fit to window")} (0)`}
             onClick={resetFit}
           >
-            Fit
+            {t("Fit")}
           </button>
           <button
             className={`h-8 rounded-full px-3 text-xs transition hover:bg-white/15 ${Math.abs(scale - 1) < 0.001 ? "text-accent" : ""}`}
-            title="Actual size (1)"
+            title={`${t("Actual size")} (1)`}
             onClick={() => zoomTo(1)}
           >
             1:1
