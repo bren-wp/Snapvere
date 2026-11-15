@@ -81,7 +81,7 @@ test("all statically named interface translations are present in the catalogs", 
   const missing = [];
   for (const path of sourcePaths) {
     const code = readFileSync(resolve(here, "../src", path), "utf8");
-    for (const found of code.matchAll(/\\bt\\(\\s*["'`]([^"'`]+)["'`]\\s*\\)/g)) {
+    for (const found of code.matchAll(/\bt\(\s*["'`]([^"'`]+)["'`]\s*\)/g)) {
       if (!hasTranslationKey(found[1])) missing.push(`${path}: ${found[1]}`);
     }
   }
