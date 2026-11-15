@@ -9,7 +9,9 @@ SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO
 - Restore original capture and thumbnail on failure; avoid following links,
   unlinking directories or overwriting existing user files on rollback.
 - Restrict frozen-frame PNG/RGBA, capture completion, cancel and reveal IPC to
-  the capture overlay window.
+  the capture overlay window; add allowlist checks for 28 sensitive commands.
+- Reject GIF audio options and fail recorder startup when selected WASAPI
+  microphone/system audio is unavailable instead of silently losing audio.
 - Add failure-injection and crash-window Rust tests and version metadata for a
   future verified **prerelease**, without claiming physical Windows QA.
 - See `docs/AUDIT-v0.2.14-P1-integrity-ipc.md` for acceptance gaps.
