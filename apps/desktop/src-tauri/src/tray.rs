@@ -124,7 +124,7 @@ pub fn set_recording(app: &AppHandle, active: bool) {
         let _ = items.start_screen.set_enabled(!active);
         let _ = items.stop.set_enabled(active);
     }
-    update_tray_tooltip(app, &current_language(app));
+    update_tray_tooltip(app, &current_language(app), active);
 }
 
 fn current_language(app: &AppHandle) -> String {
@@ -135,9 +135,9 @@ fn current_language(app: &AppHandle) -> String {
         .unwrap_or_else(|| "en".to_owned())
 }
 
-fn update_tray_tooltip(app: &AppHandle, language: &str) {
+fn update_tray_tooltip(app: &AppHandle, language: &str, active: bool) {
     if let Some(tray) = app.tray_by_id("snapvere-tray") {
-        let tooltip = if record::is_active(app) {
+        let tooltip = if active {
             tray_locale::labels(language)[8]
         } else {
             "Snapvere"
@@ -167,7 +167,7 @@ pub fn set_language(app: &AppHandle, language: &str) {
             }
         }
     }
-    update_tray_tooltip(app, language);
+    update_tray_tooltip(app, language, record::is_active(app));
 }
 
 fn on_menu_event(app: &AppHandle, event: MenuEvent) {
