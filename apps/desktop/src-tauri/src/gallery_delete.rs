@@ -213,10 +213,21 @@ mod tests {
         let folder = std::env::temp_dir().join(format!("snapvere-delete-{}", Uuid::new_v4()));
         fs::create_dir_all(&folder)?;
         let db = Db::open(&folder.join("gallery.sqlite"))?;
+        fs::create_dir_all(folder.join("media"))?;
         let shot = Screenshot {
             id: Uuid::new_v4().to_string(),
-            file_path: folder.join("capture.png").to_string_lossy().into_owned(),
-            thumb_path: Some(folder.join("thumb.webp").to_string_lossy().into_owned()),
+            file_path: folder
+                .join("media")
+                .join("capture.png")
+                .to_string_lossy()
+                .into_owned(),
+            thumb_path: Some(
+                folder
+                    .join("media")
+                    .join("thumb.webp")
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
             name: "Test capture".into(),
             format: "png".into(),
             width: 2,
@@ -278,6 +289,62 @@ mod tests {
         assert!(db.get(&shot.id)?.is_none());
         assert!(!Path::new(&job.staged_file_path).exists());
         assert!(!Path::new(job.staged_thumb_path.as_deref().unwrap()).exists());
+        assert!(db.pending_deletions()?.is_empty());
+        drop(db);
+        fs::remove_dir_all(folder)?;
+        Ok(())
+    }
+
+    #[test]
+    fn recovery_keeps_intent_while_media_drive_is_unavailable() -> Result<()> {
+        let (folder, db, shot) = fixture()?;
+        let job = intent(&shot)?;
+        db.prepare_delete(&job)?;
+        stage_files(&job)?;
+        fs::rename(folder.join("media"), folder.join("offline"))?;
+        drop(db);
+
+        // The database remains available. An absent file on an unavailable
+        // volume must not be mistaken for completed restoration.
+        let db = Db::open(&folder.join("gallery.sqlite"))?;
+        assert!(db.get(&shot.id)?.is_some());
+        assert!(db.pending_delete(&shot.id)?.is_some());
+        drop(db);
+
+        fs::rename(folder.join("offline"), folder.join("media"))?;
+        let db = Db::open(&folder.join("gallery.sqlite"))?;
+        assert_eq!(fs::read(&shot.file_path)?, b"original");
+        assert_eq!(fs::read(shot.thumb_path.as_deref().unwrap())?, b"thumbnail");
+        assert!(db.pending_deletions()?.is_empty());
+        drop(db);
+        fs::remove_dir_all(folder)?;
+        Ok(())
+    }
+
+    #[test]
+    fn committed_cleanup_failure_does_not_block_startup() -> Result<()> {
+        let (folder, mut db, shot) = fixture()?;
+        let job = intent(&shot)?;
+        db.prepare_delete(&job)?;
+        stage_files(&job)?;
+        db.commit_delete(&shot.id)?;
+        let blocked = PathBuf::from(&job.staged_file_path);
+        let backup = folder.join("pending-backup.tmp");
+        fs::rename(&blocked, &backup)?;
+        // A directory at the staged file location forces cleanup to fail
+        // portably, just as a Windows sharing violation can prevent deletion.
+        fs::create_dir(&blocked)?;
+        drop(db);
+
+        let db = Db::open(&folder.join("gallery.sqlite"))?;
+        assert!(db.get(&shot.id)?.is_none());
+        assert!(db.pending_delete(&shot.id)?.is_some());
+        drop(db);
+
+        fs::remove_dir(&blocked)?;
+        fs::rename(&backup, &blocked)?;
+        let db = Db::open(&folder.join("gallery.sqlite"))?;
+        assert!(!blocked.exists());
         assert!(db.pending_deletions()?.is_empty());
         drop(db);
         fs::remove_dir_all(folder)?;
