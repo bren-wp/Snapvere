@@ -1,5 +1,4 @@
 //! Localized native tray labels. The English edition remains the fallback.
-#![allow(clippy::needless_borrow)]
 
 /// Order: capture region, full screen, record region, record screen,
 /// stop recording, gallery, settings, quit, active recording tooltip.
