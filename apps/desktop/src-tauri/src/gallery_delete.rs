@@ -54,10 +54,20 @@ fn exists(path: &Path) -> Result<bool> {
     }
 }
 
+// An absent file is only proof of absence if its parent directory is reachable.
+// Disconnected drives and offline network folders otherwise look like missing files.
+fn ensure_parent_accessible(path: &Path) -> Result<()> {
+    let parent = path.parent().context("Media path has no containing folder")?;
+    fs::read_dir(parent)
+        .with_context(|| format!("Media folder is unavailable: {}", parent.display()))?;
+    Ok(())
+}
+
 fn stage_one(source: &str, staged: &str) -> Result<()> {
     let source = Path::new(source);
     let staged = Path::new(staged);
     if !exists(source)? {
+        ensure_parent_accessible(source)?;
         return Ok(());
     }
     // Never delete directories or follow symlinks supplied by a damaged DB.
@@ -81,6 +91,11 @@ fn restore_one(source: &str, staged: &str) -> Result<()> {
             "Original gallery path already exists; refusing overwrite"
         );
         fs::rename(staged, source).context("Could not restore staged gallery media")?;
+    } else if !exists(source)? {
+        // The staged file may merely be hidden by a disconnected volume.
+        // Keep the journal until both containing folders are accessible.
+        ensure_parent_accessible(staged)?;
+        ensure_parent_accessible(source)?;
     }
     Ok(())
 }
@@ -88,7 +103,10 @@ fn restore_one(source: &str, staged: &str) -> Result<()> {
 fn delete_one(staged: &str) -> Result<()> {
     match fs::remove_file(staged) {
         Ok(()) => Ok(()),
-        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            ensure_parent_accessible(Path::new(staged))?;
+            Ok(())
+        },
         Err(error) => Err(error).context("Could not clear committed deletion staging file"),
     }
 }
@@ -166,10 +184,20 @@ pub fn delete(db: &mut Db, id: &str) -> Result<()> {
 
 pub fn recover(db: &Db) -> Result<()> {
     for job in db.pending_deletions()? {
-        if job.committed {
-            cleanup_files(&job).context("Could not complete a committed gallery deletion")?;
+        let result = if job.committed {
+            cleanup_files(&job).context("Could not complete a committed gallery deletion")
         } else {
-            restore_files(&job).context("Could not restore interrupted gallery deletion")?;
+            restore_files(&job).context("Could not restore interrupted gallery deletion")
+        };
+        if let Err(error) = result {
+            // A locked file, disconnected media drive or transient access error
+            // must not make the whole app unavailable. Retain the journal for
+            // a future startup; never drop an un-restored capture reference.
+            crate::logging::log(&format!(
+                "Deferred recovery for gallery item {}: {error:#}",
+                job.id
+            ));
+            continue;
         }
         db.forget_delete(&job.id)?;
     }
