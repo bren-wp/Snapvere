@@ -22,6 +22,8 @@ The previous `delete_screenshot` unlinked capture media **before** deleting its 
 - Extend `tools/check_tauri_capabilities.py` to verify explicit Rust-side caller allowlists for 28 sensitive IPC commands; plugin capabilities alone do not enforce these checks.
 - Remove the old non-transactional gallery row-delete method from the production implementation.
 
+- A GIF recording with selected audio now fails validation; MP4 recording with missing requested microphone/system audio now aborts startup and reports an error before READY. Native recordings still require physical QA.
+
 ## Regression tests added (not evidence of execution)
 
 1. Deletion of media and thumbnail removes the SQLite record and leaves no pending journal.
@@ -30,6 +32,7 @@ The previous `delete_screenshot` unlinked capture media **before** deleting its 
 4. SQLite DELETE trigger failure leaves original media and row intact.
 5. SQLite journal INSERT trigger failure (simulated storage-write failure) leaves original media intact.
 6. A directory substituted for a regular media file is rejected without deleting its gallery entry.
+7. GIF selected with either audio option is rejected; MP4 source-validation tests reject missing WASAPI inputs.
 
 ## Required acceptance before publishing
 
