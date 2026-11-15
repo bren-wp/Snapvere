@@ -620,13 +620,13 @@ export default function Overlay() {
         <div className="lg-chip pointer-events-none absolute left-1/2 top-7 -translate-x-1/2 text-sm text-white animate-fade">
           {mode === "record" ? (
             <>
-              Drag to select the recording area &nbsp;·&nbsp;
-              <kbd className="font-mono">Enter</kbd> full screen &nbsp;·&nbsp;
-              <kbd className="font-mono">Esc</kbd> to exit
+              {t("Drag to select the recording area")} &nbsp;·&nbsp;
+              <kbd className="font-mono">Enter</kbd> {t("for full screen")} &nbsp;·&nbsp;
+              <kbd className="font-mono">Esc</kbd> {t("to cancel")}
             </>
           ) : (
             <>
-              Drag to select &nbsp;·&nbsp; <kbd className="font-mono">Esc</kbd> to exit
+              {t("Drag to select")} &nbsp;·&nbsp; <kbd className="font-mono">Esc</kbd> {t("to cancel")}
             </>
           )}
         </div>

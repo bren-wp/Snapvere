@@ -194,6 +194,7 @@ export default function VideoStage({
 
 /** Traka napretka — klik ili povlačenje premota; hover pokaže vrijeme. */
 function Scrubber({ time, duration, onSeek }: { time: number; duration: number; onSeek: (t: number) => void }) {
+  const { t } = useLanguage();
   const ref = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -241,7 +242,7 @@ function Scrubber({ time, duration, onSeek }: { time: number; duration: number; 
       }}
       tabIndex={0}
       role="slider"
-      aria-label="Seek"
+      aria-label={t("Seek")}
       aria-valuemin={0}
       aria-valuemax={Math.round(safeDuration)}
       aria-valuenow={Math.round(time)}

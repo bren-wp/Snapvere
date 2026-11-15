@@ -22,7 +22,12 @@ export default function StageError({
           {t(video ? "This video can’t be played here" : "This image can’t be shown")}
         </h2>
         <p className="mb-5 text-sm text-muted">{t("The file may have been moved, renamed or deleted.")}</p>
-        {detail && <p className="-mt-3 mb-5 font-mono text-[10px] text-white/35">{detail}</p>}
+        {detail && (
+          <details className="-mt-3 mb-5 rounded-lg border border-white/15 px-3 py-2 text-left text-xs text-muted">
+            <summary className="cursor-pointer">{t("Technical details")}</summary>
+            <p className="mt-2 break-all font-mono text-[10px]">{detail}</p>
+          </details>
+        )}
         <button
           onClick={onOpenExternal}
           className="rounded-full px-4 py-2 text-sm ring-1 ring-white/15 transition hover:bg-white/10 active:scale-95"
