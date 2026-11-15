@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useLanguage } from "../../lib/LanguageProvider";
 
 // ── UI primitivci ──
 export function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -63,6 +64,7 @@ export function Segmented({ value, options, onChange }: { value: string; options
  * eksplicitno kažemo umjesto da polje šuti.
  */
 export function HotkeyInput({ label, value, onChange }: { label: string; value: string; onChange: (accel: string) => void }) {
+  const { t } = useLanguage();
   const [capturing, setCapturing] = useState(false);
   const [silent, setSilent] = useState(false);
 
@@ -81,7 +83,7 @@ export function HotkeyInput({ label, value, onChange }: { label: string; value: 
       <input
         readOnly
         aria-label={label}
-        value={capturing ? "Press a combination…" : value}
+        value={capturing ? t("Press a combination…") : value}
         onFocus={() => setCapturing(true)}
         onBlur={() => setCapturing(false)}
         onKeyDown={(e) => {
@@ -98,7 +100,7 @@ export function HotkeyInput({ label, value, onChange }: { label: string; value: 
       />
       {silent && (
         <span className="max-w-52 text-right text-[11px] leading-snug text-warn">
-          This shortcut was not detected. Try another key combination.
+          {t("This shortcut was not detected. Try another key combination.")}
         </span>
       )}
     </div>
