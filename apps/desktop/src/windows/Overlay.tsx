@@ -16,6 +16,7 @@ import {
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ipc } from "../lib/ipc";
+import { useLanguage } from "../lib/LanguageProvider";
 import { readCapturePreferences } from "../lib/capturePreferencesStore";
 import { renderAnnotations } from "../lib/canvas";
 import { clampRect, applyResize } from "../lib/selectionGeometry";
@@ -33,6 +34,7 @@ import type { Rect, ResizeDirection as Dir } from "../lib/selectionGeometry";
 type DragOp = { type: "move" | "resize"; dir: Dir; sx: number; sy: number; start: Rect };
 
 export default function Overlay() {
+  const { t } = useLanguage();
   const [imgReady, setImgReady] = useState(false);
   const [phase, setPhase] = useState<"select" | "edit">("select");
   /** "shot" = snimka zaslona s anotacijama, "record" = odabir područja za video. */
@@ -176,7 +178,7 @@ export default function Overlay() {
           // Never display an opaque black window as if it were a valid capture.
           if (latestToken.current === token) {
             console.error("Could not display frozen desktop frame", error);
-            const message = "Unable to display the desktop capture. Please try again.";
+            const message = t("Unable to display the desktop capture. Please try again.");
             await emit("snapvere:toast", message).catch(() => undefined);
             await ipc.cancelCapture().catch(() => undefined);
           }
@@ -199,7 +201,7 @@ export default function Overlay() {
     return () => {
       void un.then((f) => f());
     };
-  }, [loadFrozen]);
+  }, [loadFrozen, t]);
 
   useLayoutEffect(() => {
     if (barRef.current) setBarW(barRef.current.offsetWidth);
@@ -448,7 +450,7 @@ export default function Overlay() {
     const hex = pixelHex(e.clientX, e.clientY);
     setColor(hex);
     setTool(prevTool.current === "eyedropper" ? "arrow" : prevTool.current);
-    setToast(`Color ${hex.toUpperCase()}`);
+    setToast(`${t("Color")} ${hex.toUpperCase()}`);
   };
 
   const selectTool = (id: EditorTool) => {
@@ -520,17 +522,17 @@ export default function Overlay() {
       if (!sel || !frozenRef.current) return;
       try {
         const b64 = exportPng();
-        if (action === "copy") { await ipc.copyBase64ToClipboard(b64); setToast("Copied to clipboard"); }
+        if (action === "copy") { await ipc.copyBase64ToClipboard(b64); setToast(t("Copied to clipboard")); }
         else {
           const { format, quality } = await readCapturePreferences();
           await ipc.saveEditedImage(b64, format, quality);
-          setToast("Saved to gallery");
+          setToast(t("Saved to gallery"));
         }
         closeSoon();
       } catch (err) {
         console.error(err);
         // Keep the frozen frame and annotations available for retry.
-        setToast(`Export failed: ${String(err)}`);
+        setToast(`${t("Export failed:")} ${String(err)}`);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -545,11 +547,11 @@ export default function Overlay() {
       // on the extension chosen there; never forward a webview-provided path.
       const saved = await ipc.saveImageAs(exportPng(), preferences.format, preferences.quality);
       if (!saved) return;
-      setToast("Saved");
+      setToast(t("Saved"));
       closeSoon();
     } catch (err) {
       console.error(err);
-      setToast(`Save failed: ${String(err)}`);
+      setToast(`${t("Save failed:")} ${String(err)}`);
     }
   };
 
@@ -720,7 +722,7 @@ export default function Overlay() {
             else if (e.key === "Escape") { setTextEdit(null); setTextValue(""); }
             e.stopPropagation();
           }}
-          placeholder="Type…"
+          placeholder={t("Type…")}
           className="absolute z-40 border-0 bg-black/25 p-0 outline-none placeholder:text-white/45"
           style={{
             left: textEdit.x, top: textEdit.y, color, caretColor: color,
@@ -765,11 +767,11 @@ export default function Overlay() {
               </div>
               <div className="mt-3 flex items-center justify-between">
                 <label className="flex items-center gap-2 text-xs text-white/80">
-                  Custom
+                  {t("Custom")}
                   <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-7 w-9 cursor-pointer rounded bg-transparent" />
                 </label>
                 <button onClick={() => selectTool("eyedropper")} className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs text-white hover:bg-white/15">
-                  <Pipette size={14} /> Eyedropper
+                  <Pipette size={14} /> {t("Eyedropper")}
                 </button>
               </div>
             </div>
@@ -789,39 +791,39 @@ export default function Overlay() {
 
           {/* Grupa 1 — alati */}
           <div className="lg lg-bar animate-pop">
-            {TOOLS.map((t) => (
-              <button key={t.id} title={t.label} onClick={() => selectTool(t.id)} className={`lg-btn ${tool === t.id ? "is-active" : ""}`}>
-                <t.icon size={16} strokeWidth={2} />
+            {TOOLS.map((item) => (
+              <button key={item.id} title={t(item.label)} aria-label={t(item.label)} onClick={() => selectTool(item.id)} className={`lg-btn ${tool === item.id ? "is-active" : ""}`}>
+                <item.icon size={16} strokeWidth={2} />
               </button>
             ))}
             <span className="lg-sep" />
-            <button title="Color" onClick={() => setPopover(popover === "color" ? null : "color")} className="lg-btn">
+            <button title={t("Color")} aria-label={t("Color")} onClick={() => setPopover(popover === "color" ? null : "color")} className="lg-btn">
               <span className="h-4 w-4 rounded-full border border-white/40" style={{ background: color }} />
             </button>
-            <button title="Thickness" onClick={() => setPopover(popover === "size" ? null : "size")} className="lg-btn">
+            <button title={t("Thickness")} aria-label={t("Thickness")} onClick={() => setPopover(popover === "size" ? null : "size")} className="lg-btn">
               <span className="rounded-full bg-current" style={{ width: Math.min(16, size + 2), height: Math.min(16, size + 2) }} />
             </button>
             <span className="lg-sep" />
-            <button title="Undo (Ctrl+Z)" onClick={undo} disabled={!annotations.length} className="lg-btn">
+            <button title={`${t("Undo")} (Ctrl+Z)`} aria-label={t("Undo")} onClick={undo} disabled={!annotations.length} className="lg-btn">
               <Undo2 size={16} />
             </button>
-            <button title="Redo (Ctrl+Y)" onClick={doRedo} disabled={!redo.length} className="lg-btn">
+            <button title={`${t("Redo")} (Ctrl+Y)`} aria-label={t("Redo")} onClick={doRedo} disabled={!redo.length} className="lg-btn">
               <Redo2 size={16} />
             </button>
           </div>
 
           {/* Grupa 2 — akcije */}
           <div className="lg lg-bar animate-pop">
-            <button title="Copy (Ctrl+C)" onClick={() => finish("copy")} className="lg-btn">
+            <button title={`${t("Copy")} (Ctrl+C)`} aria-label={t("Copy")} onClick={() => finish("copy")} className="lg-btn">
               <Copy size={16} />
             </button>
-            <button title="Save as…" onClick={saveAs} className="lg-btn">
+            <button title={t("Save As")} aria-label={t("Save As")} onClick={saveAs} className="lg-btn">
               <Save size={16} />
             </button>
-            <button title="Save to gallery (Ctrl+S)" onClick={() => finish("save")} className="lg-btn">
+            <button title={`${t("Save to gallery")} (Ctrl+S)`} aria-label={t("Save to gallery")} onClick={() => finish("save")} className="lg-btn">
               <Download size={16} />
             </button>
-            <button title="Cancel (Esc)" onClick={() => ipc.cancelCapture()} className="lg-btn">
+            <button title={`${t("Cancel")} (Esc)`} aria-label={t("Cancel")} onClick={() => ipc.cancelCapture()} className="lg-btn">
               <X size={16} />
             </button>
           </div>
@@ -837,17 +839,17 @@ export default function Overlay() {
         >
           <div className="lg lg-bar animate-pop">
             <button
-              title="Start recording (Enter)"
+              title={`${t("Start recording")} (Enter)`} aria-label={t("Start recording")}
               onClick={() => beginRecording(false)}
               disabled={starting}
               className="flex items-center gap-2 rounded-full bg-danger px-4 py-1.5 text-sm font-medium text-white transition hover:brightness-110 active:scale-95 disabled:opacity-50"
             >
               <span className="h-2.5 w-2.5 rounded-full bg-white" />
-              {starting ? "Starting…" : "Record"}
+              {t(starting ? "Starting…" : "Record")}
             </button>
             <span className="lg-sep" />
             <button
-              title="Record the whole screen"
+              title={t("Record the whole screen")} aria-label={t("Record the whole screen")}
               onClick={() => beginRecording(true)}
               disabled={starting}
               className="lg-btn"
@@ -860,7 +862,8 @@ export default function Overlay() {
             <span className="lg-sep" />
             {/* zvuk: bira se po snimci; GIF nema audio pa su gumbi ugašeni */}
             <button
-              title={gifFormat ? "GIF has no audio" : mic ? "Microphone: on" : "Microphone: off"}
+              title={t(gifFormat ? "GIF has no audio" : mic ? "Microphone: on" : "Microphone: off")}
+              aria-label={t(gifFormat ? "GIF has no audio" : mic ? "Microphone: on" : "Microphone: off")}
               onClick={() => void setAudio("recordMic", !mic)}
               disabled={gifFormat}
               className={`lg-btn ${mic && !gifFormat ? "is-active" : ""}`}
@@ -868,7 +871,8 @@ export default function Overlay() {
               {mic && !gifFormat ? <Mic size={16} /> : <MicOff size={16} />}
             </button>
             <button
-              title={gifFormat ? "GIF has no audio" : sysAudio ? "System audio: on" : "System audio: off"}
+              title={t(gifFormat ? "GIF has no audio" : sysAudio ? "System audio: on" : "System audio: off")}
+              aria-label={t(gifFormat ? "GIF has no audio" : sysAudio ? "System audio: on" : "System audio: off")}
               onClick={() => void setAudio("recordSystemAudio", !sysAudio)}
               disabled={gifFormat}
               className={`lg-btn ${sysAudio && !gifFormat ? "is-active" : ""}`}
@@ -876,7 +880,7 @@ export default function Overlay() {
               {sysAudio && !gifFormat ? <Volume2 size={16} /> : <VolumeX size={16} />}
             </button>
             <span className="lg-sep" />
-            <button title="Cancel (Esc)" onClick={() => ipc.cancelCapture()} className="lg-btn">
+            <button title={`${t("Cancel")} (Esc)`} aria-label={t("Cancel")} onClick={() => ipc.cancelCapture()} className="lg-btn">
               <X size={16} />
             </button>
           </div>
