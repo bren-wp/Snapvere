@@ -2,6 +2,18 @@
 
 SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO**.
 
+## v0.2.14 — P1 integrity and IPC hardening (unreleased)
+
+- Journal gallery deletions before filesystem staging and atomically commit SQLite
+  record removal; recover pending operations safely on restart.
+- Restore original capture and thumbnail on failure; avoid following links,
+  unlinking directories or overwriting existing user files on rollback.
+- Restrict frozen-frame PNG/RGBA, capture completion, cancel and reveal IPC to
+  the capture overlay window.
+- Add failure-injection and crash-window Rust tests and version metadata for a
+  future verified **prerelease**, without claiming physical Windows QA.
+- See `docs/AUDIT-v0.2.14-P1-integrity-ipc.md` for acceptance gaps.
+
 ## v0.2.13 — recording HUD recovery and localized gallery (development candidate)
 
 - Keep the recording HUD usable after a failed Stop/Discard/Pause call so the user can retry rather than losing access to recording controls.
