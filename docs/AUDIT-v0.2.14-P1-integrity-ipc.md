@@ -24,6 +24,15 @@ The previous `delete_screenshot` unlinked capture media **before** deleting its 
 
 - A GIF recording with selected audio now fails validation; MP4 recording with missing requested microphone/system audio now aborts startup and reports an error before READY. Native recordings still require physical QA.
 
+## Follow-up fixes from GitHub PR review and Windows CI
+
+- Addressed Windows compiler error `E0597` in `Db::pending_deletions` by collecting mapped SQLite rows into a local variable before the statement drops.
+- Added pre-migration `PRAGMA quick_check(1)`, atomic SQLite schema upgrades and schema version 1. Existing media and metadata are not cleared on failed startup.
+- Recovery treats missing files as absent only when their parent folders are accessible. An offline/disconnected volume leaves the recovery journal intact instead of hiding its pending files.
+- Locked or inaccessible committed staging files are deferred without preventing app startup. The journal is retained for the next attempt.
+- Existing MP4 audio preferences remain saved when switching to GIF; GIF uses silent effective settings and displays disabled audio switches. Explicit audio-enabled GIF recorder arguments are still rejected.
+- Added fault regression scenarios for disconnected media folders and failed post-commit cleanup.
+
 ## Regression tests added (not evidence of execution)
 
 1. Deletion of media and thumbnail removes the SQLite record and leaves no pending journal.
