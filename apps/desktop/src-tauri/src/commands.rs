@@ -173,9 +173,10 @@ pub fn get_overlay_recording_preferences(
         Some("gif") => RecordFormat::Gif,
         _ => RecordFormat::Mp4,
     };
+    let supports_audio = matches!(record_format, RecordFormat::Mp4);
     Ok(OverlayRecordingPreferences {
-        record_mic: get_flag("recordMic"),
-        record_system_audio: get_flag("recordSystemAudio"),
+        record_mic: supports_audio && get_flag("recordMic"),
+        record_system_audio: supports_audio && get_flag("recordSystemAudio"),
         record_format,
     })
 }
@@ -193,6 +194,15 @@ pub fn set_overlay_audio_preference(
         return Err("Recording overlay cannot modify this setting".into());
     }
     let store = app.store("settings.json").map_err(estr)?;
+    if enabled
+        && store
+            .get("recordFormat")
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .as_deref()
+            == Some("gif")
+    {
+        return Err("GIF recordings cannot enable audio".into());
+    }
     store.set(key, enabled);
     store.save().map_err(estr)
 }
@@ -649,7 +659,12 @@ struct CapturePayload {
 /// Pokreni odabir područja. Vraća ODMAH — pravi capture ide na radnu dretvu, a
 /// overlay se javi kad je frame spreman (`snapvere:capture`).
 #[tauri::command]
-pub fn begin_region_capture(app: AppHandle, mode: Option<CaptureMode>) -> Result<(), String> {
+pub fn begin_region_capture(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    mode: Option<CaptureMode>,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["home"])?;
     dispatch_region_capture(&app, mode.unwrap_or(CaptureMode::Shot));
     Ok(())
 }
@@ -760,15 +775,22 @@ fn region_capture_blocking(app: &AppHandle, mode: CaptureMode) -> Result<(), Str
 
 /// Otkrij overlay koji je frontend prikazao cloakan (vidi `set_cloaked`).
 #[tauri::command]
-pub fn reveal_overlay(app: AppHandle) {
+pub fn reveal_overlay(window: tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
+    require_window_label(window.label(), &["overlay"])?;
     if let Some(win) = app.get_webview_window("overlay") {
         set_cloaked(&win, false);
     }
+    Ok(())
 }
 
 /// Vrati zamrznuti frame monitora kao PNG data-URL (za prikaz u overlayu).
 #[tauri::command]
-pub fn get_frozen_frame(state: State<AppState>, monitor_id: u32) -> Result<String, String> {
+pub fn get_frozen_frame(
+    window: tauri::WebviewWindow,
+    state: State<AppState>,
+    monitor_id: u32,
+) -> Result<String, String> {
+    require_window_label(window.label(), &["overlay"])?;
     let frozen = lock(&state.frozen);
     let frame = frozen
         .frames
@@ -781,7 +803,12 @@ pub fn get_frozen_frame(state: State<AppState>, monitor_id: u32) -> Result<Strin
 /// Vrati zamrznuti frame kao SIROVE RGBA bajtove (header: width,height kao u32 LE, pa pikseli).
 /// Binarni IPC bez PNG/base64 → overlay se pojavi gotovo instantno (ključno za brzinu).
 #[tauri::command]
-pub fn get_frozen_rgba(state: State<AppState>, monitor_id: u32) -> Response {
+pub fn get_frozen_rgba(
+    window: tauri::WebviewWindow,
+    state: State<AppState>,
+    monitor_id: u32,
+) -> Result<Response, String> {
+    require_window_label(window.label(), &["overlay"])?;
     let frozen = lock(&state.frozen);
     // Jedan frame u igri — uzmi po id-u, ili prvi dostupni (robusno na nepodudaranje id-a).
     let Some(frame) = frozen
@@ -789,9 +816,9 @@ pub fn get_frozen_rgba(state: State<AppState>, monitor_id: u32) -> Response {
         .get(&monitor_id)
         .or_else(|| frozen.frames.values().next())
     else {
-        return Response::new(Vec::new());
+        return Ok(Response::new(Vec::new()));
     };
-    Response::new(frame_to_rgba_packet(frame))
+    Ok(Response::new(frame_to_rgba_packet(frame)))
 }
 
 /// Binary response format: 8 bytes of little-endian width and height, then
@@ -808,6 +835,7 @@ fn frame_to_rgba_packet(frame: &image::RgbaImage) -> Vec<u8> {
 /// Završi capture regije odabranom akcijom. Vraća zapis ako je nešto spremljeno.
 #[tauri::command]
 pub fn finish_region_capture(
+    window: tauri::WebviewWindow,
     app: AppHandle,
     state: State<AppState>,
     region: Region,
@@ -815,6 +843,7 @@ pub fn finish_region_capture(
     format: ImageFormat,
     quality: u8,
 ) -> Result<Option<Screenshot>, String> {
+    require_window_label(window.label(), &["overlay"])?;
     // Always close the overlay and release frozen frames, even on invalid
     // selections or when the capture frame has already disappeared.
     let cropped = {
@@ -865,7 +894,12 @@ pub fn finish_region_capture(
 
 /// Odustani od capture-a: sakrij overlay, oslobodi frozen frameove.
 #[tauri::command]
-pub fn cancel_capture(app: AppHandle, state: State<AppState>) -> Result<(), String> {
+pub fn cancel_capture(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    state: State<AppState>,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["overlay"])?;
     hide_overlays(&app);
     lock(&state.frozen).clear();
     Ok(())
@@ -874,10 +908,12 @@ pub fn cancel_capture(app: AppHandle, state: State<AppState>) -> Result<(), Stri
 /// Capture cijelog primarnog ekrana → spremi u galeriju.
 #[tauri::command]
 pub async fn capture_fullscreen(
+    window: tauri::WebviewWindow,
     app: AppHandle,
     format: ImageFormat,
     quality: u8,
 ) -> Result<Screenshot, String> {
+    require_window_label(window.label(), &["home"])?;
     let handle = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         logging::guard("capture_fullscreen", || {
@@ -948,12 +984,14 @@ pub fn dispatch_capture_fullscreen(app: &AppHandle) {
 /// Spremi sliku iz editora (base64 PNG s canvasa) u galeriju.
 #[tauri::command]
 pub fn save_edited_image(
+    window: tauri::WebviewWindow,
     app: AppHandle,
     state: State<AppState>,
     base64_png: String,
     format: ImageFormat,
     quality: u8,
 ) -> Result<Screenshot, String> {
+    require_window_label(window.label(), &["overlay", "editor"])?;
     let img = decode_editor_png(&base64_png)?;
     save_to_gallery(&app, &state, &img, CaptureSource::Region, format, quality)
 }
@@ -1125,7 +1163,34 @@ fn record_options(app: &AppHandle) -> RecordOptions {
             _ => crate::models::RecordFormat::default(),
         };
     }
+    normalize_record_audio_preferences(&mut o);
     o
+}
+
+// Persisted audio preferences are MP4-specific. A temporary GIF selection
+// must neither silently capture sound nor prevent GIF recording altogether.
+fn normalize_record_audio_preferences(options: &mut RecordOptions) {
+    if matches!(options.format, RecordFormat::Gif) {
+        options.mic = false;
+        options.system_audio = false;
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn stored_mp4_audio_choices_do_not_break_gif_recording() {
+    let mut opts = RecordOptions {
+        format: RecordFormat::Gif,
+        mic: true,
+        system_audio: true,
+        ..RecordOptions::default()
+    };
+    normalize_record_audio_preferences(&mut opts);
+    assert!(!opts.mic && !opts.system_audio);
+    opts.format = RecordFormat::Mp4;
+    opts.mic = true;
+    normalize_record_audio_preferences(&mut opts);
+    assert!(opts.mic);
 }
 
 /// Hotkey put: ako se snima — stani; inače otvori odabir područja u record modu.
@@ -1189,8 +1254,12 @@ pub fn pause_recording(
 }
 
 #[tauri::command]
-pub fn recording_status(app: AppHandle) -> RecordStatus {
-    record::status(&app)
+pub fn recording_status(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+) -> Result<RecordStatus, String> {
+    require_window_label(window.label(), &["recbar"])?;
+    Ok(record::status(&app))
 }
 
 /// Odredi monitor za snimanje: eksplicitni id, inače onaj pod mišem.
@@ -1305,8 +1374,12 @@ fn show_rec_frame(
 
 /// Snimano područje za okvir — prozor ga povuče pri učitavanju ako je event već prošao.
 #[tauri::command]
-pub fn rec_frame_rect(state: State<AppState>) -> Option<RecFrameRect> {
-    *lock(&state.rec_frame)
+pub fn rec_frame_rect(
+    window: tauri::WebviewWindow,
+    state: State<AppState>,
+) -> Result<Option<RecFrameRect>, String> {
+    require_window_label(window.label(), &["recframe"])?;
+    Ok(*lock(&state.rec_frame))
 }
 
 /// Propuštaj klikove kroz sloj za crtanje (true = sloj hvata miš).
@@ -1361,11 +1434,13 @@ pub fn close_rec_hud(window: tauri::WebviewWindow, app: AppHandle) -> Result<(),
 
 #[tauri::command]
 pub fn list_screenshots(
+    window: tauri::WebviewWindow,
     app: AppHandle,
     state: State<AppState>,
     limit: Option<u32>,
     offset: Option<u32>,
 ) -> Result<Vec<Screenshot>, String> {
+    require_window_label(window.label(), &["home"])?;
     let items = lock(&state.db)
         .list(limit.unwrap_or(200), offset.unwrap_or(0))
         .map_err(estr)?;
@@ -1375,12 +1450,14 @@ pub fn list_screenshots(
 
 #[tauri::command]
 pub fn search_screenshots(
+    window: tauri::WebviewWindow,
     app: AppHandle,
     state: State<AppState>,
     query: String,
     limit: Option<u32>,
     offset: Option<u32>,
 ) -> Result<Vec<Screenshot>, String> {
+    require_window_label(window.label(), &["home"])?;
     let items = {
         let db = lock(&state.db);
         let limit = limit.unwrap_or(120).min(500);
@@ -1397,7 +1474,8 @@ pub fn search_screenshots(
 
 /// Otvori datoteku u zadanom programu sustava (Photos, Media Player…).
 #[tauri::command]
-pub fn open_media(app: AppHandle, id: String) -> Result<(), String> {
+pub fn open_media(window: tauri::WebviewWindow, app: AppHandle, id: String) -> Result<(), String> {
+    require_window_label(window.label(), &["home"])?;
     let path = media_path(&app, &id)?;
     app.opener()
         .open_path(path.to_string_lossy(), None::<&str>)
@@ -1406,14 +1484,24 @@ pub fn open_media(app: AppHandle, id: String) -> Result<(), String> {
 
 /// Pokaži datoteku u Exploreru (označenu).
 #[tauri::command]
-pub fn reveal_media(app: AppHandle, id: String) -> Result<(), String> {
+pub fn reveal_media(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    id: String,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["home"])?;
     let path = media_path(&app, &id)?;
     app.opener().reveal_item_in_dir(&path).map_err(estr)
 }
 
 /// Copy only a gallery-registered media path, never an arbitrary UI-supplied path.
 #[tauri::command]
-pub fn copy_media_path(app: AppHandle, id: String) -> Result<(), String> {
+pub fn copy_media_path(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    id: String,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["home"])?;
     let path = media_path(&app, &id)?;
     app.clipboard()
         .write_text(path.to_string_lossy().into_owned())
@@ -1423,7 +1511,12 @@ pub fn copy_media_path(app: AppHandle, id: String) -> Result<(), String> {
 /// Kopiraj sliku iz galerije u clipboard. Dekodiranje velikog PNG-a traje — ne na
 /// glavnoj dretvi.
 #[tauri::command]
-pub async fn copy_media_image(app: AppHandle, id: String) -> Result<(), String> {
+pub async fn copy_media_image(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    id: String,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["home"])?;
     let path = media_path(&app, &id)?;
     tauri::async_runtime::spawn_blocking(move || {
         validate_copy_image(&path)?;
@@ -1441,29 +1534,19 @@ pub fn delete_screenshot(
     id: String,
 ) -> Result<(), String> {
     require_window_label(window.label(), &["home"])?;
-    // Only delete the path from an existing gallery record, never an arbitrary webview argument.
-    let shot = lock(&state.db)
-        .get(&id)
-        .map_err(estr)?
-        .ok_or("This capture is no longer in the gallery")?;
-    match fs::remove_file(&shot.file_path) {
-        Ok(()) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(format!("Could not delete capture file: {e}")),
-    }
-    lock(&state.db).delete(&id).map_err(estr)?;
-    if let Some(thumb) = shot.thumb_path {
-        if let Err(e) = fs::remove_file(&thumb) {
-            if e.kind() != std::io::ErrorKind::NotFound {
-                log(&format!("Could not delete thumbnail {}: {e}", thumb));
-            }
-        }
-    }
-    Ok(())
+    // Hold the DB mutex during staging and the atomic SQLite commit.
+    // An on-disk intent restores media after interrupted deletion.
+    crate::gallery_delete::delete(&mut lock(&state.db), &id).map_err(estr)
 }
 
 #[tauri::command]
-pub fn add_tag(state: State<AppState>, id: String, tag: String) -> Result<(), String> {
+pub fn add_tag(
+    window: tauri::WebviewWindow,
+    state: State<AppState>,
+    id: String,
+    tag: String,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["home"])?;
     lock(&state.db).add_tag(&id, tag.trim()).map_err(estr)
 }
 
@@ -1513,13 +1596,15 @@ pub fn open_settings(app: &AppHandle) -> Result<(), String> {
 
 /// Putanja do log datoteke — Settings → About nudi "Open log".
 #[tauri::command]
-pub fn log_file_path() -> Option<String> {
-    logging::log_path().map(|p| p.to_string_lossy().into_owned())
+pub fn log_file_path(window: tauri::WebviewWindow) -> Result<Option<String>, String> {
+    require_window_label(window.label(), &["settings"])?;
+    Ok(logging::log_path().map(|p| p.to_string_lossy().into_owned()))
 }
 
 /** Open the configured capture directory, with no caller-controlled path. */
 #[tauri::command]
-pub fn open_capture_folder(app: AppHandle) -> Result<(), String> {
+pub fn open_capture_folder(window: tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
+    require_window_label(window.label(), &["settings"])?;
     let dir = gallery_dir(&app)?;
     fs::create_dir_all(&dir).map_err(estr)?;
     app.opener()
@@ -1529,7 +1614,8 @@ pub fn open_capture_folder(app: AppHandle) -> Result<(), String> {
 
 /** Open Snapvere's data directory, without arbitrary filesystem IPC access. */
 #[tauri::command]
-pub fn open_data_folder(app: AppHandle) -> Result<(), String> {
+pub fn open_data_folder(window: tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
+    require_window_label(window.label(), &["settings"])?;
     let dir = app.path().app_data_dir().map_err(estr)?;
     fs::create_dir_all(&dir).map_err(estr)?;
     app.opener()
@@ -1624,5 +1710,16 @@ mod ipc_origin_tests {
         assert!(require_window_label("settings", &["home"]).is_err());
         assert!(require_window_label("recdraw", &["recbar"]).is_err());
         assert!(require_window_label("recframe", &["recdraw"]).is_err());
+        for window in [
+            "home", "settings", "editor", "recbar", "recdraw", "recframe",
+        ] {
+            assert!(
+                require_window_label(window, &["overlay"]).is_err(),
+                "Sensitive frozen-frame IPC must reject {window}"
+            );
+        }
+        assert!(require_window_label("overlay", &["overlay"]).is_ok());
+        assert!(require_window_label("home", &["settings"]).is_err());
+        assert!(require_window_label("overlay", &["home"]).is_err());
     }
 }

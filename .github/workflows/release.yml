@@ -173,14 +173,13 @@ jobs:
             All three Windows executables originate from the same Tauri build and were verified before publication.
 
             ### Changes in v${{ steps.version.outputs.value }}
-            - Preserve the recording HUD and allow a retry when Stop or Discard fails, preventing an active session from becoming headless.
-            - Display a clear, accessible recording control error without exposing internal diagnostics in the toolbar.
-            - Translate all 225 cataloged application interface strings across 12 languages, including privacy, help, tooltips, editor and capture settings.
-            - Localize the native Windows tray menu and active-recording tooltip, updating live when the selected language changes.
-            - Test static and dynamic localization coverage and reject visible untranslated React labels.
-            - Format media dates and sizes according to the selected language; guard against corrupt gallery metadata.
-            - Extend unit tests for retry locking, locale coverage and formatting and include browser-level Stop error injection.
-            - Keep version metadata consistent across Cargo, Tauri, npm and lockfiles and ship verified portable, NSIS and MSI binaries with SHA-256 checksums.
+            - Use a durable SQLite deletion journal to prevent missing gallery media after interrupted delete operations.
+            - Stage media within their original filesystem and restore unfinished deletions when the app starts again.
+            - Commit screenshot removal and deletion state in one SQLite transaction, preserving tags and avoiding unsafe overwrites.
+            - Restrict frozen-frame access and region capture lifecycle commands to the native overlay WebView.
+            - Add negative/regression tests for interrupted database transactions, simulated write failures and invalid files.
+            - Keep all 12 languages and existing Windows recording formats available; real hardware validation remains outstanding.
+            - Produce matching Portable EXE, NSIS EXE, MSI and verified SHA256SUMS.txt from this GitHub Tauri/Rust source.
 
             **Preview release.** Native Windows 10/11 capture, recorder, audio, multi-monitor,
             accessibility, install/upgrade/uninstall and 1:1 visual comparisons are not yet

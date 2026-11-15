@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::Duration;
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::models::Screenshot;
 
@@ -13,16 +13,35 @@ pub struct Db {
     conn: Connection,
 }
 
+/// A deletion intent survives an unexpected process termination. Its staged
+/// files always remain on the same volume as the originals.
+pub struct PendingDeletion {
+    pub id: String,
+    pub file_path: String,
+    pub staged_file_path: String,
+    pub thumb_path: Option<String>,
+    pub staged_thumb_path: Option<String>,
+    pub committed: bool,
+}
+
 impl Db {
     /// Otvori (ili kreiraj) bazu na zadanoj putanji i pokreni migracije.
     pub fn open(path: &Path) -> anyhow::Result<Self> {
         let conn = Connection::open(path)?;
         conn.busy_timeout(Duration::from_secs(5))?;
+        // Inspect the existing database before running schema changes. Never
+        // replace damaged user data with a new, empty gallery.
+        let integrity: String = conn.query_row("PRAGMA quick_check(1)", [], |row| row.get(0))?;
+        anyhow::ensure!(
+            integrity == "ok",
+            "SQLite gallery integrity check failed: {integrity}"
+        );
         conn.pragma_update(None, "journal_mode", "WAL")?;
-        conn.pragma_update(None, "synchronous", "NORMAL")?;
+        conn.pragma_update(None, "synchronous", "FULL")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         let db = Self { conn };
         db.migrate()?;
+        crate::gallery_delete::recover(&db)?;
         Ok(db)
     }
 
@@ -38,8 +57,11 @@ impl Db {
     }
 
     fn migrate(&self) -> anyhow::Result<()> {
+        // SQLite DDL participates in transactions: partial schema upgrades
+        // must not leave a database that looks successfully migrated.
         self.conn.execute_batch(
             r#"
+            BEGIN IMMEDIATE;
             CREATE TABLE IF NOT EXISTS screenshots (
                 id            TEXT PRIMARY KEY,
                 file_path     TEXT NOT NULL,
@@ -69,6 +91,19 @@ impl Db {
                 tag_id        INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
                 PRIMARY KEY (screenshot_id, tag_id)
             );
+
+            -- Persisted BEFORE files are staged, retained AFTER row deletion,
+            -- and cleared only after rollback or cleanup succeeds.
+            CREATE TABLE IF NOT EXISTS pending_deletions (
+                id                TEXT PRIMARY KEY,
+                file_path         TEXT NOT NULL,
+                staged_file_path  TEXT NOT NULL,
+                thumb_path        TEXT,
+                staged_thumb_path TEXT,
+                committed         INTEGER NOT NULL DEFAULT 0 CHECK (committed IN (0, 1))
+            );
+            PRAGMA user_version = 1;
+            COMMIT;
             "#,
         )?;
         Ok(())
@@ -168,11 +203,76 @@ impl Db {
         Ok(out)
     }
 
-    /// Obriši zapis (datoteku briše pozivatelj).
-    pub fn delete(&self, id: &str) -> anyhow::Result<()> {
-        self.conn
-            .execute("DELETE FROM screenshots WHERE id = ?1", params![id])?;
+    /// Write durable intent before the filesystem is touched.
+    pub fn prepare_delete(&self, job: &PendingDeletion) -> anyhow::Result<()> {
+        let changed = self.conn.execute(
+            "INSERT INTO pending_deletions
+             (id, file_path, staged_file_path, thumb_path, staged_thumb_path, committed)
+             SELECT ?1, ?2, ?3, ?4, ?5, 0
+             FROM screenshots WHERE id = ?1",
+            params![
+                job.id,
+                job.file_path,
+                job.staged_file_path,
+                job.thumb_path,
+                job.staged_thumb_path
+            ],
+        )?;
+        anyhow::ensure!(changed == 1, "Gallery item disappeared before delete");
         Ok(())
+    }
+
+    /// Atomically remove the row and mark its staged media as safe to clean.
+    pub fn commit_delete(&mut self, id: &str) -> anyhow::Result<()> {
+        let tx = self.conn.transaction()?;
+        let removed = tx.execute("DELETE FROM screenshots WHERE id = ?1", params![id])?;
+        anyhow::ensure!(removed == 1, "No gallery entry to delete");
+        let marked = tx.execute(
+            "UPDATE pending_deletions SET committed = 1 WHERE id = ?1 AND committed = 0",
+            params![id],
+        )?;
+        anyhow::ensure!(marked == 1, "Missing prepared gallery deletion");
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn forget_delete(&self, id: &str) -> anyhow::Result<()> {
+        self.conn
+            .execute("DELETE FROM pending_deletions WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    pub fn pending_delete(&self, id: &str) -> anyhow::Result<Option<PendingDeletion>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT id, file_path, staged_file_path, thumb_path, staged_thumb_path, committed
+                 FROM pending_deletions WHERE id = ?1",
+                params![id],
+                Self::map_pending,
+            )
+            .optional()?)
+    }
+
+    pub fn pending_deletions(&self) -> anyhow::Result<Vec<PendingDeletion>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, file_path, staged_file_path, thumb_path, staged_thumb_path, committed
+             FROM pending_deletions ORDER BY id",
+        )?;
+        let rows = stmt.query_map([], Self::map_pending)?;
+        let pending = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(pending)
+    }
+
+    fn map_pending(row: &rusqlite::Row) -> rusqlite::Result<PendingDeletion> {
+        Ok(PendingDeletion {
+            id: row.get(0)?,
+            file_path: row.get(1)?,
+            staged_file_path: row.get(2)?,
+            thumb_path: row.get(3)?,
+            staged_thumb_path: row.get(4)?,
+            committed: row.get::<_, i32>(5)? != 0,
+        })
     }
 
     /// Dodaj tag screenshotu (kreira tag ako ne postoji).
@@ -377,6 +477,10 @@ mod gallery_tests {
                 // The same public API opens an existing on-disk SQLite/WAL
                 // gallery after a dependency upgrade; no destructive migrations.
                 let upgraded = Db::open(&path)?;
+                let version: i64 = upgraded
+                    .conn
+                    .query_row("PRAGMA user_version", [], |r| r.get(0))?;
+                assert_eq!(version, 1);
                 let record = upgraded.get("saved-before-upgrade")?.expect("saved record");
                 assert_eq!(record.tags, vec!["keep-me"]);
                 assert_eq!(upgraded.list(10, 0)?.len(), 1);
@@ -402,7 +506,10 @@ mod gallery_tests {
         let db = Db::open_in_memory()?;
         db.insert(&shot("one", 100))?;
         db.add_tag("one", "important")?;
-        db.delete("one")?;
+        // Validate SQLite foreign-key behavior without bypassing the
+        // crash-recoverable deletion API in production.
+        db.conn
+            .execute("DELETE FROM screenshots WHERE id = ?1", params!["one"])?;
         let count: i64 = db
             .conn
             .query_row("SELECT COUNT(*) FROM screenshot_tags", [], |r| r.get(0))?;

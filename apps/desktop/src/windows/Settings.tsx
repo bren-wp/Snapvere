@@ -358,7 +358,8 @@ export default function Settings() {
             >
               <Toggle
                 label={t("Record microphone")}
-                checked={s.recordMic}
+                checked={s.recordFormat === "mp4" && s.recordMic}
+                disabled={s.recordFormat === "gif"}
                 onChange={(v) => set("recordMic", v)}
               />
             </Row>
@@ -368,7 +369,8 @@ export default function Settings() {
             >
               <Toggle
                 label={t("Record system audio")}
-                checked={s.recordSystemAudio}
+                checked={s.recordFormat === "mp4" && s.recordSystemAudio}
+                disabled={s.recordFormat === "gif"}
                 onChange={(v) => set("recordSystemAudio", v)}
               />
             </Row>
