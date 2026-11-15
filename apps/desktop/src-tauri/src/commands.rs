@@ -649,7 +649,12 @@ struct CapturePayload {
 /// Pokreni odabir područja. Vraća ODMAH — pravi capture ide na radnu dretvu, a
 /// overlay se javi kad je frame spreman (`snapvere:capture`).
 #[tauri::command]
-pub fn begin_region_capture(app: AppHandle, mode: Option<CaptureMode>) -> Result<(), String> {
+pub fn begin_region_capture(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    mode: Option<CaptureMode>,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["home"])?;
     dispatch_region_capture(&app, mode.unwrap_or(CaptureMode::Shot));
     Ok(())
 }
@@ -893,10 +898,12 @@ pub fn cancel_capture(
 /// Capture cijelog primarnog ekrana → spremi u galeriju.
 #[tauri::command]
 pub async fn capture_fullscreen(
+    window: tauri::WebviewWindow,
     app: AppHandle,
     format: ImageFormat,
     quality: u8,
 ) -> Result<Screenshot, String> {
+    require_window_label(window.label(), &["home"])?;
     let handle = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         logging::guard("capture_fullscreen", || {
@@ -967,12 +974,14 @@ pub fn dispatch_capture_fullscreen(app: &AppHandle) {
 /// Spremi sliku iz editora (base64 PNG s canvasa) u galeriju.
 #[tauri::command]
 pub fn save_edited_image(
+    window: tauri::WebviewWindow,
     app: AppHandle,
     state: State<AppState>,
     base64_png: String,
     format: ImageFormat,
     quality: u8,
 ) -> Result<Screenshot, String> {
+    require_window_label(window.label(), &["overlay", "editor"])?;
     let img = decode_editor_png(&base64_png)?;
     save_to_gallery(&app, &state, &img, CaptureSource::Region, format, quality)
 }
@@ -1380,11 +1389,13 @@ pub fn close_rec_hud(window: tauri::WebviewWindow, app: AppHandle) -> Result<(),
 
 #[tauri::command]
 pub fn list_screenshots(
+    window: tauri::WebviewWindow,
     app: AppHandle,
     state: State<AppState>,
     limit: Option<u32>,
     offset: Option<u32>,
 ) -> Result<Vec<Screenshot>, String> {
+    require_window_label(window.label(), &["home"])?;
     let items = lock(&state.db)
         .list(limit.unwrap_or(200), offset.unwrap_or(0))
         .map_err(estr)?;
@@ -1394,12 +1405,14 @@ pub fn list_screenshots(
 
 #[tauri::command]
 pub fn search_screenshots(
+    window: tauri::WebviewWindow,
     app: AppHandle,
     state: State<AppState>,
     query: String,
     limit: Option<u32>,
     offset: Option<u32>,
 ) -> Result<Vec<Screenshot>, String> {
+    require_window_label(window.label(), &["home"])?;
     let items = {
         let db = lock(&state.db);
         let limit = limit.unwrap_or(120).min(500);
@@ -1416,7 +1429,12 @@ pub fn search_screenshots(
 
 /// Otvori datoteku u zadanom programu sustava (Photos, Media Player…).
 #[tauri::command]
-pub fn open_media(app: AppHandle, id: String) -> Result<(), String> {
+pub fn open_media(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    id: String,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["home"])?;
     let path = media_path(&app, &id)?;
     app.opener()
         .open_path(path.to_string_lossy(), None::<&str>)
@@ -1425,14 +1443,24 @@ pub fn open_media(app: AppHandle, id: String) -> Result<(), String> {
 
 /// Pokaži datoteku u Exploreru (označenu).
 #[tauri::command]
-pub fn reveal_media(app: AppHandle, id: String) -> Result<(), String> {
+pub fn reveal_media(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    id: String,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["home"])?;
     let path = media_path(&app, &id)?;
     app.opener().reveal_item_in_dir(&path).map_err(estr)
 }
 
 /// Copy only a gallery-registered media path, never an arbitrary UI-supplied path.
 #[tauri::command]
-pub fn copy_media_path(app: AppHandle, id: String) -> Result<(), String> {
+pub fn copy_media_path(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    id: String,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["home"])?;
     let path = media_path(&app, &id)?;
     app.clipboard()
         .write_text(path.to_string_lossy().into_owned())
@@ -1442,7 +1470,12 @@ pub fn copy_media_path(app: AppHandle, id: String) -> Result<(), String> {
 /// Kopiraj sliku iz galerije u clipboard. Dekodiranje velikog PNG-a traje — ne na
 /// glavnoj dretvi.
 #[tauri::command]
-pub async fn copy_media_image(app: AppHandle, id: String) -> Result<(), String> {
+pub async fn copy_media_image(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    id: String,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["home"])?;
     let path = media_path(&app, &id)?;
     tauri::async_runtime::spawn_blocking(move || {
         validate_copy_image(&path)?;
@@ -1466,7 +1499,13 @@ pub fn delete_screenshot(
 }
 
 #[tauri::command]
-pub fn add_tag(state: State<AppState>, id: String, tag: String) -> Result<(), String> {
+pub fn add_tag(
+    window: tauri::WebviewWindow,
+    state: State<AppState>,
+    id: String,
+    tag: String,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["home"])?;
     lock(&state.db).add_tag(&id, tag.trim()).map_err(estr)
 }
 
@@ -1516,13 +1555,18 @@ pub fn open_settings(app: &AppHandle) -> Result<(), String> {
 
 /// Putanja do log datoteke — Settings → About nudi "Open log".
 #[tauri::command]
-pub fn log_file_path() -> Option<String> {
-    logging::log_path().map(|p| p.to_string_lossy().into_owned())
+pub fn log_file_path(window: tauri::WebviewWindow) -> Result<Option<String>, String> {
+    require_window_label(window.label(), &["settings"])?;
+    Ok(logging::log_path().map(|p| p.to_string_lossy().into_owned()))
 }
 
 /** Open the configured capture directory, with no caller-controlled path. */
 #[tauri::command]
-pub fn open_capture_folder(app: AppHandle) -> Result<(), String> {
+pub fn open_capture_folder(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["settings"])?;
     let dir = gallery_dir(&app)?;
     fs::create_dir_all(&dir).map_err(estr)?;
     app.opener()
@@ -1532,7 +1576,11 @@ pub fn open_capture_folder(app: AppHandle) -> Result<(), String> {
 
 /** Open Snapvere's data directory, without arbitrary filesystem IPC access. */
 #[tauri::command]
-pub fn open_data_folder(app: AppHandle) -> Result<(), String> {
+pub fn open_data_folder(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["settings"])?;
     let dir = app.path().app_data_dir().map_err(estr)?;
     fs::create_dir_all(&dir).map_err(estr)?;
     app.opener()
