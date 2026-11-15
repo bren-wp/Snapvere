@@ -191,13 +191,6 @@ impl Db {
         Ok(out)
     }
 
-    /// Obriši zapis (datoteku briše pozivatelj).
-    pub fn delete(&self, id: &str) -> anyhow::Result<()> {
-        self.conn
-            .execute("DELETE FROM screenshots WHERE id = ?1", params![id])?;
-        Ok(())
-    }
-
     /// Write durable intent before the filesystem is touched.
     pub fn prepare_delete(&self, job: &PendingDeletion) -> anyhow::Result<()> {
         let changed = self.conn.execute(
@@ -497,7 +490,10 @@ mod gallery_tests {
         let db = Db::open_in_memory()?;
         db.insert(&shot("one", 100))?;
         db.add_tag("one", "important")?;
-        db.delete("one")?;
+        // Validate SQLite foreign-key behavior without bypassing the
+        // crash-recoverable deletion API in production.
+        db.conn
+            .execute("DELETE FROM screenshots WHERE id = ?1", params!["one"])?;
         let count: i64 = db
             .conn
             .query_row("SELECT COUNT(*) FROM screenshot_tags", [], |r| r.get(0))?;
