@@ -1217,8 +1217,12 @@ pub fn pause_recording(
 }
 
 #[tauri::command]
-pub fn recording_status(app: AppHandle) -> RecordStatus {
-    record::status(&app)
+pub fn recording_status(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+) -> Result<RecordStatus, String> {
+    require_window_label(window.label(), &["recbar"])?;
+    Ok(record::status(&app))
 }
 
 /// Odredi monitor za snimanje: eksplicitni id, inače onaj pod mišem.
@@ -1333,8 +1337,12 @@ fn show_rec_frame(
 
 /// Snimano područje za okvir — prozor ga povuče pri učitavanju ako je event već prošao.
 #[tauri::command]
-pub fn rec_frame_rect(state: State<AppState>) -> Option<RecFrameRect> {
-    *lock(&state.rec_frame)
+pub fn rec_frame_rect(
+    window: tauri::WebviewWindow,
+    state: State<AppState>,
+) -> Result<Option<RecFrameRect>, String> {
+    require_window_label(window.label(), &["recframe"])?;
+    Ok(*lock(&state.rec_frame))
 }
 
 /// Propuštaj klikove kroz sloj za crtanje (true = sloj hvata miš).
@@ -1675,5 +1683,14 @@ mod ipc_origin_tests {
         assert!(require_window_label("settings", &["home"]).is_err());
         assert!(require_window_label("recdraw", &["recbar"]).is_err());
         assert!(require_window_label("recframe", &["recdraw"]).is_err());
+        for window in ["home", "settings", "editor", "recbar", "recdraw", "recframe"] {
+            assert!(
+                require_window_label(window, &["overlay"]).is_err(),
+                "Sensitive frozen-frame IPC must reject {window}"
+            );
+        }
+        assert!(require_window_label("overlay", &["overlay"]).is_ok());
+        assert!(require_window_label("home", &["settings"]).is_err());
+        assert!(require_window_label("overlay", &["home"]).is_err());
     }
 }
