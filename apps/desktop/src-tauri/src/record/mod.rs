@@ -201,7 +201,19 @@ pub fn status(app: &AppHandle) -> RecordStatus {
 /// returning an audio-less recording that was requested with audio enabled.
 fn validate_audio_options(opts: &RecordOptions) -> Result<(), String> {
     if matches!(opts.format, RecordFormat::Gif) && (opts.mic || opts.system_audio) {
-        return Err("GIF cannot contain audio. Choose MP4 or disable microphone and system audio.".into());
+        return Err(
+            "GIF cannot contain audio. Choose MP4 or disable microphone and system audio.".into(),
+        );
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn ensure_audio_sources(requested: &[audio::Kind], opened: &[audio::Kind]) -> Result<(), String> {
+    if let Some(missing) = requested.iter().find(|kind| !opened.contains(kind)) {
+        return Err(format!(
+            "Requested {missing:?} audio is unavailable. Recording was not started."
+        ));
     }
     Ok(())
 }
@@ -604,11 +616,7 @@ fn run(
             let m = audio::Mixer::start(&kinds);
             // Never start a video-only/single-source recording when the user
             // explicitly selected more audio inputs than WASAPI could open.
-            if let Some(missing) = kinds.iter().find(|kind| !m.kinds.contains(kind)) {
-                return Err(format!(
-                    "Requested {missing:?} audio is unavailable. Recording was not started."
-                ));
-            }
+            ensure_audio_sources(&kinds, &m.kinds)?;
             ctl.mic.store(
                 m.kinds.contains(&audio::Kind::Microphone),
                 Ordering::Relaxed,
