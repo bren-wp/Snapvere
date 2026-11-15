@@ -21,15 +21,16 @@ export function Row({ label, hint, children }: { label: string; hint?: string; c
     </div>
   );
 }
-export function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+export function Toggle({ label, checked, onChange, disabled = false }: { label: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
     <button
       type="button"
       onClick={() => onChange(!checked)}
+      disabled={disabled}
       role="switch"
       aria-label={label}
       aria-checked={checked}
-      className={`inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 ${checked ? "bg-accent" : "bg-border"}`}
+      className={`inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 ${disabled ? "cursor-not-allowed opacity-50" : ""} ${checked ? "bg-accent" : "bg-border"}`}
     >
       <span
         className={`inline-block h-5 w-5 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.4)] transition-transform duration-200 ${
