@@ -15,16 +15,17 @@ use std::time::Duration;
 use windows::Win32::Media::Audio::{
     eCapture, eConsole, eRender, IAudioCaptureClient, IAudioClient, IMMDeviceEnumerator,
     MMDeviceEnumerator, AUDCLNT_BUFFERFLAGS_SILENT, AUDCLNT_SHAREMODE_SHARED,
-    AUDCLNT_STREAMFLAGS_LOOPBACK, WAVEFORMATEX, WAVEFORMATEXTENSIBLE, WAVE_FORMAT_PCM,
+    AUDCLNT_STREAMFLAGS_LOOPBACK,
 };
-use windows::Win32::Media::KernelStreaming::WAVE_FORMAT_EXTENSIBLE;
-use windows::Win32::Media::Multimedia::{KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, WAVE_FORMAT_IEEE_FLOAT};
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize, CLSCTX_ALL,
     COINIT_MULTITHREADED,
 };
 
 use crate::logging::log;
+
+mod format;
+use format::{read_format, SourceFormat};
 
 /// Format u koji se sve svodi (AAC enkoder prima 44.1/48 kHz, 1-2 kanala, PCM16).
 pub const RATE: u32 = 48_000;
@@ -150,14 +151,6 @@ impl Drop for Mixer {
 
 // ────────────────────────────── dretva za hvatanje ──────────────────────────────
 
-/// Format izvora kako ga WASAPI daje (mix format uređaja).
-struct SourceFormat {
-    rate: u32,
-    channels: usize,
-    float: bool,
-    bits: u16,
-}
-
 fn capture_thread(
     kind: Kind,
     queue: Arc<Queue>,
@@ -241,7 +234,14 @@ fn open(kind: Kind) -> Result<(IAudioClient, IAudioCaptureClient, SourceFormat),
         let fmt_ptr = client
             .GetMixFormat()
             .map_err(|e| format!("GetMixFormat: {e}"))?;
-        let fmt = read_format(fmt_ptr);
+        let fmt = match read_format(fmt_ptr) {
+            Ok(fmt) => fmt,
+            Err(error) => {
+                // Windows allocates the mix format; invalid layouts must not leak it.
+                CoTaskMemFree(Some(fmt_ptr as *const _));
+                return Err(error);
+            }
+        };
 
         let flags = match kind {
             Kind::SystemLoopback => AUDCLNT_STREAMFLAGS_LOOPBACK,
@@ -265,26 +265,6 @@ fn open(kind: Kind) -> Result<(IAudioClient, IAudioCaptureClient, SourceFormat),
             if fmt.float { "float" } else { "PCM" }
         ));
         Ok((client, capture, fmt))
-    }
-}
-
-unsafe fn read_format(p: *const WAVEFORMATEX) -> SourceFormat {
-    let f = &*p;
-    let tag = f.wFormatTag as u32;
-    let float = if tag == WAVE_FORMAT_EXTENSIBLE {
-        // WAVEFORMATEXTENSIBLE je packed(1) → polje se ne smije referencirati, samo kopirati.
-        let ext = std::ptr::read_unaligned(p as *const WAVEFORMATEXTENSIBLE);
-        let sub = ext.SubFormat; // kopija po vrijednosti; `==` bi uzeo referencu na packed polje
-        sub == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
-    } else {
-        tag == WAVE_FORMAT_IEEE_FLOAT
-    };
-    let _ = WAVE_FORMAT_PCM; // ostali tagovi se tretiraju kao cjelobrojni PCM
-    SourceFormat {
-        rate: f.nSamplesPerSec,
-        channels: (f.nChannels as usize).max(1),
-        float,
-        bits: f.wBitsPerSample,
     }
 }
 
