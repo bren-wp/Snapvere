@@ -1441,25 +1441,9 @@ pub fn delete_screenshot(
     id: String,
 ) -> Result<(), String> {
     require_window_label(window.label(), &["home"])?;
-    // Only delete the path from an existing gallery record, never an arbitrary webview argument.
-    let shot = lock(&state.db)
-        .get(&id)
-        .map_err(estr)?
-        .ok_or("This capture is no longer in the gallery")?;
-    match fs::remove_file(&shot.file_path) {
-        Ok(()) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(format!("Could not delete capture file: {e}")),
-    }
-    lock(&state.db).delete(&id).map_err(estr)?;
-    if let Some(thumb) = shot.thumb_path {
-        if let Err(e) = fs::remove_file(&thumb) {
-            if e.kind() != std::io::ErrorKind::NotFound {
-                log(&format!("Could not delete thumbnail {}: {e}", thumb));
-            }
-        }
-    }
-    Ok(())
+    // Hold the DB mutex during staging and the atomic SQLite commit.
+    // An on-disk intent restores media after interrupted deletion.
+    crate::gallery_delete::delete(&mut lock(&state.db), &id).map_err(estr)
 }
 
 #[tauri::command]
