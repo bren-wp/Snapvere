@@ -4,6 +4,12 @@ SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO
 
 ## v0.2.14 — P1 integrity and IPC hardening (unreleased)
 
+- Check existing SQLite integrity before schema changes; run schema migrations
+  transactionally with an explicit database schema version.
+- Defer file cleanup safely when media are locked or drives are disconnected,
+  retaining recovery journals while permitting the app to open.
+- Normalize effective GIF recording preferences to silent while preserving
+  saved MP4 audio selections; reject explicit unsupported audio combinations.
 - Journal gallery deletions before filesystem staging and atomically commit SQLite
   record removal; recover pending operations safely on restart.
 - Restore original capture and thumbnail on failure; avoid following links,
