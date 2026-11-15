@@ -1,4 +1,5 @@
 import React from "react";
+import { translate, normalizeLanguage } from "../lib/i18n";
 
 /**
  * Catch render/lifecycle errors in a single WebView without taking down the
@@ -21,6 +22,8 @@ export default class AppErrorBoundary extends React.Component<
 
   render(): React.ReactNode {
     if (!this.state.failed) return this.props.children;
+    const currentLanguage = normalizeLanguage(document.documentElement.lang);
+    const t = (text: string) => translate(currentLanguage, text);
     return (
       <main
         role="alert"
@@ -28,17 +31,16 @@ export default class AppErrorBoundary extends React.Component<
       >
         <div className="rounded-2xl border border-border bg-elevated p-8 shadow-card">
           <div className="text-xs font-semibold uppercase tracking-widest text-accent">SNAPVERE</div>
-          <h1 className="mt-3 text-xl font-bold">The interface needs to recover</h1>
+          <h1 className="mt-3 text-xl font-bold">{t("The interface needs to recover")}</h1>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-muted">
-            An unexpected display error occurred. Your saved screenshots and recordings
-            remain on your device. Reloading may discard unsaved edits.
+            {t("An unexpected display error occurred. Your captures are safe, but unsaved edits may be lost.")}
           </p>
           <button
             type="button"
             className="mt-5 rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             onClick={() => window.location.reload()}
           >
-            Reload interface
+            {t("Reload interface")}
           </button>
         </div>
       </main>
