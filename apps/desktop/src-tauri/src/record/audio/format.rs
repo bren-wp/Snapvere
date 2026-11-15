@@ -5,12 +5,8 @@
 use std::mem::size_of;
 
 use windows::Win32::Media::Audio::{WAVEFORMATEX, WAVEFORMATEXTENSIBLE, WAVE_FORMAT_PCM};
-use windows::Win32::Media::KernelStreaming::{
-    KSDATAFORMAT_SUBTYPE_PCM, WAVE_FORMAT_EXTENSIBLE,
-};
-use windows::Win32::Media::Multimedia::{
-    KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, WAVE_FORMAT_IEEE_FLOAT,
-};
+use windows::Win32::Media::KernelStreaming::{KSDATAFORMAT_SUBTYPE_PCM, WAVE_FORMAT_EXTENSIBLE};
+use windows::Win32::Media::Multimedia::{KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, WAVE_FORMAT_IEEE_FLOAT};
 
 pub(super) struct SourceFormat {
     pub(super) rate: u32,
@@ -24,12 +20,15 @@ fn validate_layout(fmt: &SourceFormat, valid_bits: u16, block_align: u16) -> Res
         return Err(format!("Unsupported WASAPI sample rate: {} Hz", fmt.rate));
     }
     if !(1..=32).contains(&fmt.channels) {
-        return Err(format!("Unsupported WASAPI channel count: {}", fmt.channels));
+        return Err(format!(
+            "Unsupported WASAPI channel count: {}",
+            fmt.channels
+        ));
     }
-    let supported = match (fmt.float, fmt.bits) {
-        (true, 32) | (false, 8 | 16 | 24 | 32) => true,
-        _ => false,
-    };
+    let supported = matches!(
+        (fmt.float, fmt.bits),
+        (true, 32) | (false, 8 | 16 | 24 | 32)
+    );
     if !supported {
         return Err(format!(
             "Unsupported WASAPI sample encoding: float={}, container={} bits",
