@@ -11,7 +11,6 @@ const MAX_ZOOM = 8;
 const STEP = 1.2;
 
 export default function ImageStage({
-  const { t } = useLanguage();
   shot,
   chromeHidden,
   onOpenExternal,
@@ -20,6 +19,7 @@ export default function ImageStage({
   chromeHidden: boolean;
   onOpenExternal: () => void;
 }) {
+  const { t } = useLanguage();
   const boxRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [natural, setNatural] = useState({ w: shot.width || 1, h: shot.height || 1 });
