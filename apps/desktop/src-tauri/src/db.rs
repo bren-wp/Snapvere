@@ -31,9 +31,11 @@ impl Db {
         conn.busy_timeout(Duration::from_secs(5))?;
         // Inspect the existing database before running schema changes. Never
         // replace damaged user data with a new, empty gallery.
-        let integrity: String =
-            conn.query_row("PRAGMA quick_check(1)", [], |row| row.get(0))?;
-        anyhow::ensure!(integrity == "ok", "SQLite gallery integrity check failed: {integrity}");
+        let integrity: String = conn.query_row("PRAGMA quick_check(1)", [], |row| row.get(0))?;
+        anyhow::ensure!(
+            integrity == "ok",
+            "SQLite gallery integrity check failed: {integrity}"
+        );
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "FULL")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
@@ -475,8 +477,9 @@ mod gallery_tests {
                 // The same public API opens an existing on-disk SQLite/WAL
                 // gallery after a dependency upgrade; no destructive migrations.
                 let upgraded = Db::open(&path)?;
-                let version: i64 =
-                    upgraded.conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+                let version: i64 = upgraded
+                    .conn
+                    .query_row("PRAGMA user_version", [], |r| r.get(0))?;
                 assert_eq!(version, 1);
                 let record = upgraded.get("saved-before-upgrade")?.expect("saved record");
                 assert_eq!(record.tags, vec!["keep-me"]);
