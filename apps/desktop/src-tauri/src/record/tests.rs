@@ -550,6 +550,8 @@ fn unavailable_requested_audio_source_rejects_recorder_startup() {
     assert!(ensure_audio_sources(&[Microphone], &[]).is_err());
     assert!(ensure_audio_sources(&[SystemLoopback], &[Microphone]).is_err());
     assert!(ensure_audio_sources(&[Microphone, SystemLoopback], &[Microphone]).is_err());
-    assert!(ensure_audio_sources(&[Microphone, SystemLoopback], &[Microphone, SystemLoopback]).is_ok());
+    assert!(
+        ensure_audio_sources(&[Microphone, SystemLoopback], &[Microphone, SystemLoopback]).is_ok()
+    );
     assert!(ensure_audio_sources(&[], &[]).is_ok());
 }
