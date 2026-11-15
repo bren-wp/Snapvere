@@ -16,6 +16,7 @@ import {
   FileDown,
 } from "lucide-react";
 import { ipc } from "../lib/ipc";
+import { useLanguage } from "../lib/LanguageProvider";
 import { readCapturePreferences } from "../lib/capturePreferencesStore";
 import type { Annotation, EditorTool, Point } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
@@ -37,6 +38,7 @@ let counter = 0;
 const uid = () => `a${++counter}`;
 
 export default function Editor({ pathB64 }: { pathB64: string }) {
+  const { t } = useLanguage();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const baseImg = useRef<HTMLImageElement | null>(null);
   const [ready, setReady] = useState(false);
@@ -58,7 +60,7 @@ export default function Editor({ pathB64 }: { pathB64: string }) {
     try {
       path = atob(pathB64);
     } catch {
-      setNotice("Could not open the image. Invalid capture reference.");
+      setNotice(t("Could not open the image. Invalid capture reference."));
       return;
     }
     const img = new Image();
@@ -69,7 +71,7 @@ export default function Editor({ pathB64 }: { pathB64: string }) {
       c.height = img.naturalHeight;
       setReady(true);
     };
-    img.onerror = () => setNotice("This capture could not be loaded. Check the saved image file.");
+    img.onerror = () => setNotice(t("The image could not be loaded. Check the saved file."));
     img.src = convertFileSrc(path);
   }, [pathB64]);
 
@@ -203,9 +205,9 @@ export default function Editor({ pathB64 }: { pathB64: string }) {
     try {
       const { format, quality } = await readCapturePreferences();
       await ipc.saveEditedImage(exportBase64(), format, quality);
-      setNotice("Saved to your gallery.");
+      setNotice(t("Saved to gallery"));
     } catch (e) {
-      setNotice(`Could not save the screenshot: ${String(e)}`);
+      setNotice(`${t("Could not save screenshot:")} ${String(e)}`);
       console.error(e);
     }
   };
@@ -216,9 +218,9 @@ export default function Editor({ pathB64 }: { pathB64: string }) {
       const { format, quality } = await readCapturePreferences();
       // The native backend owns the file picker; the webview never supplies a path.
       const saved = await ipc.saveImageAs(exportBase64(), format, quality);
-      if (saved) setNotice("Image exported to the selected location.");
+      if (saved) setNotice(t("Image exported successfully."));
     } catch (e) {
-      setNotice(`Could not export the screenshot: ${String(e)}`);
+      setNotice(`${t("Could not export screenshot:")} ${String(e)}`);
       console.error(e);
     } finally {
       setExporting(false);
@@ -227,9 +229,9 @@ export default function Editor({ pathB64 }: { pathB64: string }) {
   const onCopy = async () => {
     try {
       await ipc.copyBase64ToClipboard(exportBase64());
-      setNotice("Image copied to clipboard.");
+      setNotice(t("Image copied to clipboard."));
     } catch (e) {
-      setNotice(`Could not copy the image: ${String(e)}`);
+      setNotice(`${t("Could not copy image:")} ${String(e)}`);
       console.error(e);
     }
   };
@@ -247,24 +249,24 @@ export default function Editor({ pathB64 }: { pathB64: string }) {
   });
 
   return (
-    <WindowFrame title="Snapvere — Editor">
+    <WindowFrame title={`Snapvere — ${t("Editor")}`}>
       <div className="flex min-h-0 flex-1 flex-col text-text">
       {notice && <p role="status" aria-live="polite" className="snapvere-editor-notice px-4 py-2 text-xs">{notice}</p>}
       {/* kontekstni bar */}
       <div className="snapvere-editor-toolbar flex flex-wrap items-center gap-3 px-3 py-2">
-        <div className="snapvere-editor-heading" aria-label="Image editor">
-          <span className="snapvere-section-eyebrow">IMAGE EDITOR</span>
-          <strong>Refine your capture</strong>
+        <div className="snapvere-editor-heading" aria-label={t("Image editor")}>
+          <span className="snapvere-section-eyebrow">{t("Image editor").toLocaleUpperCase()}</span>
+          <strong>{t("Refine your capture")}</strong>
         </div>
         <div className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
         {/* boje */}
-        <div role="group" aria-label="Annotation colors" className="flex items-center gap-1">
+        <div role="group" aria-label={t("Annotation colors")} className="flex items-center gap-1">
           {COLORS.map((c) => (
             <button
               key={c}
               type="button"
               onClick={() => setColor(c)}
-              aria-label={`Use annotation color ${c}`}
+              aria-label={`${t("Annotation color")} ${c}`}
               aria-pressed={color === c}
               className={`h-6 w-6 rounded-full border-2 transition-transform ${color === c ? "scale-110 border-text" : "border-transparent"}`}
               style={{ background: c }}
@@ -275,53 +277,53 @@ export default function Editor({ pathB64 }: { pathB64: string }) {
         <div className="mx-1 h-5 w-px bg-border" />
         {/* stroke */}
         <label className="flex items-center gap-2 text-xs text-muted">
-          Thickness
+          {t("Thickness")}
           <input type="range" min={2} max={28} value={size} onChange={(e) => setSize(+e.target.value)} />
           <span className="w-6 font-mono">{size}</span>
         </label>
         <div className="ml-auto flex items-center gap-1">
-          <IconBtn title="Undo (Ctrl+Z)" onClick={undo} disabled={!annotations.length}>
+          <IconBtn title={`${t("Undo")} (Ctrl+Z)`} onClick={undo} disabled={!annotations.length}>
             <Undo2 size={18} />
           </IconBtn>
-          <IconBtn title="Redo (Ctrl+Y)" onClick={doRedo} disabled={!redo.length}>
+          <IconBtn title={`${t("Redo")} (Ctrl+Y)`} onClick={doRedo} disabled={!redo.length}>
             <Redo2 size={18} />
           </IconBtn>
           <div className="mx-1 h-5 w-px bg-border" />
           <button type="button" onClick={onCopy} disabled={!ready} className="snapvere-btn-secondary flex items-center gap-2 rounded-full px-3 py-1.5 text-sm hover:bg-elevated">
-            <Copy size={16} /> Copy
+            <Copy size={16} /> {t("Copy")}
           </button>
-          <button type="button" onClick={onSaveAs} disabled={!ready || exporting} aria-label="Save image as a new file" className="snapvere-btn-secondary flex items-center gap-2 rounded-full px-3 py-1.5 text-sm hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-40">
-            <FileDown size={16} /> {exporting ? "Exporting…" : "Save As"}
+          <button type="button" onClick={onSaveAs} disabled={!ready || exporting} aria-label={t("Save image as a new file")} className="snapvere-btn-secondary flex items-center gap-2 rounded-full px-3 py-1.5 text-sm hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-40">
+            <FileDown size={16} /> {t(exporting ? "Exporting…" : "Save As")}
           </button>
           <button type="button" onClick={onSave} disabled={!ready} className="snapvere-btn-primary flex items-center gap-2 rounded-full bg-accent px-3 py-1.5 text-sm text-white hover:opacity-90">
-            <Save size={16} /> Save
+            <Save size={16} /> {t("Save")}
           </button>
         </div>
       </div>
 
       <div className="flex min-h-0 flex-1">
         {/* paleta alata */}
-        <div role="group" aria-label="Annotation tools" className="snapvere-editor-tool-rail flex w-14 flex-col items-center gap-1 border-r border-border bg-surface py-2">
-          {TOOLS.map((t) => (
+        <div role="group" aria-label={t("Annotation tools")} className="snapvere-editor-tool-rail flex w-14 flex-col items-center gap-1 border-r border-border bg-surface py-2">
+          {TOOLS.map((item) => (
             <button
-              key={t.id}
+              key={item.id}
               type="button"
-              onClick={() => setTool(t.id)}
-              title={t.label}
-              aria-label={t.label}
-              aria-pressed={tool === t.id}
+              onClick={() => setTool(item.id)}
+              title={t(item.label)}
+              aria-label={t(item.label)}
+              aria-pressed={tool === item.id}
               className={`snapvere-editor-tool flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
-                tool === t.id ? "bg-accent text-white" : "text-muted hover:bg-elevated hover:text-text"
+                tool === item.id ? "bg-accent text-white" : "text-muted hover:bg-elevated hover:text-text"
               }`}
             >
-              <t.icon size={20} />
+              <item.icon size={20} />
             </button>
           ))}
         </div>
 
         {/* canvas */}
         <div className="snapvere-editor-stage flex min-h-0 flex-1 items-center justify-center overflow-auto bg-bg p-6">
-          {!ready && <div className="text-muted">Loading image…</div>}
+          {!ready && <div className="text-muted">{t("Loading image…")}</div>}
           <canvas
             ref={canvasRef}
             onMouseDown={onDown}
