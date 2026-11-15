@@ -1437,11 +1437,7 @@ pub fn search_screenshots(
 
 /// Otvori datoteku u zadanom programu sustava (Photos, Media Player…).
 #[tauri::command]
-pub fn open_media(
-    window: tauri::WebviewWindow,
-    app: AppHandle,
-    id: String,
-) -> Result<(), String> {
+pub fn open_media(window: tauri::WebviewWindow, app: AppHandle, id: String) -> Result<(), String> {
     require_window_label(window.label(), &["home"])?;
     let path = media_path(&app, &id)?;
     app.opener()
@@ -1570,10 +1566,7 @@ pub fn log_file_path(window: tauri::WebviewWindow) -> Result<Option<String>, Str
 
 /** Open the configured capture directory, with no caller-controlled path. */
 #[tauri::command]
-pub fn open_capture_folder(
-    window: tauri::WebviewWindow,
-    app: AppHandle,
-) -> Result<(), String> {
+pub fn open_capture_folder(window: tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
     require_window_label(window.label(), &["settings"])?;
     let dir = gallery_dir(&app)?;
     fs::create_dir_all(&dir).map_err(estr)?;
@@ -1584,10 +1577,7 @@ pub fn open_capture_folder(
 
 /** Open Snapvere's data directory, without arbitrary filesystem IPC access. */
 #[tauri::command]
-pub fn open_data_folder(
-    window: tauri::WebviewWindow,
-    app: AppHandle,
-) -> Result<(), String> {
+pub fn open_data_folder(window: tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
     require_window_label(window.label(), &["settings"])?;
     let dir = app.path().app_data_dir().map_err(estr)?;
     fs::create_dir_all(&dir).map_err(estr)?;
@@ -1683,7 +1673,9 @@ mod ipc_origin_tests {
         assert!(require_window_label("settings", &["home"]).is_err());
         assert!(require_window_label("recdraw", &["recbar"]).is_err());
         assert!(require_window_label("recframe", &["recdraw"]).is_err());
-        for window in ["home", "settings", "editor", "recbar", "recdraw", "recframe"] {
+        for window in [
+            "home", "settings", "editor", "recbar", "recdraw", "recframe",
+        ] {
             assert!(
                 require_window_label(window, &["overlay"]).is_err(),
                 "Sensitive frozen-frame IPC must reject {window}"
