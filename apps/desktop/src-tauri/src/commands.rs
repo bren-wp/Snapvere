@@ -760,15 +760,22 @@ fn region_capture_blocking(app: &AppHandle, mode: CaptureMode) -> Result<(), Str
 
 /// Otkrij overlay koji je frontend prikazao cloakan (vidi `set_cloaked`).
 #[tauri::command]
-pub fn reveal_overlay(app: AppHandle) {
+pub fn reveal_overlay(window: tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
+    require_window_label(window.label(), &["overlay"])?;
     if let Some(win) = app.get_webview_window("overlay") {
         set_cloaked(&win, false);
     }
+    Ok(())
 }
 
 /// Vrati zamrznuti frame monitora kao PNG data-URL (za prikaz u overlayu).
 #[tauri::command]
-pub fn get_frozen_frame(state: State<AppState>, monitor_id: u32) -> Result<String, String> {
+pub fn get_frozen_frame(
+    window: tauri::WebviewWindow,
+    state: State<AppState>,
+    monitor_id: u32,
+) -> Result<String, String> {
+    require_window_label(window.label(), &["overlay"])?;
     let frozen = lock(&state.frozen);
     let frame = frozen
         .frames
@@ -781,7 +788,12 @@ pub fn get_frozen_frame(state: State<AppState>, monitor_id: u32) -> Result<Strin
 /// Vrati zamrznuti frame kao SIROVE RGBA bajtove (header: width,height kao u32 LE, pa pikseli).
 /// Binarni IPC bez PNG/base64 → overlay se pojavi gotovo instantno (ključno za brzinu).
 #[tauri::command]
-pub fn get_frozen_rgba(state: State<AppState>, monitor_id: u32) -> Response {
+pub fn get_frozen_rgba(
+    window: tauri::WebviewWindow,
+    state: State<AppState>,
+    monitor_id: u32,
+) -> Result<Response, String> {
+    require_window_label(window.label(), &["overlay"])?;
     let frozen = lock(&state.frozen);
     // Jedan frame u igri — uzmi po id-u, ili prvi dostupni (robusno na nepodudaranje id-a).
     let Some(frame) = frozen
@@ -789,9 +801,9 @@ pub fn get_frozen_rgba(state: State<AppState>, monitor_id: u32) -> Response {
         .get(&monitor_id)
         .or_else(|| frozen.frames.values().next())
     else {
-        return Response::new(Vec::new());
+        return Ok(Response::new(Vec::new()));
     };
-    Response::new(frame_to_rgba_packet(frame))
+    Ok(Response::new(frame_to_rgba_packet(frame)))
 }
 
 /// Binary response format: 8 bytes of little-endian width and height, then
@@ -808,6 +820,7 @@ fn frame_to_rgba_packet(frame: &image::RgbaImage) -> Vec<u8> {
 /// Završi capture regije odabranom akcijom. Vraća zapis ako je nešto spremljeno.
 #[tauri::command]
 pub fn finish_region_capture(
+    window: tauri::WebviewWindow,
     app: AppHandle,
     state: State<AppState>,
     region: Region,
@@ -815,6 +828,7 @@ pub fn finish_region_capture(
     format: ImageFormat,
     quality: u8,
 ) -> Result<Option<Screenshot>, String> {
+    require_window_label(window.label(), &["overlay"])?;
     // Always close the overlay and release frozen frames, even on invalid
     // selections or when the capture frame has already disappeared.
     let cropped = {
@@ -865,7 +879,12 @@ pub fn finish_region_capture(
 
 /// Odustani od capture-a: sakrij overlay, oslobodi frozen frameove.
 #[tauri::command]
-pub fn cancel_capture(app: AppHandle, state: State<AppState>) -> Result<(), String> {
+pub fn cancel_capture(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    state: State<AppState>,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["overlay"])?;
     hide_overlays(&app);
     lock(&state.frozen).clear();
     Ok(())
