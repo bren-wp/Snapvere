@@ -2,6 +2,7 @@ import { GENERAL_KEYS, GENERAL_TRANSLATIONS } from "./i18nGeneral.ts";
 import { EDITOR_KEYS, EDITOR_TRANSLATIONS } from "./i18nEditor.ts";
 import { HELP_KEYS, HELP_TRANSLATIONS } from "./i18nHelp.ts";
 import { FEEDBACK_KEYS, FEEDBACK_TRANSLATIONS } from "./i18nFeedback.ts";
+import { MISC_KEYS, MISC_TRANSLATIONS } from "./i18nMisc.ts";
 
 /** SNAPVERE UI languages. English remains the authoritative fallback. */
 export const LANGUAGES = [
@@ -172,6 +173,7 @@ const EXTENDED_CATALOGS = [
   { keys: EDITOR_KEYS, translations: EDITOR_TRANSLATIONS },
   { keys: HELP_KEYS, translations: HELP_TRANSLATIONS },
   { keys: FEEDBACK_KEYS, translations: FEEDBACK_TRANSLATIONS },
+  { keys: MISC_KEYS, translations: MISC_TRANSLATIONS },
 ] as const;
 
 export const ALL_TRANSLATION_KEYS: readonly string[] = [
@@ -181,6 +183,7 @@ export const ALL_TRANSLATION_KEYS: readonly string[] = [
   ...EDITOR_KEYS,
   ...HELP_KEYS,
   ...FEEDBACK_KEYS,
+  ...MISC_KEYS,
 ];
 
 /** Static key existence check; unlike translate(), this cannot mask missing locales. */
