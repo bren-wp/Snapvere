@@ -57,7 +57,9 @@ fn exists(path: &Path) -> Result<bool> {
 // An absent file is only proof of absence if its parent directory is reachable.
 // Disconnected drives and offline network folders otherwise look like missing files.
 fn ensure_parent_accessible(path: &Path) -> Result<()> {
-    let parent = path.parent().context("Media path has no containing folder")?;
+    let parent = path
+        .parent()
+        .context("Media path has no containing folder")?;
     fs::read_dir(parent)
         .with_context(|| format!("Media folder is unavailable: {}", parent.display()))?;
     Ok(())
@@ -106,7 +108,7 @@ fn delete_one(staged: &str) -> Result<()> {
         Err(error) if error.kind() == ErrorKind::NotFound => {
             ensure_parent_accessible(Path::new(staged))?;
             Ok(())
-        },
+        }
         Err(error) => Err(error).context("Could not clear committed deletion staging file"),
     }
 }
