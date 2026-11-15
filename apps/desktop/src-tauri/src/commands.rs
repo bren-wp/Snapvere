@@ -195,8 +195,11 @@ pub fn set_overlay_audio_preference(
     }
     let store = app.store("settings.json").map_err(estr)?;
     if enabled
-        && store.get("recordFormat").and_then(|v| v.as_str().map(str::to_owned))
-            .as_deref() == Some("gif")
+        && store
+            .get("recordFormat")
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .as_deref()
+            == Some("gif")
     {
         return Err("GIF recordings cannot enable audio".into());
     }
