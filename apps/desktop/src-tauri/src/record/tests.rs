@@ -528,9 +528,11 @@ fn redact_regions_are_bounded_and_cannot_overflow_frame_dimensions() {
 
 #[test]
 fn gif_audio_options_fail_instead_of_silently_dropping_selected_audio() {
-    let mut opts = RecordOptions::default();
-    opts.format = RecordFormat::Gif;
-    opts.mic = true;
+    let mut opts = RecordOptions {
+        format: RecordFormat::Gif,
+        mic: true,
+        ..RecordOptions::default()
+    };
     assert!(validate_audio_options(&opts).is_err());
     opts.mic = false;
     opts.system_audio = true;

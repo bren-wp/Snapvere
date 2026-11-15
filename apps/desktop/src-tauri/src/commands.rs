@@ -1179,10 +1179,12 @@ fn normalize_record_audio_preferences(options: &mut RecordOptions) {
 #[cfg(test)]
 #[test]
 fn stored_mp4_audio_choices_do_not_break_gif_recording() {
-    let mut opts = RecordOptions::default();
-    opts.format = RecordFormat::Gif;
-    opts.mic = true;
-    opts.system_audio = true;
+    let mut opts = RecordOptions {
+        format: RecordFormat::Gif,
+        mic: true,
+        system_audio: true,
+        ..RecordOptions::default()
+    };
     normalize_record_audio_preferences(&mut opts);
     assert!(!opts.mic && !opts.system_audio);
     opts.format = RecordFormat::Mp4;
