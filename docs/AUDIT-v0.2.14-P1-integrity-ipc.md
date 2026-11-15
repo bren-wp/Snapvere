@@ -18,7 +18,8 @@ The previous `delete_screenshot` unlinked capture media **before** deleting its 
 - On a failed stage or failed SQL transaction, restore staged files without overwriting any existing user file. If restoration is blocked, keep the pending journal so the next startup can recover.
 - At startup, replay pending intents: restore pre-commit files, or complete post-commit file cleanup. Failed recovery does **not** replace the gallery with a blank database.
 - SQLite synchronous mode raised from NORMAL to FULL, favoring durable write intent over peak write throughput.
-- Restrict IPC entry points for frozen PNG/RGBA frames and overlay capture finish/cancel/reveal to the actual `overlay` WebView. Caller-owned paths remain prohibited for gallery deletion.
+- Restrict IPC entry points for frozen PNG/RGBA frames and overlay capture finish/cancel/reveal to the actual `overlay` WebView. Also restrict Home gallery listing/search/open/reveal/copy/tag/delete, capture initiation, Settings file/folder access, editor image export and recording metadata to their intended WebViews. Caller-owned paths remain prohibited for gallery deletion.
+- Extend `tools/check_tauri_capabilities.py` to verify explicit Rust-side caller allowlists for 28 sensitive IPC commands; plugin capabilities alone do not enforce these checks.
 - Remove the old non-transactional gallery row-delete method from the production implementation.
 
 ## Regression tests added (not evidence of execution)
