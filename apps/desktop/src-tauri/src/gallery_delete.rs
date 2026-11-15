@@ -17,7 +17,9 @@ use crate::models::Screenshot;
 
 fn stage_path(source: &Path, token: &str, kind: &str) -> Result<PathBuf> {
     ensure!(source.is_absolute(), "Gallery media path is not absolute");
-    let parent = source.parent().context("Gallery media has no parent folder")?;
+    let parent = source
+        .parent()
+        .context("Gallery media has no parent folder")?;
     Ok(parent.join(format!(".snapvere-delete-{token}-{kind}.pending")))
 }
 
@@ -63,7 +65,10 @@ fn stage_one(source: &str, staged: &str) -> Result<()> {
         fs::symlink_metadata(source)?.file_type().is_file(),
         "Gallery deletion requires a regular media file"
     );
-    ensure!(!exists(staged)?, "Gallery deletion staging target already exists");
+    ensure!(
+        !exists(staged)?,
+        "Gallery deletion staging target already exists"
+    );
     fs::rename(source, staged).context("Could not stage media for deletion")
 }
 
@@ -71,7 +76,10 @@ fn restore_one(source: &str, staged: &str) -> Result<()> {
     let source = Path::new(source);
     let staged = Path::new(staged);
     if exists(staged)? {
-        ensure!(!exists(source)?, "Original gallery path already exists; refusing overwrite");
+        ensure!(
+            !exists(source)?,
+            "Original gallery path already exists; refusing overwrite"
+        );
         fs::rename(staged, source).context("Could not restore staged gallery media")?;
     }
     Ok(())
@@ -116,7 +124,9 @@ fn cleanup_files(job: &PendingDeletion) -> Result<()> {
 }
 
 pub fn delete(db: &mut Db, id: &str) -> Result<()> {
-    let shot = db.get(id)?.context("This capture is no longer in the gallery")?;
+    let shot = db
+        .get(id)?
+        .context("This capture is no longer in the gallery")?;
     let job = intent(&shot)?;
     db.prepare_delete(&job)?;
 
