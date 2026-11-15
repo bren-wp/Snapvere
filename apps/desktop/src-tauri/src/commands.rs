@@ -173,9 +173,10 @@ pub fn get_overlay_recording_preferences(
         Some("gif") => RecordFormat::Gif,
         _ => RecordFormat::Mp4,
     };
+    let supports_audio = matches!(record_format, RecordFormat::Mp4);
     Ok(OverlayRecordingPreferences {
-        record_mic: get_flag("recordMic"),
-        record_system_audio: get_flag("recordSystemAudio"),
+        record_mic: supports_audio && get_flag("recordMic"),
+        record_system_audio: supports_audio && get_flag("recordSystemAudio"),
         record_format,
     })
 }
@@ -193,6 +194,12 @@ pub fn set_overlay_audio_preference(
         return Err("Recording overlay cannot modify this setting".into());
     }
     let store = app.store("settings.json").map_err(estr)?;
+    if enabled
+        && store.get("recordFormat").and_then(|v| v.as_str().map(str::to_owned))
+            .as_deref() == Some("gif")
+    {
+        return Err("GIF recordings cannot enable audio".into());
+    }
     store.set(key, enabled);
     store.save().map_err(estr)
 }
@@ -1153,7 +1160,32 @@ fn record_options(app: &AppHandle) -> RecordOptions {
             _ => crate::models::RecordFormat::default(),
         };
     }
+    normalize_record_audio_preferences(&mut o);
     o
+}
+
+// Persisted audio preferences are MP4-specific. A temporary GIF selection
+// must neither silently capture sound nor prevent GIF recording altogether.
+fn normalize_record_audio_preferences(options: &mut RecordOptions) {
+    if matches!(options.format, RecordFormat::Gif) {
+        options.mic = false;
+        options.system_audio = false;
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn stored_mp4_audio_choices_do_not_break_gif_recording() {
+    let mut opts = RecordOptions::default();
+    opts.format = RecordFormat::Gif;
+    opts.mic = true;
+    opts.system_audio = true;
+    normalize_record_audio_preferences(&mut opts);
+    assert!(!opts.mic && !opts.system_audio);
+    opts.format = RecordFormat::Mp4;
+    opts.mic = true;
+    normalize_record_audio_preferences(&mut opts);
+    assert!(opts.mic);
 }
 
 /// Hotkey put: ako se snima — stani; inače otvori odabir područja u record modu.
