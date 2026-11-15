@@ -197,6 +197,15 @@ pub fn status(app: &AppHandle) -> RecordStatus {
         .unwrap_or_else(RecordStatus::idle)
 }
 
+/// GIF cannot contain audio: reject incompatible options instead of silently
+/// returning an audio-less recording that was requested with audio enabled.
+fn validate_audio_options(opts: &RecordOptions) -> Result<(), String> {
+    if matches!(opts.format, RecordFormat::Gif) && (opts.mic || opts.system_audio) {
+        return Err("GIF cannot contain audio. Choose MP4 or disable microphone and system audio.".into());
+    }
+    Ok(())
+}
+
 /// Pokreni snimanje. Vraća početni status (dimenzije, format) ili grešku ako
 /// se izvor/enkoder nije dao otvoriti — greška stiže PRIJE nego HUD ode gore.
 pub fn start(
@@ -208,6 +217,7 @@ pub fn start(
     if is_active(app) {
         return Err("Snimanje je već u tijeku".into());
     }
+    validate_audio_options(&opts)?;
 
     let fps = opts.fps.clamp(5, 60);
     // Izlazne dimenzije moraju biti parne (NV12 uzorkuje kromu 2x2).
@@ -592,6 +602,13 @@ fn run(
             None
         } else {
             let m = audio::Mixer::start(&kinds);
+            // Never start a video-only/single-source recording when the user
+            // explicitly selected more audio inputs than WASAPI could open.
+            if let Some(missing) = kinds.iter().find(|kind| !m.kinds.contains(kind)) {
+                return Err(format!(
+                    "Requested {missing:?} audio is unavailable. Recording was not started."
+                ));
+            }
             ctl.mic.store(
                 m.kinds.contains(&audio::Kind::Microphone),
                 Ordering::Relaxed,
