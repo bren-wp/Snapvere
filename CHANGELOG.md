@@ -5,7 +5,10 @@ SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO
 ## v0.2.13 — recording HUD recovery and localized gallery (development candidate)
 
 - Keep the recording HUD usable after a failed Stop/Discard/Pause call so the user can retry rather than losing access to recording controls.
-- Localize gallery and recording toolbar actions across 12 languages, format capture dates and file sizes using the selected locale, and test UI action retry behaviour.
+- Complete the catalog of 225 app-interface keys across English, Croatian, German, Spanish, French, Italian, Portuguese, Dutch, Polish, Czech, Slovak and Slovenian; translate all user-visible React screens, dialogs, tooltips, keyboard hints, privacy and About/license copy.
+- Localize the native Windows tray menu and recording tooltip; propagate saved-language changes immediately to native menus and all React windows.
+- Use localized date and size formatting and validate empty/missing/duplicate translations, dynamic labels, JSX text, tooltips and accessibility attributes in CI.
+- Test recorder UI action retries and translated editor, viewer, gallery and overlay controls.
 - Keep native recorder APIs and the Windows application identity unchanged until QA gates pass.
 
 ## v0.2.12 — recorder failure integrity (published 2026-11-15, pre-release)

@@ -41,14 +41,23 @@ Snapvere starts in **English**. Select a language in **Settings → General → 
 English, Hrvatski, Deutsch, Español, Français, Italiano, Português,
 Nederlands, Polski, Čeština, Slovenčina or Slovenščina.
 
-The selection is stored in the existing on-device Settings file through an
-allowlisted Rust command and broadcast to all open desktop windows. The navigation,
-capture actions and principal Settings controls have reviewed translations in all
-12 languages. **Remaining UI copy falls back to English** while translations are
-reviewed; this is not yet a claim of complete end-to-end localization. Locale
-normalization, fallback, supported languages and core translations are covered
-by automated tests. Hardware, visual alignment and translated layout QA are still
-required before final release acceptance.
+The selection is stored in the on-device Settings file through a strict,
+window-scoped Rust command and broadcast to all open desktop windows. The
+**225-key application interface catalog** covers capture, settings, editor,
+recording HUD, media viewer, privacy, licensing, errors and accessibility
+labels in all 12 languages. The **native Windows tray menu** also follows the
+selected language, including live updates without restarting. English remains
+the source language and fallback for any future untranslated key.
+
+Automated tests reject missing or duplicated keys, missing translations,
+hard-coded visible labels and unexpected English strings in scanned React
+components. Real Windows 10/11 layout, spoken accessibility, native driver
+error messaging, third-party system dialogs and installer localization remain
+subject to device-specific QA; automated checks alone are not a guarantee of
+perfect translation or pixel-level visual equivalence.
+
+See [localization and QA guidance](docs/LOCALIZATION.md) for the catalog
+structure, supported language codes, native tray mapping and test commands.
 
 ## v0.2.13 development quality improvements
 

@@ -175,7 +175,9 @@ jobs:
             ### Changes in v${{ steps.version.outputs.value }}
             - Preserve the recording HUD and allow a retry when Stop or Discard fails, preventing an active session from becoming headless.
             - Display a clear, accessible recording control error without exposing internal diagnostics in the toolbar.
-            - Translate gallery, media viewer and recording toolbar controls in all 12 interface languages.
+            - Translate all 225 cataloged application interface strings across 12 languages, including privacy, help, tooltips, editor and capture settings.
+            - Localize the native Windows tray menu and active-recording tooltip, updating live when the selected language changes.
+            - Test static and dynamic localization coverage and reject visible untranslated React labels.
             - Format media dates and sizes according to the selected language; guard against corrupt gallery metadata.
             - Extend unit tests for retry locking, locale coverage and formatting and include browser-level Stop error injection.
             - Keep version metadata consistent across Cargo, Tauri, npm and lockfiles and ship verified portable, NSIS and MSI binaries with SHA-256 checksums.
