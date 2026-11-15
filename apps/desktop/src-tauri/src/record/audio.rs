@@ -58,14 +58,16 @@ pub struct Mixer {
     queues: Vec<Arc<Queue>>,
     stop: Arc<AtomicBool>,
     threads: Vec<std::thread::JoinHandle<()>>,
+    failure: Arc<Mutex<Option<String>>>,
     pub kinds: Vec<Kind>,
 }
 
 impl Mixer {
-    /// Otvori tražene izvore. Izvor koji se ne da otvoriti (nema mikrofona, nema
-    /// uređaja za reprodukciju) se preskače uz log — snimanje ide dalje bez njega.
+    /// Open sources and track failures that happen after WASAPI initialization.
+    /// The caller rejects unavailable audio that was explicitly requested.
     pub fn start(kinds: &[Kind]) -> Self {
         let stop = Arc::new(AtomicBool::new(false));
+        let failure = Arc::new(Mutex::new(None));
         let mut queues = Vec::new();
         let mut threads = Vec::new();
         let mut opened = Vec::new();
@@ -77,9 +79,10 @@ impl Mixer {
             let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<(), String>>();
             let q = Arc::clone(&queue);
             let st = Arc::clone(&stop);
+            let health = Arc::clone(&failure);
             let handle = match std::thread::Builder::new()
                 .name(format!("snapvere-audio-{kind:?}"))
-                .spawn(move || capture_thread(kind, q, st, ready_tx))
+                .spawn(move || capture_thread(kind, q, st, ready_tx, health))
             {
                 Ok(h) => h,
                 Err(e) => {
@@ -106,12 +109,24 @@ impl Mixer {
             queues,
             stop,
             threads,
+            failure,
             kinds: opened,
         }
     }
 
     pub fn is_empty(&self) -> bool {
         self.queues.is_empty()
+    }
+
+    /// Errors from either selected source must reach the encoder and UI.
+    pub fn check_health(&self) -> Result<(), String> {
+        if let Some(error) = crate::state::lock(&self.failure).as_ref() {
+            return Err(error.clone());
+        }
+        if self.threads.iter().any(|worker| worker.is_finished()) {
+            return Err("A requested WASAPI audio capture thread exited unexpectedly".into());
+        }
+        Ok(())
     }
 
     /// Odbaci sve što čeka u redovima (poravnanje sa satom videa, izlazak iz pauze).
@@ -156,6 +171,7 @@ fn capture_thread(
     queue: Arc<Queue>,
     stop: Arc<AtomicBool>,
     ready: std::sync::mpsc::Sender<Result<(), String>>,
+    failure: Arc<Mutex<Option<String>>>,
 ) {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
@@ -173,26 +189,34 @@ fn capture_thread(
     let mut resampler = Resampler::new(fmt.rate);
     let mut scratch: Vec<f32> = Vec::new();
 
-    while !stop.load(Ordering::Relaxed) {
-        unsafe {
-            let mut packet = capture.GetNextPacketSize().unwrap_or(0);
+    while !stop.load(Ordering::Acquire) {
+        // WASAPI errors are not empty packets; failing selected audio must stop
+        // the recording rather than silently filling the MP4 with zeros.
+        let result = (|| -> Result<(), String> {
+            let mut packet = unsafe { capture.GetNextPacketSize() }
+                .map_err(|e| format!("GetNextPacketSize: {e}"))?;
             while packet > 0 {
                 let mut data: *mut u8 = std::ptr::null_mut();
                 let mut frames = 0u32;
                 let mut flags = 0u32;
-                if capture
-                    .GetBuffer(&mut data, &mut frames, &mut flags, None, None)
-                    .is_err()
-                {
-                    break;
-                }
+                unsafe { capture.GetBuffer(&mut data, &mut frames, &mut flags, None, None) }
+                    .map_err(|e| format!("GetBuffer: {e}"))?;
+
                 scratch.clear();
-                if flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 || data.is_null() {
+                let decoded = if flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 {
                     scratch.resize(frames as usize * CHANNELS, 0.0);
+                    Ok(())
+                } else if data.is_null() {
+                    Err("Non-silent WASAPI packet has a null audio buffer".to_string())
                 } else {
-                    to_stereo_f32(data, frames as usize, &fmt, &mut scratch);
-                }
-                let _ = capture.ReleaseBuffer(frames);
+                    unsafe { to_stereo_f32(data, frames as usize, &fmt, &mut scratch) };
+                    Ok(())
+                };
+                // A successful GetBuffer must always be paired with ReleaseBuffer,
+                // even if its payload is malformed.
+                unsafe { capture.ReleaseBuffer(frames) }
+                    .map_err(|e| format!("ReleaseBuffer: {e}"))?;
+                decoded?;
 
                 let out = resampler.process(&scratch);
                 let mut q = crate::state::lock(&queue.samples);
@@ -201,8 +225,21 @@ fn capture_thread(
                 if over > 0 {
                     q.drain(..over);
                 }
-                packet = capture.GetNextPacketSize().unwrap_or(0);
+                packet = unsafe { capture.GetNextPacketSize() }
+                    .map_err(|e| format!("GetNextPacketSize: {e}"))?;
             }
+            Ok(())
+        })();
+        if let Err(reason) = result {
+            if !stop.load(Ordering::Acquire) {
+                let error = format!("WASAPI {} capture failed: {reason}", kind.label());
+                let mut status = crate::state::lock(&failure);
+                if status.is_none() {
+                    *status = Some(error.clone());
+                }
+                log(&error);
+            }
+            break;
         }
         std::thread::sleep(Duration::from_millis(5));
     }
@@ -392,11 +429,29 @@ mod tests {
             queues: vec![],
             stop: Arc::new(AtomicBool::new(false)),
             threads: vec![],
+            failure: Arc::new(Mutex::new(None)),
             kinds: vec![],
         };
         let out = m.pull(10);
         assert_eq!(out.len(), 20);
         assert!(out.iter().all(|&s| s == 0));
+    }
+
+    #[test]
+    fn runtime_source_failure_is_reported_without_silent_fallback() {
+        let failure = Arc::new(Mutex::new(None));
+        let mixer = Mixer {
+            queues: vec![],
+            stop: Arc::new(AtomicBool::new(false)),
+            threads: vec![],
+            failure: Arc::clone(&failure),
+            kinds: vec![],
+        };
+        assert!(mixer.check_health().is_ok());
+        *crate::state::lock(&failure) =
+            Some("WASAPI microphone capture failed: simulated invalidation".into());
+        let error = mixer.check_health().expect_err("failed audio must not be silent");
+        assert!(error.contains("invalidation"));
     }
 
     #[test]
@@ -411,6 +466,7 @@ mod tests {
             queues: vec![q1, q2],
             stop: Arc::new(AtomicBool::new(false)),
             threads: vec![],
+            failure: Arc::new(Mutex::new(None)),
             kinds: vec![],
         };
         let out = m.pull(2);
