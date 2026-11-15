@@ -118,7 +118,7 @@ with sync_playwright() as p:
         (ROOT / "apps/desktop/package.json").read_text(encoding="utf-8")
     )["version"]
     settings.get_by_text(
-        "Snapvere · version " + expected_version, exact=True
+        "Snapvere · Version " + expected_version, exact=True
     ).wait_for(timeout=20000)
 
     # Language selector must work across all 12 locales without clipping controls.
