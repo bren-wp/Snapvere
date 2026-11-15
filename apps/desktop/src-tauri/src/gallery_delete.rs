@@ -267,8 +267,28 @@ mod tests {
     }
 
     #[test]
+    fn sqlite_prepare_failure_leaves_original_media_untouched() -> Result<()> {
+        let (folder, mut db, shot) = fixture()?;
+        {
+            let guard = rusqlite::Connection::open(folder.join("gallery.sqlite"))?;
+            guard.execute_batch(
+                "CREATE TRIGGER block_prepare BEFORE INSERT ON pending_deletions
+                 BEGIN SELECT RAISE(FAIL, 'simulated disk full'); END;",
+            )?;
+        }
+        assert!(delete(&mut db, &shot.id).is_err());
+        assert!(db.get(&shot.id)?.is_some());
+        assert_eq!(fs::read(&shot.file_path)?, b"original");
+        assert_eq!(fs::read(shot.thumb_path.as_deref().unwrap())?, b"thumbnail");
+        assert!(db.pending_deletions()?.is_empty());
+        drop(db);
+        fs::remove_dir_all(folder)?;
+        Ok(())
+    }
+
+    #[test]
     fn unsafe_directory_media_cannot_be_deleted() -> Result<()> {
-        let (folder, mut db, mut shot) = fixture()?;
+        let (folder, mut db, shot) = fixture()?;
         fs::remove_file(&shot.file_path)?;
         fs::create_dir(&shot.file_path)?;
         assert!(delete(&mut db, &shot.id).is_err());
@@ -277,8 +297,6 @@ mod tests {
         assert!(db.pending_deletions()?.is_empty());
         drop(db);
         fs::remove_dir_all(folder)?;
-        // Keep the mutable fixture explicit to validate file path ownership.
-        shot.file_path.clear();
         Ok(())
     }
 }
