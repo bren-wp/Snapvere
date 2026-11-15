@@ -450,7 +450,9 @@ mod tests {
         assert!(mixer.check_health().is_ok());
         *crate::state::lock(&failure) =
             Some("WASAPI microphone capture failed: simulated invalidation".into());
-        let error = mixer.check_health().expect_err("failed audio must not be silent");
+        let error = mixer
+            .check_health()
+            .expect_err("failed audio must not be silent");
         assert!(error.contains("invalidation"));
     }
 
