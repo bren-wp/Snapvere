@@ -1,7 +1,7 @@
-import { GENERAL_KEYS, GENERAL_TRANSLATIONS } from "./i18nGeneral";
-import { EDITOR_KEYS, EDITOR_TRANSLATIONS } from "./i18nEditor";
-import { HELP_KEYS, HELP_TRANSLATIONS } from "./i18nHelp";
-import { FEEDBACK_KEYS, FEEDBACK_TRANSLATIONS } from "./i18nFeedback";
+import { GENERAL_KEYS, GENERAL_TRANSLATIONS } from "./i18nGeneral.ts";
+import { EDITOR_KEYS, EDITOR_TRANSLATIONS } from "./i18nEditor.ts";
+import { HELP_KEYS, HELP_TRANSLATIONS } from "./i18nHelp.ts";
+import { FEEDBACK_KEYS, FEEDBACK_TRANSLATIONS } from "./i18nFeedback.ts";
 
 /** SNAPVERE UI languages. English remains the authoritative fallback. */
 export const LANGUAGES = [
