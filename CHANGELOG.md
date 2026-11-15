@@ -2,7 +2,17 @@
 
 SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO**.
 
-## v0.2.14 — P1 integrity and IPC hardening (unreleased)
+## v0.2.15 — P1 WASAPI format validation (development candidate)
+
+- Modularized Windows audio capture: the sample format decoder is now in `record/audio/format.rs`.
+- Reject invalid WASAPI sample rate, channel count, sample type, precision, block alignment and malformed extensible data instead of silently producing silence.
+- Free the COM mix-format allocation on validation failures and propagate the error through existing selected-audio startup checks.
+- Add hardware-independent Windows format parser regression tests.
+- Retain all 12 UI languages, the SQLite crash-recovery journal and scoped Tauri IPC without weakening their checks.
+- Acceptance pending: native Windows CI, installation QA, audio hardware tests, and measured pixel-accurate screenshots.
+- Details: `docs/AUDIT-v0.2.15-P1-WASAPI.md`.
+
+## v0.2.14 — P1 integrity and IPC hardening (published 2026-11-15)
 
 - Check existing SQLite integrity before schema changes; run schema migrations
   transactionally with an explicit database schema version.
