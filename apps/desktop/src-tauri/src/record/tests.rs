@@ -525,3 +525,31 @@ fn redact_regions_are_bounded_and_cannot_overflow_frame_dimensions() {
     assert!(bounded_blur_rects(&[invalid], 64, 48).unwrap().is_empty());
     assert!(bounded_blur_rects(&vec![huge; 33], 64, 48).is_err());
 }
+
+#[test]
+fn gif_audio_options_fail_instead_of_silently_dropping_selected_audio() {
+    let mut opts = RecordOptions::default();
+    opts.format = RecordFormat::Gif;
+    opts.mic = true;
+    assert!(validate_audio_options(&opts).is_err());
+    opts.mic = false;
+    opts.system_audio = true;
+    assert!(validate_audio_options(&opts).is_err());
+    opts.system_audio = false;
+    assert!(validate_audio_options(&opts).is_ok());
+    opts.format = RecordFormat::Mp4;
+    opts.mic = true;
+    assert!(validate_audio_options(&opts).is_ok());
+}
+
+#[cfg(windows)]
+#[test]
+fn unavailable_requested_audio_source_rejects_recorder_startup() {
+    use audio::Kind::{Microphone, SystemLoopback};
+
+    assert!(ensure_audio_sources(&[Microphone], &[]).is_err());
+    assert!(ensure_audio_sources(&[SystemLoopback], &[Microphone]).is_err());
+    assert!(ensure_audio_sources(&[Microphone, SystemLoopback], &[Microphone]).is_err());
+    assert!(ensure_audio_sources(&[Microphone, SystemLoopback], &[Microphone, SystemLoopback]).is_ok());
+    assert!(ensure_audio_sources(&[], &[]).is_ok());
+}
