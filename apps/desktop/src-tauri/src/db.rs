@@ -247,9 +247,9 @@ impl Db {
             "SELECT id, file_path, staged_file_path, thumb_path, staged_thumb_path, committed
              FROM pending_deletions ORDER BY id",
         )?;
-        Ok(stmt
-            .query_map([], Self::map_pending)?
-            .collect::<rusqlite::Result<Vec<_>>>()?)
+        let rows = stmt.query_map([], Self::map_pending)?;
+        let pending = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(pending)
     }
 
     fn map_pending(row: &rusqlite::Row) -> rusqlite::Result<PendingDeletion> {
