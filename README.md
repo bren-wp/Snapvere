@@ -25,7 +25,7 @@ A focused Windows capture workspace from **[BRENDIGO](https://brendigo.com)**.
 
 > **Distribution notice:** snapvere.com currently publishes SNAPVERE v0.0.8 built with
 > .NET / WinUI 3. This repository builds the separate Tauri 2 / Rust Windows edition
-> (v0.2.13 development candidate; latest published GitHub release: v0.2.12). Do not mix their installers, licenses, versions or upgrade paths.
+> (v0.2.14 P1 development branch; latest published GitHub release: v0.2.13). Do not mix their installers, licenses, versions or upgrade paths.
 > The production website, email download flow, and its binaries are not modified
 > by this GitHub release.
 >
@@ -58,6 +58,17 @@ perfect translation or pixel-level visual equivalence.
 
 See [localization and QA guidance](docs/LOCALIZATION.md) for the catalog
 structure, supported language codes, native tray mapping and test commands.
+
+## v0.2.14 — P1 deletion recovery (draft PR)
+
+- Deletes now use a durable SQLite intent and same-volume media staging. Interrupted
+  operations restore original captures or finish cleanup safely on the next start.
+- Frozen-frame PNG/RGBA transport and overlay lifecycle IPC verify the calling
+  WebView window before accessing private screen content.
+- Regression scenarios cover transaction failure, interruption before/after commit
+  and unsafe filesystem entries; CI and real Windows device tests must still pass.
+- This GitHub edition remains separate from the .NET/WinUI installers on
+  snapvere.com. See [P1 audit report](docs/AUDIT-v0.2.14-P1-integrity-ipc.md).
 
 ## v0.2.13 development quality improvements
 
