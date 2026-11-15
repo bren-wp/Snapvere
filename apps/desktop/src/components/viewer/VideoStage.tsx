@@ -1,3 +1,4 @@
+import { useLanguage } from "../../lib/LanguageProvider";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Pause, Play, RotateCcw, Volume2, VolumeX } from "lucide-react";
@@ -8,6 +9,7 @@ import StageError from "./StageError";
 // ───────────────────────────────── video ─────────────────────────────────
 
 export default function VideoStage({
+  const { t } = useLanguage();
   shot,
   chromeHidden,
   onPlayingChange,
@@ -137,7 +139,7 @@ export default function VideoStage({
           <button
             onClick={toggle}
             className="lg grid h-16 w-16 place-items-center !rounded-full transition hover:brightness-125 active:scale-95 animate-pop"
-            title={ended ? "Replay" : "Play (Space)"}
+            title={`${t(ended ? "Replay" : "Play")} (Space)`} aria-label={t(ended ? "Replay" : "Play")}
           >
             {ended ? <RotateCcw size={24} /> : <Play size={26} fill="currentColor" className="ml-1" />}
           </button>
@@ -151,7 +153,7 @@ export default function VideoStage({
         }`}
       >
         <div className="lg flex items-center gap-2 !rounded-full px-2 py-1.5">
-          <button className="lg-btn shrink-0" title={playing ? "Pause (Space)" : "Play (Space)"} onClick={toggle}>
+          <button className="lg-btn shrink-0" title={`${t(playing ? "Pause" : "Play")} (Space)`} aria-label={t(playing ? "Pause" : "Play")} onClick={toggle}>
             {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5" />}
           </button>
           <span className="w-[92px] shrink-0 text-center font-mono text-[11px] tabular-nums text-white/80">
@@ -160,7 +162,7 @@ export default function VideoStage({
           <Scrubber time={time} duration={duration} onSeek={seekTo} />
           <button
             className="lg-btn shrink-0"
-            title={silent ? "Unmute (M)" : "Mute (M)"}
+            title={`${t(silent ? "Unmute" : "Mute")} (M)`} aria-label={t(silent ? "Unmute" : "Mute")}
             onClick={() => setSound((s) => ({ volume: s.volume || 1, muted: !silent }))}
           >
             {silent ? <VolumeX size={16} /> : <Volume2 size={16} />}
@@ -174,12 +176,12 @@ export default function VideoStage({
             onChange={(e) => setSound({ volume: Number(e.target.value), muted: false })}
             onPointerUp={(e) => e.currentTarget.blur()}
             className="vw-range w-20 shrink-0"
-            aria-label="Volume"
+            aria-label={t("Volume")}
             style={{ ["--p" as string]: `${(silent ? 0 : volume) * 100}%` }}
           />
           <button
             className="h-8 w-11 shrink-0 rounded-full font-mono text-[11px] tabular-nums transition hover:bg-white/15"
-            title="Playback speed"
+            title={t("Playback speed")} aria-label={t("Playback speed")}
             onClick={() => setSpeed((s) => PLAYBACK_SPEEDS[(PLAYBACK_SPEEDS.indexOf(s) + 1) % PLAYBACK_SPEEDS.length])}
           >
             {speed}×
