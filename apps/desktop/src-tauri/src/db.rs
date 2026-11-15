@@ -5,12 +5,23 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::Duration;
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::models::Screenshot;
 
 pub struct Db {
     conn: Connection,
+}
+
+/// A deletion intent survives an unexpected process termination. Its staged
+/// files always remain on the same volume as the originals.
+pub struct PendingDeletion {
+    pub id: String,
+    pub file_path: String,
+    pub staged_file_path: String,
+    pub thumb_path: Option<String>,
+    pub staged_thumb_path: Option<String>,
+    pub committed: bool,
 }
 
 impl Db {
@@ -19,10 +30,11 @@ impl Db {
         let conn = Connection::open(path)?;
         conn.busy_timeout(Duration::from_secs(5))?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
-        conn.pragma_update(None, "synchronous", "NORMAL")?;
+        conn.pragma_update(None, "synchronous", "FULL")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         let db = Self { conn };
         db.migrate()?;
+        crate::gallery_delete::recover(&db)?;
         Ok(db)
     }
 
@@ -68,6 +80,17 @@ impl Db {
                 screenshot_id TEXT NOT NULL REFERENCES screenshots(id) ON DELETE CASCADE,
                 tag_id        INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
                 PRIMARY KEY (screenshot_id, tag_id)
+            );
+
+            -- Persisted BEFORE files are staged, retained AFTER row deletion,
+            -- and cleared only after rollback or cleanup succeeds.
+            CREATE TABLE IF NOT EXISTS pending_deletions (
+                id                TEXT PRIMARY KEY,
+                file_path         TEXT NOT NULL,
+                staged_file_path  TEXT NOT NULL,
+                thumb_path        TEXT,
+                staged_thumb_path TEXT,
+                committed         INTEGER NOT NULL DEFAULT 0 CHECK (committed IN (0, 1))
             );
             "#,
         )?;
@@ -173,6 +196,78 @@ impl Db {
         self.conn
             .execute("DELETE FROM screenshots WHERE id = ?1", params![id])?;
         Ok(())
+    }
+
+    /// Write durable intent before the filesystem is touched.
+    pub fn prepare_delete(&self, job: &PendingDeletion) -> anyhow::Result<()> {
+        let changed = self.conn.execute(
+            "INSERT INTO pending_deletions
+             (id, file_path, staged_file_path, thumb_path, staged_thumb_path, committed)
+             SELECT ?1, ?2, ?3, ?4, ?5, 0
+             FROM screenshots WHERE id = ?1",
+            params![
+                job.id,
+                job.file_path,
+                job.staged_file_path,
+                job.thumb_path,
+                job.staged_thumb_path
+            ],
+        )?;
+        anyhow::ensure!(changed == 1, "Gallery item disappeared before delete");
+        Ok(())
+    }
+
+    /// Atomically remove the row and mark its staged media as safe to clean.
+    pub fn commit_delete(&mut self, id: &str) -> anyhow::Result<()> {
+        let tx = self.conn.transaction()?;
+        let removed = tx.execute("DELETE FROM screenshots WHERE id = ?1", params![id])?;
+        anyhow::ensure!(removed == 1, "No gallery entry to delete");
+        let marked = tx.execute(
+            "UPDATE pending_deletions SET committed = 1 WHERE id = ?1 AND committed = 0",
+            params![id],
+        )?;
+        anyhow::ensure!(marked == 1, "Missing prepared gallery deletion");
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn forget_delete(&self, id: &str) -> anyhow::Result<()> {
+        self.conn
+            .execute("DELETE FROM pending_deletions WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    pub fn pending_delete(&self, id: &str) -> anyhow::Result<Option<PendingDeletion>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT id, file_path, staged_file_path, thumb_path, staged_thumb_path, committed
+                 FROM pending_deletions WHERE id = ?1",
+                params![id],
+                Self::map_pending,
+            )
+            .optional()?)
+    }
+
+    pub fn pending_deletions(&self) -> anyhow::Result<Vec<PendingDeletion>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, file_path, staged_file_path, thumb_path, staged_thumb_path, committed
+             FROM pending_deletions ORDER BY id",
+        )?;
+        Ok(stmt
+            .query_map([], Self::map_pending)?
+            .collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    fn map_pending(row: &rusqlite::Row) -> rusqlite::Result<PendingDeletion> {
+        Ok(PendingDeletion {
+            id: row.get(0)?,
+            file_path: row.get(1)?,
+            staged_file_path: row.get(2)?,
+            thumb_path: row.get(3)?,
+            staged_thumb_path: row.get(4)?,
+            committed: row.get::<_, i32>(5)? != 0,
+        })
     }
 
     /// Dodaj tag screenshotu (kreira tag ako ne postoji).
