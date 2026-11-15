@@ -4,6 +4,7 @@
 mod capture;
 mod commands;
 mod db;
+mod gallery_delete;
 mod logging;
 mod models;
 mod record;
