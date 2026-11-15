@@ -77,7 +77,7 @@ export default function Home() {
       setHasMore(res.length === PAGE_SIZE);
     } catch (error) {
       if (request === galleryRequest.current) {
-        setToast(`Could not load older captures: ${String(error)}`);
+        setToast(`${t("Could not load older captures:")} ${String(error)}`);
       }
     } finally {
       pagingBusy.current = false;
@@ -106,7 +106,7 @@ export default function Home() {
     const subs = [
       listen<RecordDone>("snapvere:rec-done", (e) => {
         const { error, cancelled } = e.payload;
-        if (error) setToast(`Recording failed: ${error}`);
+        if (error) setToast(`${t("Recording failed:")} ${error}`);
         else if (!cancelled) {
           setToast(t("Recording saved"));
           void load(query);
@@ -145,7 +145,7 @@ export default function Home() {
       setItems((prev) => prev.filter((x) => x.id !== s.id));
       return true;
     } catch (e) {
-      setToast(`Could not delete capture: ${String(e)}`);
+      setToast(`${t("Could not delete capture:")} ${String(e)}`);
       return false;
     }
   }, [t]);
@@ -166,7 +166,7 @@ export default function Home() {
       await ipc.beginRegionCapture();
     } catch (e) {
       await getCurrentWindow().show().catch(console.error);
-      setToast(`Capture could not start: ${String(e)}`);
+      setToast(`${t("Capture could not start:")} ${String(e)}`);
     }
   };
   const captureFull = async () => {
@@ -184,7 +184,7 @@ export default function Home() {
       await load(query);
       setToast(t("Full-screen screenshot saved."));
     } catch (e) {
-      setToast(`Screenshot failed: ${String(e)}`);
+      setToast(`${t("Screenshot failed:")} ${String(e)}`);
     } finally {
       await win.show().catch(console.error);
       await win.setFocus().catch(console.error);
@@ -197,7 +197,7 @@ export default function Home() {
       await ipc.beginRegionCapture("record");
     } catch (e) {
       await getCurrentWindow().show().catch(console.error);
-      setToast(`Recording could not start: ${String(e)}`);
+      setToast(`${t("Recording could not start:")} ${String(e)}`);
     }
   };
   const openSettings = async () => {
@@ -221,7 +221,7 @@ export default function Home() {
             <p className="snapvere-section-eyebrow">SNAPVERE</p>
             <h1 className="snapvere-workspace-title">{t("Capture what matters.")}</h1>
             <p className="snapvere-workspace-subtitle">
-              Take a screenshot, record a walkthrough, then make it yours.
+              {t("Capture, record, and annotate your screen.")}
             </p>
           </div>
           <button
@@ -234,7 +234,7 @@ export default function Home() {
             <span>{t("Settings")}</span>
           </button>
         </div>
-        <div role="group" aria-label="Capture actions" className="snapvere-workspace-actions">
+        <div role="group" aria-label={t("Capture actions")} className="snapvere-workspace-actions">
           <button
             type="button"
             aria-label={t("Capture region")}
@@ -280,12 +280,12 @@ export default function Home() {
         </div>
       </header>
 
-      <section className="snapvere-gallery-controls shrink-0 px-5 py-4" aria-label="Gallery controls">
+      <section className="snapvere-gallery-controls shrink-0 px-5 py-4" aria-label={t("Gallery controls")}>
         <div className="snapvere-gallery-overview">
           <p className="snapvere-section-eyebrow">{t("Library")}</p>
           <h2 className="snapvere-gallery-title">{t("Your captures")}</h2>
           <p className="snapvere-gallery-count" aria-live="polite">
-            {loading ? t("Updating…") : `${visible.length}${hasMore ? "+" : ""} ${visible.length === 1 ? "item" : "items"} loaded`}
+            {loading ? t("Updating…") : `${visible.length}${hasMore ? "+" : ""} ${t(visible.length === 1 ? "item loaded" : "items loaded")}`}
           </p>
         </div>
         <div className="snapvere-gallery-tools">
@@ -305,7 +305,7 @@ export default function Home() {
               className="w-full rounded-full bg-elevated/80 py-2.5 pl-10 pr-4 text-sm outline-none ring-1 ring-white/10 transition focus:ring-2 focus:ring-accent"
             />
           </div>
-          <div role="group" aria-label="Filter gallery" className="snapvere-gallery-filters">
+          <div role="group" aria-label={t("Filter gallery")} className="snapvere-gallery-filters">
             {(["all", "images", "videos"] as Filter[]).map((f) => (
               <button
                 key={f}
@@ -346,7 +346,7 @@ export default function Home() {
               type="button"
               onClick={() => void loadMore()}
               disabled={loadingMore || loading}
-              aria-label="Load older captures"
+              aria-label={t("Load more captures")}
               className="snapvere-btn-secondary rounded-full px-5 py-2.5 text-sm font-semibold transition hover:bg-elevated disabled:opacity-60"
             >
               {loadingMore ? t("Loading…") : t("Load more captures")}
