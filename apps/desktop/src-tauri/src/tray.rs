@@ -36,20 +36,9 @@ static RECORD_ITEMS: OnceLock<RecordItems> = OnceLock::new();
 pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let language = current_language(app);
     let labels = tray_locale::labels(&language);
-    let capture_region = MenuItem::with_id(
-        app,
-        "capture_region",
-        labels[0],
-        true,
-        Some("PrintScreen"),
-    )?;
-    let capture_full = MenuItem::with_id(
-        app,
-        "capture_full",
-        labels[1],
-        true,
-        None::<&str>,
-    )?;
+    let capture_region =
+        MenuItem::with_id(app, "capture_region", labels[0], true, Some("PrintScreen"))?;
+    let capture_full = MenuItem::with_id(app, "capture_full", labels[1], true, None::<&str>)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
 
     let record_region = MenuItem::with_id(
@@ -59,13 +48,7 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         true,
         Some("CmdOrCtrl+Shift+R"),
     )?;
-    let record_screen = MenuItem::with_id(
-        app,
-        "record_screen",
-        labels[3],
-        true,
-        None::<&str>,
-    )?;
+    let record_screen = MenuItem::with_id(app, "record_screen", labels[3], true, None::<&str>)?;
     let record_stop = MenuItem::with_id(app, "record_stop", labels[4], false, None::<&str>)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
 
