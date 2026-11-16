@@ -662,6 +662,7 @@ fn run(
     #[cfg(windows)]
     if let Some(m) = &mixer {
         m.clear();
+        m.check_health()?;
     }
     // Zvuk se vuče s ~120 ms zakašnjenja za satom videa — toliko WASAPI-ju treba da
     // paket stigne; bez margine bismo rupu popunili tišinom pa pravi zvuk gurnuli kasnije.
@@ -695,6 +696,16 @@ fn run(
         }
         if ctl.stop.load(Ordering::Relaxed) {
             break;
+        }
+
+        #[cfg(windows)]
+        if let Some(m) = &mixer {
+            if let Err(e) = m.check_health() {
+                let error = format!("Recording stopped because requested audio failed: {e}");
+                log(&error);
+                recording_error = Some(error);
+                break;
+            }
         }
 
         // ── pauza ──
@@ -826,6 +837,11 @@ fn run(
     #[cfg(windows)]
     if let Some(m) = &mixer {
         if !cancelled && recording_error.is_none() {
+            if let Err(e) = m.check_health() {
+                recording_error = Some(format!("Requested WASAPI audio failed: {e}"));
+            }
+        }
+        if !cancelled && recording_error.is_none() {
             // Treat even the final audio write as a recording failure.
             let end = ((last_time_100ns.max(0) as f64 / 1e7) * audio::RATE as f64) as i64;
             if let Err(e) = write_audio_until(&mut encoder, m, &mut audio_written, end) {
@@ -864,6 +880,7 @@ fn write_audio_until(
     if n <= 0 {
         return Ok(());
     }
+    mixer.check_health()?;
     let pcm = mixer.pull(n as usize);
     let to_100ns = |frames: i64| frames * 10_000_000 / audio::RATE as i64;
     encoder.write_audio(&pcm, to_100ns(*written), to_100ns(n))?;

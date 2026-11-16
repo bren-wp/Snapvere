@@ -2,7 +2,19 @@
 
 SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO**.
 
-## v0.2.15 — P1 WASAPI format validation (development candidate)
+## v0.2.16 — P1 WASAPI runtime failure propagation (development candidate)
+
+- Keep a thread-safe recorder health state for requested WASAPI microphone/system-loopback sources after initial readiness.
+- Stop the capture session with an explicit error when `GetNextPacketSize`, `GetBuffer` or `ReleaseBuffer` fails, rather than interpreting driver errors as silence.
+- Reject malformed non-silent audio buffers with null pointers while always releasing successfully acquired packets.
+- Detect unexpectedly finished audio workers before writing frames, during pause and before final encoder flush; preserve the existing failure-aware MP4 finalization behavior.
+- Keep real WASAPI silent packets legitimate; only operating-system errors and unexpected worker termination trigger the fail-fast path.
+- Add hardware-independent Rust regression tests for the worker-health error state.
+- Preserve 12-language localization, crash-recoverable gallery deletion, window-scoped IPC, SHA256 release checks and version identity.
+- Physical Windows 10/11 audio/device-change and 1:1 visual acceptance remain unverified and mandatory for production claims.
+- See `docs/AUDIT-v0.2.16-P1-audio-runtime.md`.
+
+## v0.2.15 — P1 WASAPI format validation (published 2026-11-15, prerelease)
 
 - Modularized Windows audio capture: the sample format decoder is now in `record/audio/format.rs`.
 - Reject invalid WASAPI sample rate, channel count, sample type, precision, block alignment and malformed extensible data instead of silently producing silence.
