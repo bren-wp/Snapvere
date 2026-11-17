@@ -330,14 +330,14 @@ fn downmix_weights(fmt: &SourceFormat) -> ([(f32, f32); 32], f32) {
             let bit = mask & mask.wrapping_neg();
             mask &= !bit;
             match bit {
-                0x0001 | 0x0040 => (1.0, 0.0), // front left, front left-of-center
-                0x0002 | 0x0080 => (0.0, 1.0), // front right, front right-of-center
-                0x0004 => (0.707, 0.707), // speech / front center
-                0x0008 => (0.25, 0.25), // low-frequency effects
+                0x0001 | 0x0040 => (1.0, 0.0),   // front left, front left-of-center
+                0x0002 | 0x0080 => (0.0, 1.0),   // front right, front right-of-center
+                0x0004 => (0.707, 0.707),        // speech / front center
+                0x0008 => (0.25, 0.25),          // low-frequency effects
                 0x0010 | 0x0200 => (0.707, 0.0), // back/side left
                 0x0020 | 0x0400 => (0.0, 0.707), // back/side right
-                0x0100 => (0.5, 0.5), // back center
-                _ => (0.25, 0.25), // height / unspecified speakers
+                0x0100 => (0.5, 0.5),            // back center
+                _ => (0.25, 0.25),               // height / unspecified speakers
             }
         } else {
             // Legacy multichannel PCM has no standard channel positions.
@@ -584,7 +584,10 @@ mod tests {
         };
         let centre = decode([0.0, 0.0, 0.9, 0.0, 0.0, 0.0]);
         assert!(centre[0] > 0.0);
-        assert_eq!(centre[0], centre[1], "centre speech must reach both speakers");
+        assert_eq!(
+            centre[0], centre[1],
+            "centre speech must reach both speakers"
+        );
         let surround = decode([0.0, 0.0, 0.0, 0.0, 0.8, 0.0]);
         assert!(surround[0] > 0.0);
         assert_eq!(surround[1], 0.0, "left rear must not leak right");
