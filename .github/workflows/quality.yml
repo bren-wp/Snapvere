@@ -31,6 +31,17 @@ jobs:
       - name: Install locked dependencies without lifecycle hooks
         working-directory: apps/desktop
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Record patched picomatch package SRI for immutable lockfile pinning
+        working-directory: apps/desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          sri=$(npm view '@ryotsu/picomatch@4.0.7-a' dist.integrity)
+          if [[ ! "$sri" =~ ^sha512-[A-Za-z0-9+/=]+$ ]]; then
+            echo "::error::Scoped patched package has no verifiable SHA-512 registry integrity."
+            exit 1
+          fi
+          echo "Patched picomatch published SHA512 SRI: $sri"
       - name: Enforce reachable Rust modules (dead-code graph)
         run: python tools/check_rust_modules.py
       - name: Enforce reachable TypeScript modules (dead-code graph)
