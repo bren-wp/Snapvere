@@ -2,7 +2,17 @@
 
 SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO**.
 
-## v0.2.16 — P1 WASAPI runtime failure propagation (development candidate)
+## v0.2.17 — P1 bounded audio buffering and safe PCM decoding (development candidate)
+
+- Bound microphone and system-audio WASAPI packet frame counts to two seconds of validated device sample rate; reject malformed oversized driver buffers before scratch allocation, while still releasing acquired packets.
+- Decode PCM16, PCM32 and IEEE float32 with unaligned-safe byte-pointer reads, eliminating undefined behavior when a driver returns an unaligned sample pointer.
+- Bound MP4 audio catch-up to the mixer's two-second retention capacity: refuse unrecoverable gaps instead of generating long, misleading silent audio tracks.
+- Encode recoverable audio backlogs in <=500 ms blocks instead of one potentially excessive PCM allocation, preserving time ordering and existing failure-aware recording cleanup.
+- Add hardware-independent Windows Rust tests for oversized packet counts, misaligned samples and audio backlog overflow/boundaries.
+- Keep saved settings, 12-language interface, window-scoped Tauri IPC, crash-recoverable SQLite gallery and existing recording formats unchanged.
+- Full physical Windows capture/audio/DPI/installer QA remains an explicit prerelease gate; see `docs/AUDIT-v0.2.17-P1-audio-memory.md`.
+
+## v0.2.16 — P1 WASAPI runtime failure propagation (published 2026-11-16)
 
 - Keep a thread-safe recorder health state for requested WASAPI microphone/system-loopback sources after initial readiness.
 - Stop the capture session with an explicit error when `GetNextPacketSize`, `GetBuffer` or `ReleaseBuffer` fails, rather than interpreting driver errors as silence.

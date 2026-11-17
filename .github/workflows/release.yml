@@ -173,11 +173,11 @@ jobs:
             All three Windows executables originate from the same Tauri build and were verified before publication.
 
             ### Changes in v${{ steps.version.outputs.value }}
-            - Propagate runtime WASAPI device failures during audio/video capture, instead of silently writing microphone/system silence.
-            - Check requested microphone and system-loopback capture worker health before video frames, audio flushing and final MP4 completion.
-            - Reject null non-silent WASAPI audio buffers and treat GetNextPacketSize, GetBuffer and ReleaseBuffer errors as fatal for the recording.
-            - Keep the v0.2.15 validated WASAPI formats, SQLite gallery recovery, window-scoped Tauri IPC and 12 UI languages.
-            - Build Portable EXE, NSIS Setup EXE, MSI and SHA256SUMS from one verified Tauri/Rust source revision.
+            - Bound microphone/system-audio packet sizes and reject malformed large WASAPI buffers before PCM allocation.
+            - Use unaligned-safe PCM16/PCM32/float32 reads for Windows audio sample decoding.
+            - Encode MP4 catch-up audio in small bounded chunks; stop with an explicit error when more than two seconds are irrecoverably missing.
+            - Retain existing v0.2.16 device-error handling, SQLite gallery crash recovery, scoped Tauri IPC and all 12 app languages.
+            - Build and verify Portable EXE, NSIS Setup EXE, MSI and SHA256SUMS from the same Tauri/Rust commit.
 
             **Preview release.** Native Windows 10/11 capture, recorder, audio, multi-monitor,
             accessibility, install/upgrade/uninstall and 1:1 visual comparisons are not yet
