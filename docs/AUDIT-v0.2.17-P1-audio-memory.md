@@ -31,3 +31,14 @@ WAVEFORMATEXTENSIBLE provides a speaker channel mask that identifies center and 
 - Retain direct mono/stereo behavior, including the original 48 kHz resampler.
 - Regression tests validate center voice, rear direction, side-right 7.1 preservation and clipping protection.
 - Real speakers, format handling and subjective 5.1/7.1 listening still require physical Windows QA.
+
+
+## Temporary CVE-2026-112366 build dependency substitution
+
+A separate frontend CI failure was traced to `picomatch@4.0.7`, pulled into the **dev/build toolchain** by Vite 8.3.8. Official picomatch still publishes v4.0.7 with no release officially marked fixed for `GHSA-fc5q-39xc-vjpf`; forcing Vite 6.2.7 as suggested by npm audit would reintroduce two high-severity Vite issues.
+
+For this development PR only, the root npm `overrides` temporarily resolves the `picomatch` package name to `npm:@ryotsu/picomatch@4.0.7-a`. This independently maintained MIT fork is built from upstream 4.0.7 plus the single-branch extglob ReDoS hardening patch published in commit `3ab5a7627d480259e3d9ca67fbc14c125d374f0e` at `https://github.com/ryotsu-kankichi/secured-picomatch`. The fork has limited community adoption; it is **not** the official picomatch release and is not presumed trustworthy merely because npm audit passes. Its npm distribution must be checked against source, tested and pinned to a verified integrity digest before release.
+
+`tests/picomatchSecurity.test.mjs` checks loaded package name/version and runs the relevant malicious pattern in a bounded child process, alongside ordinary file-path glob semantics. The CI gate still executes `npm audit --audit-level=high` unchanged. If the override is rejected by npm ci, security test fails, published package differs from reviewed source or any audit fails, do **not** merge.
+
+Once upstream publishes an official patched `picomatch`, remove the override, upgrade the lockfile and rerun all tests.
