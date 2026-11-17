@@ -20,7 +20,6 @@ fn audio_backlog_rejects_unrecoverable_gaps_and_arithmetic_overflow() {
     assert!(validate_audio_backlog(-1, i64::MAX).is_err());
 }
 
-
 #[test]
 fn crop_rect_poravnava_na_parne_dimenzije() {
     let t = RecordTarget {

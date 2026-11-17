@@ -327,12 +327,10 @@ unsafe fn to_stereo_f32(data: *const u8, frames: usize, fmt: &SourceFormat, out:
             // WASAPI supplies a byte pointer, not an alignment guarantee.
             // Read sample values without creating potentially unaligned references.
             (true, 32) => std::ptr::read_unaligned(data.add(i * 4).cast::<f32>()),
-            (false, 16) => {
-                std::ptr::read_unaligned(data.add(i * 2).cast::<i16>()) as f32 / 32768.0
-            }
+            (false, 16) => std::ptr::read_unaligned(data.add(i * 2).cast::<i16>()) as f32 / 32768.0,
             (false, 32) => {
                 std::ptr::read_unaligned(data.add(i * 4).cast::<i32>()) as f32 / 2_147_483_648.0
-            },
+            }
             (false, 24) => {
                 let b = data.add(i * 3);
                 let v =
