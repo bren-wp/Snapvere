@@ -868,7 +868,23 @@ fn run(
     })
 }
 
-/// Povuci iz miksera i zapiši sve audio frameove do `due` (frameovi @ 48 kHz).
+/// WASAPI's mixer only retains 2 seconds of audio. A larger catch-up
+/// interval is unrecoverable: do not manufacture a long silent recording.
+#[cfg(windows)]
+fn validate_audio_backlog(written: i64, due: i64) -> Result<i64, String> {
+    let backlog = due
+        .checked_sub(written)
+        .ok_or_else(|| "Audio timeline overflow".to_string())?;
+    if backlog > audio::MAX_QUEUED_FRAMES as i64 {
+        return Err(format!(
+            "Audio backlog exceeded the 2-second WASAPI buffer ({backlog} frames)"
+        ));
+    }
+    Ok(backlog.max(0))
+}
+
+/// Pull and encode bounded 500-ms PCM chunks instead of allocating the full
+/// audio backlog in one contiguous buffer after scheduler or system stalls.
 #[cfg(windows)]
 fn write_audio_until(
     encoder: &mut Encoder,
@@ -876,15 +892,23 @@ fn write_audio_until(
     written: &mut i64,
     due: i64,
 ) -> Result<(), String> {
-    let n = due - *written;
-    if n <= 0 {
+    let outstanding = validate_audio_backlog(*written, due)?;
+    if outstanding == 0 {
         return Ok(());
     }
-    mixer.check_health()?;
-    let pcm = mixer.pull(n as usize);
-    let to_100ns = |frames: i64| frames * 10_000_000 / audio::RATE as i64;
-    encoder.write_audio(&pcm, to_100ns(*written), to_100ns(n))?;
-    *written += n;
+    const CHUNK: i64 = audio::RATE as i64 / 2;
+    while *written < due {
+        mixer.check_health()?;
+        let frames = (due - *written).min(CHUNK);
+        let pcm = mixer.pull(frames as usize);
+        let timestamp = written
+            .checked_mul(10_000_000)
+            .ok_or_else(|| "Audio timestamp overflow".to_string())?
+            / audio::RATE as i64;
+        let duration = frames * 10_000_000 / audio::RATE as i64;
+        encoder.write_audio(&pcm, timestamp, duration)?;
+        *written += frames;
+    }
     Ok(())
 }
 

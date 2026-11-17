@@ -31,6 +31,21 @@ jobs:
       - name: Install locked dependencies without lifecycle hooks
         working-directory: apps/desktop
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Require SHA-512 pinned patched picomatch registry tarball
+        working-directory: apps/desktop
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          const dep = lock.packages['node_modules/picomatch'];
+          assert.equal(dep.name, '@ryotsu/picomatch');
+          assert.equal(dep.version, '4.0.7-a');
+          assert.equal(dep.resolved, 'https://registry.npmjs.org/@ryotsu/picomatch/-/picomatch-4.0.7-a.tgz');
+          assert.equal(dep.integrity, 'sha512-JroBFEmaejC7szGSfqOhF1QZHLKvX2wTA1+fWyfkpy3BjzdQKNPLKa2FtgeKVUDy5/UPUNkXEeCHJ5ZRBMLTVA==');
+          console.log('Verified patched picomatch tarball is pinned by SHA-512');
+          NODE
       - name: Enforce reachable Rust modules (dead-code graph)
         run: python tools/check_rust_modules.py
       - name: Enforce reachable TypeScript modules (dead-code graph)

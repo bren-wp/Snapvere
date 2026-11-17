@@ -23,9 +23,11 @@ A focused Windows capture workspace from **[BRENDIGO](https://brendigo.com)**.
 
 ---
 
-> **Distribution notice:** snapvere.com currently publishes SNAPVERE v0.0.8 built with
-> .NET / WinUI 3. This repository builds the separate Tauri 2 / Rust Windows edition
-> (v0.2.14 P1 development branch; latest published GitHub release: v0.2.13). Do not mix their installers, licenses, versions or upgrade paths.
+> **Distribution notice:** This repository builds the **Tauri 2 / Rust** Windows
+> edition of SNAPVERE. The latest confirmed GitHub release is **v0.2.16**;
+> **v0.2.17** is being developed in [PR #27](https://github.com/bren-wp/Snapvere/pull/27).
+> The publicly deployed snapvere.com product distributes a separate .NET / WinUI 3
+> edition. Their installers, versions, licenses and update paths are not interchangeable.
 > The production website, email download flow, and its binaries are not modified
 > by this GitHub release.
 >
@@ -59,7 +61,30 @@ perfect translation or pixel-level visual equivalence.
 See [localization and QA guidance](docs/LOCALIZATION.md) for the catalog
 structure, supported language codes, native tray mapping and test commands.
 
-## v0.2.14 — P1 deletion recovery (draft PR)
+## What's new in v0.2.17 — safer recordings (development PR #27)
+
+- **Audio memory limits:** validate incoming WASAPI packet sizes before conversion
+  and reject irrecoverable post-sleep audio gaps instead of exhausting memory or
+  writing long blocks of missing sound.
+- **Reliable PCM decoding:** Windows audio buffers can be read safely even when
+  samples arrive at unaligned addresses.
+- **Smoother recording workload:** write recovered MP4 audio in bounded 500-ms
+  chunks, and keep the existing failure-aware MP4 finalization policy.
+- **Security remains a release gate:** the upstream `picomatch` ReDoS advisory
+  currently blocks the strict npm audit. This is not an accepted exception.
+- Review the [technical audit](docs/AUDIT-v0.2.17-P1-audio-memory.md).
+  Build CI and real Windows 10/11 device testing remain acceptance requirements.
+
+## In v0.2.16 — recording and audio-device integrity
+
+- Microphone and system-loopback capture now surface device/API errors that occur
+  *after* initial readiness instead of silently producing audio-less recordings.
+- A failed selected audio source stops the recording through the existing
+  error-handling and MP4 cleanup path.
+- Published as [v0.2.16](https://github.com/bren-wp/Snapvere/releases/tag/v0.2.16);
+  physical Windows testing and pixel-perfect reference acceptance remain pending.
+
+## v0.2.14 — P1 deletion recovery (implemented)
 
 - Deletes now use a durable SQLite intent and same-volume media staging. Interrupted
   operations restore original captures or finish cleanup safely on the next start.
@@ -183,19 +208,19 @@ The source and interface images are built directly from the SNAPVERE project. Pr
 
 ## Get SNAPVERE for Windows
 
-**Latest published repository release: v0.2.10 (14 November 2026).** SNAPVERE provides three Windows package formats with a SHA-256 manifest. Obtain the Tauri/Rust edition from [GitHub Releases](https://github.com/bren-wp/Snapvere/releases/tag/v0.2.10). The downloads on snapvere.com are maintained separately for the .NET/WinUI edition and are **not** interchangeable. The repository packages remain unsigned preview builds.
+**Latest confirmed repository release: v0.2.16 (16 November 2026).** SNAPVERE provides three Windows package formats with a SHA-256 manifest. Obtain the Tauri/Rust edition from [GitHub Releases](https://github.com/bren-wp/Snapvere/releases/tag/v0.2.16). The downloads on snapvere.com are maintained separately for the .NET/WinUI edition and are **not** interchangeable. GitHub labels v0.2.16 as a stable release, but physical Windows device QA is not documented; do not treat the stable badge as a hardware-validation claim.
 
 | Package | Ideal for | Official download |
 |---|---|---|
-| 💻 **Portable EXE** | Run without installing SNAPVERE | [Snapvere-Portable.exe](https://github.com/bren-wp/Snapvere/releases/download/v0.2.10/Snapvere-Portable.exe) |
-| 📦 **EXE Setup** | Guided installation | [Snapvere-Setup.exe](https://github.com/bren-wp/Snapvere/releases/download/v0.2.10/Snapvere-Setup.exe) |
-| 🏢 **MSI Setup** | Windows managed installation | [Snapvere-Setup.msi](https://github.com/bren-wp/Snapvere/releases/download/v0.2.10/Snapvere-Setup.msi) |
+| 💻 **Portable EXE** | Run without installing SNAPVERE | [Snapvere-Portable.exe](https://github.com/bren-wp/Snapvere/releases/download/v0.2.16/Snapvere-Portable.exe) |
+| 📦 **EXE Setup** | Guided installation | [Snapvere-Setup.exe](https://github.com/bren-wp/Snapvere/releases/download/v0.2.16/Snapvere-Setup.exe) |
+| 🏢 **MSI Setup** | Windows managed installation | [Snapvere-Setup.msi](https://github.com/bren-wp/Snapvere/releases/download/v0.2.16/Snapvere-Setup.msi) |
 
 **Requires:** 64-bit Windows 10/11 and Microsoft WebView2 Runtime. Portable means the SNAPVERE installer is not needed; some systems may still need WebView2 installed. These are **unsigned preview builds** and Windows SmartScreen may display a warning.
 
 ### Verify what you install
 
-Download [SHA256SUMS.txt](https://github.com/bren-wp/Snapvere/releases/download/v0.2.10/SHA256SUMS.txt) **from the same package version**, then run:
+Download [SHA256SUMS.txt](https://github.com/bren-wp/Snapvere/releases/download/v0.2.16/SHA256SUMS.txt) **from the same package version**, then run:
 
 ```powershell
 Get-FileHash .\Snapvere-Portable.exe -Algorithm SHA256

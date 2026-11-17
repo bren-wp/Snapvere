@@ -1,7 +1,7 @@
 {
   "name": "snapvere-desktop",
   "private": true,
-  "version": "0.2.16",
+  "version": "0.2.17",
   "type": "module",
   "description": "Snapvere — brzi, privatni screenshot i screen-recording alat (desktop)",
   "scripts": {
@@ -11,8 +11,9 @@
     "tauri": "tauri",
     "lint": "tsc --noEmit --pretty false",
     "test:capture": "node --test --experimental-strip-types tests/capturePreferences.test.mjs",
-    "test:unit": "node --test --experimental-strip-types tests/capturePreferences.test.mjs tests/galleryPaging.test.mjs tests/playerPreferences.test.mjs tests/settingsPreferences.test.mjs tests/selectionGeometry.test.mjs tests/languages.test.mjs tests/recordingControls.test.mjs tests/mediaFormatting.test.mjs",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
+    "test:unit": "node --test --experimental-strip-types tests/capturePreferences.test.mjs tests/galleryPaging.test.mjs tests/playerPreferences.test.mjs tests/settingsPreferences.test.mjs tests/selectionGeometry.test.mjs tests/languages.test.mjs tests/recordingControls.test.mjs tests/mediaFormatting.test.mjs tests/picomatchSecurity.test.mjs",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "test:security": "node --test tests/picomatchSecurity.test.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",
@@ -41,5 +42,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/bren-wp/Snapvere.git"
+  },
+  "overrides": {
+    "picomatch": "npm:@ryotsu/picomatch@4.0.7-a"
   }
 }

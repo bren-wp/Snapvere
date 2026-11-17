@@ -31,7 +31,7 @@ use format::{read_format, SourceFormat};
 pub const RATE: u32 = 48_000;
 pub const CHANNELS: usize = 2;
 /// Više od ovoga u redu = zaostatak (npr. nakon pauze) → odbaci najstarije.
-const MAX_QUEUED_FRAMES: usize = RATE as usize * 2;
+pub(super) const MAX_QUEUED_FRAMES: usize = RATE as usize * 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
@@ -155,6 +155,17 @@ impl Mixer {
     }
 }
 
+/// Constrain a device packet to the maximum duration the mixer can retain.
+/// A corrupt driver frame count must never trigger an unbounded allocation.
+fn validate_packet_frames(frames: u32, sample_rate: u32) -> Result<(), String> {
+    if sample_rate == 0 || frames > sample_rate.saturating_mul(2) {
+        return Err(format!(
+            "WASAPI packet contains {frames} frames at {sample_rate} Hz (maximum 2 seconds)"
+        ));
+    }
+    Ok(())
+}
+
 impl Drop for Mixer {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
@@ -203,7 +214,9 @@ fn capture_thread(
                     .map_err(|e| format!("GetBuffer: {e}"))?;
 
                 scratch.clear();
-                let decoded = if flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 {
+                let decoded = if let Err(error) = validate_packet_frames(frames, fmt.rate) {
+                    Err(error)
+                } else if flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 {
                     scratch.resize(frames as usize * CHANNELS, 0.0);
                     Ok(())
                 } else if data.is_null() {
@@ -305,15 +318,57 @@ fn open(kind: Kind) -> Result<(IAudioClient, IAudioCaptureClient, SourceFormat),
     }
 }
 
+/// Convert the Windows WAVEFORMATEXTENSIBLE speaker layout to stereo weights.
+/// The speaker order follows the increasing bit positions in dwChannelMask.
+/// A bounded sum of channel weights prevents multichannel downmix clipping
+/// while preserving centre-channel speech and surround channels.
+fn downmix_weights(fmt: &SourceFormat) -> ([(f32, f32); 32], f32) {
+    let mut weights = [(0.0f32, 0.0f32); 32];
+    let mut mask = fmt.channel_mask;
+    for (i, weight) in weights.iter_mut().enumerate().take(fmt.channels) {
+        *weight = if mask != 0 {
+            let bit = mask & mask.wrapping_neg();
+            mask &= !bit;
+            match bit {
+                0x0001 | 0x0040 => (1.0, 0.0),   // front left, front left-of-center
+                0x0002 | 0x0080 => (0.0, 1.0),   // front right, front right-of-center
+                0x0004 => (0.707, 0.707),        // speech / front center
+                0x0008 => (0.25, 0.25),          // low-frequency effects
+                0x0010 | 0x0200 => (0.707, 0.0), // back/side left
+                0x0020 | 0x0400 => (0.0, 0.707), // back/side right
+                0x0100 => (0.5, 0.5),            // back center
+                _ => (0.25, 0.25),               // height / unspecified speakers
+            }
+        } else {
+            // Legacy multichannel PCM has no standard channel positions.
+            // Include all channels rather than dropping the centre/surround.
+            match i {
+                0 => (1.0, 0.0),
+                1 => (0.0, 1.0),
+                2 => (0.707, 0.707),
+                _ if i % 2 == 1 => (0.5, 0.0),
+                _ => (0.0, 0.5),
+            }
+        };
+    }
+    let left: f32 = weights.iter().map(|v| v.0).sum();
+    let right: f32 = weights.iter().map(|v| v.1).sum();
+    (weights, left.max(right).max(1.0))
+}
+
 /// Pretvori sirovi WASAPI paket u interleaved stereo f32 (izvorni sample rate).
 unsafe fn to_stereo_f32(data: *const u8, frames: usize, fmt: &SourceFormat, out: &mut Vec<f32>) {
     let ch = fmt.channels;
     let read = |i: usize| -> f32 {
         // i = indeks uzorka (frame * ch + kanal)
         match (fmt.float, fmt.bits) {
-            (true, 32) => *(data as *const f32).add(i),
-            (false, 16) => *(data as *const i16).add(i) as f32 / 32768.0,
-            (false, 32) => *(data as *const i32).add(i) as f32 / 2_147_483_648.0,
+            // WASAPI supplies a byte pointer, not an alignment guarantee.
+            // Read sample values without creating potentially unaligned references.
+            (true, 32) => std::ptr::read_unaligned(data.add(i * 4).cast::<f32>()),
+            (false, 16) => std::ptr::read_unaligned(data.add(i * 2).cast::<i16>()) as f32 / 32768.0,
+            (false, 32) => {
+                std::ptr::read_unaligned(data.add(i * 4).cast::<i32>()) as f32 / 2_147_483_648.0
+            }
             (false, 24) => {
                 let b = data.add(i * 3);
                 let v =
@@ -324,6 +379,7 @@ unsafe fn to_stereo_f32(data: *const u8, frames: usize, fmt: &SourceFormat, out:
             _ => 0.0,
         }
     };
+    let (weights, normalization) = downmix_weights(fmt);
     out.reserve(frames * CHANNELS);
     for f in 0..frames {
         let base = f * ch;
@@ -333,9 +389,19 @@ unsafe fn to_stereo_f32(data: *const u8, frames: usize, fmt: &SourceFormat, out:
                 out.push(m);
                 out.push(m);
             }
-            _ => {
+            2 => {
                 out.push(read(base));
                 out.push(read(base + 1));
+            }
+            _ => {
+                let (mut left, mut right) = (0.0f32, 0.0f32);
+                for (c, &(wl, wr)) in weights.iter().enumerate().take(ch) {
+                    let sample = read(base + c);
+                    left += sample * wl;
+                    right += sample * wr;
+                }
+                out.push(left / normalization);
+                out.push(right / normalization);
             }
         }
     }
@@ -454,6 +520,98 @@ mod tests {
             .check_health()
             .expect_err("failed audio must not be silent");
         assert!(error.contains("invalidation"));
+    }
+
+    #[test]
+    fn rejects_unbounded_wasapi_packet_frame_counts() {
+        assert!(validate_packet_frames(0, RATE).is_ok());
+        assert!(validate_packet_frames(RATE * 2, RATE).is_ok());
+        assert!(validate_packet_frames(RATE * 2 + 1, RATE).is_err());
+        assert!(validate_packet_frames(u32::MAX, RATE).is_err());
+        assert!(validate_packet_frames(1, 0).is_err());
+    }
+
+    #[test]
+    fn pcm16_and_float32_accept_misaligned_wasapi_byte_pointers() {
+        let pcm = SourceFormat {
+            rate: RATE,
+            channels: 2,
+            float: false,
+            bits: 16,
+            channel_mask: 0,
+        };
+        let mut pcm_bytes = [0u8; 5];
+        pcm_bytes[1..3].copy_from_slice(&16_384i16.to_le_bytes());
+        pcm_bytes[3..5].copy_from_slice(&(-16_384i16).to_le_bytes());
+        let mut pcm_out = Vec::new();
+        unsafe {
+            to_stereo_f32(pcm_bytes.as_ptr().add(1), 1, &pcm, &mut pcm_out);
+        }
+        assert_eq!(pcm_out, vec![0.5, -0.5]);
+
+        let float = SourceFormat {
+            rate: RATE,
+            channels: 2,
+            float: true,
+            bits: 32,
+            channel_mask: 0,
+        };
+        let mut float_bytes = [0u8; 9];
+        float_bytes[1..5].copy_from_slice(&0.25f32.to_le_bytes());
+        float_bytes[5..9].copy_from_slice(&(-0.75f32).to_le_bytes());
+        let mut float_out = Vec::new();
+        unsafe {
+            to_stereo_f32(float_bytes.as_ptr().add(1), 1, &float, &mut float_out);
+        }
+        assert_eq!(float_out, vec![0.25, -0.75]);
+    }
+
+    #[test]
+    fn multichannel_51_preserves_speech_and_surround_direction() {
+        // Windows 5.1 order: FL FR FC LFE BL BR.
+        let fmt = SourceFormat {
+            rate: RATE,
+            channels: 6,
+            float: true,
+            bits: 32,
+            channel_mask: 0x3f,
+        };
+        let decode = |samples: [f32; 6]| -> Vec<f32> {
+            let data: Vec<u8> = samples.iter().flat_map(|v| v.to_le_bytes()).collect();
+            let mut output = Vec::new();
+            unsafe { to_stereo_f32(data.as_ptr(), 1, &fmt, &mut output) };
+            output
+        };
+        let centre = decode([0.0, 0.0, 0.9, 0.0, 0.0, 0.0]);
+        assert!(centre[0] > 0.0);
+        assert_eq!(
+            centre[0], centre[1],
+            "centre speech must reach both speakers"
+        );
+        let surround = decode([0.0, 0.0, 0.0, 0.0, 0.8, 0.0]);
+        assert!(surround[0] > 0.0);
+        assert_eq!(surround[1], 0.0, "left rear must not leak right");
+        let loud = decode([1.0; 6]);
+        assert!(loud.iter().all(|v| *v <= 1.0), "avoid downmix clipping");
+    }
+
+    #[test]
+    fn multichannel_71_side_surround_is_preserved() {
+        // 7.1 order: FL FR FC LFE BL BR SL SR.
+        let fmt = SourceFormat {
+            rate: RATE,
+            channels: 8,
+            float: true,
+            bits: 32,
+            channel_mask: 0x63f,
+        };
+        let mut samples = [0.0f32; 8];
+        samples[7] = 0.8;
+        let data: Vec<u8> = samples.iter().flat_map(|v| v.to_le_bytes()).collect();
+        let mut out = Vec::new();
+        unsafe { to_stereo_f32(data.as_ptr(), 1, &fmt, &mut out) };
+        assert_eq!(out[0], 0.0);
+        assert!(out[1] > 0.0, "side right must reach right speaker");
     }
 
     #[test]
