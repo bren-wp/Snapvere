@@ -31,7 +31,7 @@ use format::{read_format, SourceFormat};
 pub const RATE: u32 = 48_000;
 pub const CHANNELS: usize = 2;
 /// Više od ovoga u redu = zaostatak (npr. nakon pauze) → odbaci najstarije.
-const MAX_QUEUED_FRAMES: usize = RATE as usize * 2;
+pub(super) const MAX_QUEUED_FRAMES: usize = RATE as usize * 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
@@ -155,6 +155,17 @@ impl Mixer {
     }
 }
 
+/// Constrain a device packet to the maximum duration the mixer can retain.
+/// A corrupt driver frame count must never trigger an unbounded allocation.
+fn validate_packet_frames(frames: u32, sample_rate: u32) -> Result<(), String> {
+    if sample_rate == 0 || frames > sample_rate.saturating_mul(2) {
+        return Err(format!(
+            "WASAPI packet contains {frames} frames at {sample_rate} Hz (maximum 2 seconds)"
+        ));
+    }
+    Ok(())
+}
+
 impl Drop for Mixer {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
@@ -203,7 +214,9 @@ fn capture_thread(
                     .map_err(|e| format!("GetBuffer: {e}"))?;
 
                 scratch.clear();
-                let decoded = if flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 {
+                let decoded = if let Err(error) = validate_packet_frames(frames, fmt.rate) {
+                    Err(error)
+                } else if flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 {
                     scratch.resize(frames as usize * CHANNELS, 0.0);
                     Ok(())
                 } else if data.is_null() {
@@ -311,9 +324,15 @@ unsafe fn to_stereo_f32(data: *const u8, frames: usize, fmt: &SourceFormat, out:
     let read = |i: usize| -> f32 {
         // i = indeks uzorka (frame * ch + kanal)
         match (fmt.float, fmt.bits) {
-            (true, 32) => *(data as *const f32).add(i),
-            (false, 16) => *(data as *const i16).add(i) as f32 / 32768.0,
-            (false, 32) => *(data as *const i32).add(i) as f32 / 2_147_483_648.0,
+            // WASAPI supplies a byte pointer, not an alignment guarantee.
+            // Read sample values without creating potentially unaligned references.
+            (true, 32) => std::ptr::read_unaligned(data.add(i * 4).cast::<f32>()),
+            (false, 16) => {
+                std::ptr::read_unaligned(data.add(i * 2).cast::<i16>()) as f32 / 32768.0
+            }
+            (false, 32) => {
+                std::ptr::read_unaligned(data.add(i * 4).cast::<i32>()) as f32 / 2_147_483_648.0
+            },
             (false, 24) => {
                 let b = data.add(i * 3);
                 let v =
@@ -454,6 +473,48 @@ mod tests {
             .check_health()
             .expect_err("failed audio must not be silent");
         assert!(error.contains("invalidation"));
+    }
+
+    #[test]
+    fn rejects_unbounded_wasapi_packet_frame_counts() {
+        assert!(validate_packet_frames(0, RATE).is_ok());
+        assert!(validate_packet_frames(RATE * 2, RATE).is_ok());
+        assert!(validate_packet_frames(RATE * 2 + 1, RATE).is_err());
+        assert!(validate_packet_frames(u32::MAX, RATE).is_err());
+        assert!(validate_packet_frames(1, 0).is_err());
+    }
+
+    #[test]
+    fn pcm16_and_float32_accept_misaligned_wasapi_byte_pointers() {
+        let pcm = SourceFormat {
+            rate: RATE,
+            channels: 2,
+            float: false,
+            bits: 16,
+        };
+        let mut pcm_bytes = [0u8; 5];
+        pcm_bytes[1..3].copy_from_slice(&16_384i16.to_le_bytes());
+        pcm_bytes[3..5].copy_from_slice(&(-16_384i16).to_le_bytes());
+        let mut pcm_out = Vec::new();
+        unsafe {
+            to_stereo_f32(pcm_bytes.as_ptr().add(1), 1, &pcm, &mut pcm_out);
+        }
+        assert_eq!(pcm_out, vec![0.5, -0.5]);
+
+        let float = SourceFormat {
+            rate: RATE,
+            channels: 2,
+            float: true,
+            bits: 32,
+        };
+        let mut float_bytes = [0u8; 9];
+        float_bytes[1..5].copy_from_slice(&0.25f32.to_le_bytes());
+        float_bytes[5..9].copy_from_slice(&(-0.75f32).to_le_bytes());
+        let mut float_out = Vec::new();
+        unsafe {
+            to_stereo_f32(float_bytes.as_ptr().add(1), 1, &float, &mut float_out);
+        }
+        assert_eq!(float_out, vec![0.25, -0.75]);
     }
 
     #[test]

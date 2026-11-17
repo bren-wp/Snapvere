@@ -9,6 +9,18 @@
 
 use super::*;
 
+#[cfg(windows)]
+#[test]
+fn audio_backlog_rejects_unrecoverable_gaps_and_arithmetic_overflow() {
+    let two_seconds = audio::MAX_QUEUED_FRAMES as i64;
+    assert_eq!(validate_audio_backlog(0, 0).unwrap(), 0);
+    assert_eq!(validate_audio_backlog(1_000, 900).unwrap(), 0);
+    assert_eq!(validate_audio_backlog(0, two_seconds).unwrap(), two_seconds);
+    assert!(validate_audio_backlog(0, two_seconds + 1).is_err());
+    assert!(validate_audio_backlog(-1, i64::MAX).is_err());
+}
+
+
 #[test]
 fn crop_rect_poravnava_na_parne_dimenzije() {
     let t = RecordTarget {
