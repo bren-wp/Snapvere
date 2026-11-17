@@ -21,3 +21,13 @@
 - `cargo fmt --all -- --check`, `cargo test --locked`, `cargo clippy --all-targets --locked -- -D warnings`, RustSec, npm/TS/frontend and IPC checks, plus Windows Portable/NSIS/MSI packaging and hashes must pass for this commit.
 - Hardware Windows 10/11 real devices and WebView2: MIC+loopback including unplug, D3D/DXGI, pause/resume, long sleep/resume, MP4 A/V synchronization, high DPI/multi-monitor, install/upgrade/uninstall, screen readers and all 12 localized pixel-reference screenshots are not established by GitHub CI.
 - Any release without documented physical QA should remain **prerelease**. Do not treat an existing GitHub release's stable flag as physical acceptance.
+
+## Added functional enhancement: multichannel Windows system audio
+
+WAVEFORMATEXTENSIBLE provides a speaker channel mask that identifies center and surround channels. The prior stereo-only decoder silently omitted every channel beyond the first two, risking missing dialogue in 5.1/7.1 recordings.
+
+- Validate nonzero speaker-mask channel counts, then preserve front center, LFE, rear and side channels when producing the stereo PCM16 stream.
+- Apply bounded gain normalization so the sum of input speakers cannot raise the stereo downmix above unity for in-range input PCM.
+- Retain direct mono/stereo behavior, including the original 48 kHz resampler.
+- Regression tests validate center voice, rear direction, side-right 7.1 preservation and clipping protection.
+- Real speakers, format handling and subjective 5.1/7.1 listening still require physical Windows QA.

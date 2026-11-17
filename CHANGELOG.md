@@ -8,7 +8,8 @@ SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO
 - Decode PCM16, PCM32 and IEEE float32 with unaligned-safe byte-pointer reads, eliminating undefined behavior when a driver returns an unaligned sample pointer.
 - Bound MP4 audio catch-up to the mixer's two-second retention capacity: refuse unrecoverable gaps instead of generating long, misleading silent audio tracks.
 - Encode recoverable audio backlogs in <=500 ms blocks instead of one potentially excessive PCM allocation, preserving time ordering and existing failure-aware recording cleanup.
-- Add hardware-independent Windows Rust tests for oversized packet counts, misaligned samples and audio backlog overflow/boundaries.
+- Add hardware-independent Windows Rust tests for oversized packet counts, misaligned samples, audio backlog overflow/boundaries and 5.1/7.1 multichannel downmix.
+- Preserve center-channel speech and side/rear surround from 5.1/7.1 Windows audio using speaker-mask-aware normalized stereo downmix; reject malformed speaker masks.
 - Keep saved settings, 12-language interface, window-scoped Tauri IPC, crash-recoverable SQLite gallery and existing recording formats unchanged.
 - Full physical Windows capture/audio/DPI/installer QA remains an explicit prerelease gate; see `docs/AUDIT-v0.2.17-P1-audio-memory.md`.
 

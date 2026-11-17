@@ -13,6 +13,8 @@ pub(super) struct SourceFormat {
     pub(super) channels: usize,
     pub(super) float: bool,
     pub(super) bits: u16,
+    /// WAVEFORMATEXTENSIBLE speaker mask (zero for legacy or unspecified layouts).
+    pub(super) channel_mask: u32,
 }
 
 fn validate_layout(fmt: &SourceFormat, valid_bits: u16, block_align: u16) -> Result<(), String> {
@@ -59,7 +61,7 @@ pub(super) unsafe fn read_format(ptr: *const WAVEFORMATEX) -> Result<SourceForma
     }
     let base = &*ptr;
     let tag = u32::from(base.wFormatTag);
-    let (float, valid_bits) = if tag == WAVE_FORMAT_EXTENSIBLE {
+    let (float, valid_bits, channel_mask) = if tag == WAVE_FORMAT_EXTENSIBLE {
         let required = size_of::<WAVEFORMATEXTENSIBLE>() - size_of::<WAVEFORMATEX>();
         if usize::from(base.cbSize) < required {
             return Err("Truncated WASAPI extensible format".into());
@@ -74,11 +76,11 @@ pub(super) unsafe fn read_format(ptr: *const WAVEFORMATEX) -> Result<SourceForma
         } else {
             return Err("Unsupported WASAPI subtype (expected PCM or IEEE float)".into());
         };
-        (float, ext.Samples.wValidBitsPerSample)
+        (float, ext.Samples.wValidBitsPerSample, ext.dwChannelMask)
     } else if tag == WAVE_FORMAT_IEEE_FLOAT {
-        (true, base.wBitsPerSample)
+        (true, base.wBitsPerSample, 0)
     } else if tag == WAVE_FORMAT_PCM {
-        (false, base.wBitsPerSample)
+        (false, base.wBitsPerSample, 0)
     } else {
         return Err(format!("Unsupported WASAPI format tag: {tag}"));
     };
@@ -87,8 +89,16 @@ pub(super) unsafe fn read_format(ptr: *const WAVEFORMATEX) -> Result<SourceForma
         channels: usize::from(base.nChannels),
         float,
         bits: base.wBitsPerSample,
+        channel_mask,
     };
     validate_layout(&fmt, valid_bits, base.nBlockAlign)?;
+    if channel_mask != 0 && channel_mask.count_ones() as usize != fmt.channels {
+        return Err(format!(
+            "WASAPI speaker mask declares {} channels but source has {}",
+            channel_mask.count_ones(),
+            fmt.channels
+        ));
+    }
     Ok(fmt)
 }
 
@@ -136,6 +146,29 @@ mod tests {
         let fmt = unsafe { read_format(p) }.expect("valid float32");
         assert_eq!(fmt.bits, 32);
         assert!(fmt.float);
+        assert_eq!(fmt.channel_mask, 3);
+    }
+
+    #[test]
+    fn rejects_mismatched_speaker_masks() {
+        let ext = WAVEFORMATEXTENSIBLE {
+            Format: WAVEFORMATEX {
+                wFormatTag: WAVE_FORMAT_EXTENSIBLE as u16,
+                nChannels: 6,
+                nSamplesPerSec: 48_000,
+                nAvgBytesPerSec: 576_000,
+                nBlockAlign: 12,
+                wBitsPerSample: 16,
+                cbSize: 22,
+            },
+            Samples: WAVEFORMATEXTENSIBLE_0 {
+                wValidBitsPerSample: 16,
+            },
+            dwChannelMask: 3,
+            SubFormat: KSDATAFORMAT_SUBTYPE_PCM,
+        };
+        let p = (&ext as *const WAVEFORMATEXTENSIBLE).cast::<WAVEFORMATEX>();
+        assert!(unsafe { read_format(p) }.is_err());
     }
 
     #[test]
