@@ -40,7 +40,12 @@ for path in CODE:
             raise AssertionError(
                 f"Native external endpoint requires review: {path}:{number}: {line.strip()}"
             )
-        if pattern.search(line):
+        # The reviewed update feed is the only allowed frontend network call.
+        official_feed = (
+            path == DESKTOP / "lib/updateFeed.ts"
+            and line.strip().startswith("const response = await fetch(UPDATE_FEED_URL,")
+        )
+        if pattern.search(line) and not official_feed:
             raise AssertionError(
                 f"Unreviewed network/process primitive: {path}:{number}: {line.strip()}"
             )
@@ -66,5 +71,9 @@ for path in SITE.rglob("*.js"):
 
 assert count >= 40, f"Native/frontend scan unexpectedly covered only {count} files"
 print(f"Source backdoor-pattern guard: {count} native/frontend source files checked")
-print("No direct process spawning, native outbound network, or webview network calls detected")
+feed = (DESKTOP / "lib/updateFeed.ts").read_text(encoding="utf-8")
+assert 'https://update.snapvere.com/stable.json' in feed
+assert 'https://snapvere.com/download/' in feed
+assert 'credentials: "omit"' in feed and 'redirect: "error"' in feed
+print("No unreviewed process spawning or network calls; only the official read-only update feed is allowed")
 print("Site consented Google Analytics is the sole explicitly reviewed third-party script")
