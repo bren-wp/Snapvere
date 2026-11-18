@@ -219,7 +219,14 @@ pub fn update_record_hotkey(app: AppHandle, accelerator: String) -> Result<(), S
 
 #[cfg(test)]
 mod shortcut_validation_tests {
-    use super::validate_pair;
+    use super::{validate_pair, DEFAULT_HOTKEYS};
+
+    #[test]
+    fn print_screen_is_first_choice_for_screenshot_shortcut() {
+        assert_eq!(DEFAULT_HOTKEYS.first().copied(), Some("PrintScreen"));
+        assert!(DEFAULT_HOTKEYS.len() >= 2, "Windows may reserve PrintScreen");
+        assert!(DEFAULT_HOTKEYS.iter().skip(1).all(|key| *key != "PrintScreen"));
+    }
 
     #[test]
     fn independent_capture_and_record_keys_are_allowed() {
