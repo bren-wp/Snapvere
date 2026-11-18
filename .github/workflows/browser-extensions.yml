@@ -1,0 +1,64 @@
+name: SNAPVERE browser extension static QA and source bundles
+on:
+  push:
+    paths:
+      - 'chrome/**'
+      - 'edge/**'
+      - 'brave/**'
+      - 'opera/**'
+      - 'vivaldi/**'
+      - 'firefox/**'
+      - 'safari/**'
+      - 'extensions/**'
+      - 'tools/build_browser_extensions.py'
+      - 'tools/check_browser_extensions.py'
+      - '.github/workflows/browser-extensions.yml'
+  pull_request:
+    paths:
+      - 'chrome/**'
+      - 'edge/**'
+      - 'brave/**'
+      - 'opera/**'
+      - 'vivaldi/**'
+      - 'firefox/**'
+      - 'safari/**'
+      - 'extensions/**'
+      - 'tools/build_browser_extensions.py'
+      - 'tools/check_browser_extensions.py'
+      - '.github/workflows/browser-extensions.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Check reproducible browser-specific sources
+        run: python tools/build_browser_extensions.py --check
+      - name: Least-privilege and first-party links audit
+        run: python tools/check_browser_extensions.py
+      - name: Validate all browser JavaScript syntax
+        run: |
+          for browser in chrome edge brave opera vivaldi firefox safari; do
+            for src in capture.js background.js popup.js; do
+              node --check "$browser/$src"
+            done
+          done
+      - name: Test captured tab data and seven manifest variants
+        run: node --test extensions/tests/*.test.mjs
+      - name: Assemble versioned browser-specific source archives
+        run: python tools/build_browser_extensions.py --build --zip-dir browser-extension-dist
+      - name: Upload seven extension ZIPs for manual browser QA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Snapvere-Browser-Extensions-v0.1.0
+          path: browser-extension-dist/*.zip
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>SNAPVERE — Browser capture</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="popup">
+    <header class="header">
+      <div class="mark" aria-hidden="true">S</div>
+      <div class="identity">
+        <strong>SNAPVERE</strong>
+        <span>Browser capture</span>
+      </div>
+      <span class="label">LOCAL</span>
+    </header>
+    <section class="panel" aria-label="Screenshot action">
+      <h1>Capture your tab</h1>
+      <p>Save the visible part of the current tab as a PNG file on your device.</p>
+      <button id="capture" class="capture" type="button">
+        <span aria-hidden="true">▣</span> Capture visible tab
+      </button>
+      <p id="status" class="status" role="status" aria-live="polite">Ready to capture.</p>
+      <p id="note" class="note">Only the active tab is accessed when you click.</p>
+    </section>
+    <footer>
+      <span>No account · No cloud uploads</span>
+      <a href="https://snapvere.com/" target="_blank" rel="noopener noreferrer"
+         aria-label="Official Snapvere website">snapvere.com</a>
+    </footer>
+  </main>
+  <script src="capture.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
