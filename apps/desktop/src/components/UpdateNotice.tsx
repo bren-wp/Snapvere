@@ -78,8 +78,10 @@ export default function UpdateNotice({
     catch { return true; }
   });
   const controller = useRef<AbortController | null>(null);
+  const lastAttemptAt = useRef(0);
 
   const check = useCallback(async () => {
+    lastAttemptAt.current = Date.now();
     controller.current?.abort();
     const active = new AbortController();
     controller.current = active;
@@ -102,7 +104,22 @@ export default function UpdateNotice({
   useEffect(() => {
     if (autoEnabled) void check();
     else setState("current");
-    return () => controller.current?.abort();
+    // Check again while the app stays open. A minimized-to-tray window checks
+    // when it regains focus, avoiding polling a hidden capture application.
+    const onFocus = () => {
+      if (autoEnabled && Date.now() - lastAttemptAt.current >= 5 * 60_000) {
+        void check();
+      }
+    };
+    const interval = window.setInterval(() => {
+      if (autoEnabled && document.visibilityState === "visible") void check();
+    }, 60 * 60_000);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      controller.current?.abort();
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [autoEnabled, check]);
 
   const changeAuto = (enabled: boolean) => {
