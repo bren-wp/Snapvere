@@ -78,6 +78,12 @@ structure, supported language codes, native tray mapping and test commands.
   until its provenance and an upstream replacement are validated.
 - Resolve Settings window creation/focus errors and recover safely if opening
   the diagnostics log fails.
+- **Print Screen starts screen selection:** normal EXE launches show the
+  Snapvere window, while the optional Windows login autostart runs it quietly
+  in the system tray with a registered PrintScreen global shortcut.
+  Settings → Hotkeys shows the *actual* OS registration, provides a one-click
+  PrintScreen binding action and explains Windows Snipping Tool conflicts.
+  Without a running tray process, Windows cannot deliver the shortcut.
 - Remove third-party and GitHub links from public app controls: only
   `snapvere.com` is linked from the UI; the developer name remains plain text.
 - Update server setup and security requirements:
