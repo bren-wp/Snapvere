@@ -5,6 +5,8 @@ import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { emit } from "@tauri-apps/api/event";
+import UpdateNotice from "../components/UpdateNotice";
+import { OFFICIAL_DOWNLOAD_URL } from "../lib/updateFeed";
 import { ipc } from "../lib/ipc";
 import { LANGUAGES, type Language } from "../lib/i18n";
 import { useLanguage } from "../lib/LanguageProvider";
@@ -451,9 +453,9 @@ export default function Settings() {
             <div className="mt-3 flex flex-wrap gap-3 text-sm">
               <button
                 type="button"
-                onClick={() => void openUrl("https://brendigo.com").catch(console.error)}
+                onClick={() => void openUrl("https://snapvere.com/").catch((error) => setNotice(String(error)))
                 className="font-medium text-accent underline-offset-4 hover:underline focus-visible:underline"
-                aria-label={t("Open Brendigo website")}
+                aria-label={t("Open Snapvere website")}
               >
                 {t("Developer")}: Brendigo
               </button>
@@ -465,6 +467,11 @@ export default function Settings() {
               >
                 {t("Official website")}: snapvere.com
               </button>
+            </div>
+            <div className="mt-4">
+              <UpdateNotice mode="settings" onAction={() => {
+                void openUrl(OFFICIAL_DOWNLOAD_URL).catch((error) => setNotice(String(error)));
+              }} />
             </div>
             <div className="mt-5 rounded-xl border border-border/60 bg-elevated/20 p-4">
               <div className="text-sm font-medium">{t("Commercial license agreement")}</div>
@@ -486,8 +493,13 @@ export default function Settings() {
               </p>
               <button
                 onClick={async () => {
-                  const path = await ipc.logFilePath();
-                  if (path) await openPath(path);
+                  try {
+                    const path = await ipc.logFilePath();
+                    if (path) await openPath(path);
+                  } catch (error) {
+                    console.error("Cannot open diagnostics log", error);
+                    setNotice(String(error));
+                  }
                 }}
                 className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-elevated"
               >
