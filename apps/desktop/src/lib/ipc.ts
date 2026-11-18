@@ -87,6 +87,9 @@ export const ipc = {
     invoke<boolean>("save_image_as", { base64Png, format, quality }),
   copyBase64ToClipboard: (base64Png: string) =>
     invoke<void>("copy_base64_to_clipboard", { base64Png }),
+  /** Import the PNG the user explicitly copied from a browser extension. */
+  importClipboardImage: () =>
+    invoke<Screenshot>("import_clipboard_image"),
 
   // ── galerija ──
   listScreenshots: (limit?: number, offset?: number) =>
