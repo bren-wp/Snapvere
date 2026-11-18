@@ -61,9 +61,9 @@ if ($Hud) {
   $matches = [System.Collections.Generic.List[IntPtr]]::new()
   $callback = [SnapvereNativeQa+EnumProc] {
     param([IntPtr]$hwnd, [IntPtr]$data)
-    [uint32]$pid = 0
-    [void][SnapvereNativeQa]::GetWindowThreadProcessId($hwnd, [ref]$pid)
-    if (($ids -contains $pid) -and [SnapvereNativeQa]::IsWindowVisible($hwnd)) {
+    [uint32]$windowProcessId = 0
+    [void][SnapvereNativeQa]::GetWindowThreadProcessId($hwnd, [ref]$windowProcessId)
+    if (($ids -contains $windowProcessId) -and [SnapvereNativeQa]::IsWindowVisible($hwnd)) {
       $caption = [System.Text.StringBuilder]::new(300)
       [void][SnapvereNativeQa]::GetWindowText($hwnd, $caption, $caption.Capacity)
       if ($caption.ToString() -like '*Snapvere*Recording*') { $matches.Add($hwnd) }
@@ -75,9 +75,9 @@ if ($Hud) {
   $target = $matches[0]
 } else {
   $target = [SnapvereNativeQa]::GetForegroundWindow()
-  [uint32]$pid = 0
-  [void][SnapvereNativeQa]::GetWindowThreadProcessId($target, [ref]$pid)
-  if ($ids -notcontains $pid) {
+  [uint32]$windowProcessId = 0
+  [void][SnapvereNativeQa]::GetWindowThreadProcessId($target, [ref]$windowProcessId)
+  if ($ids -notcontains $windowProcessId) {
     throw 'The foreground window is not owned by Snapvere. Activate the intended app window.'
   }
 }
