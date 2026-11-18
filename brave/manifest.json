@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "SNAPVERE — Brave",
+  "version": "0.1.0",
+  "description": "Capture visible tabs privately as local PNG screenshots. No uploads or tracking.",
+  "permissions": [
+    "activeTab",
+    "downloads"
+  ],
+  "action": {
+    "default_title": "Capture tab with SNAPVERE",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "commands": {
+    "capture-visible-tab": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+8",
+        "mac": "Command+Shift+8"
+      },
+      "description": "Save a screenshot of the visible tab"
+    }
+  }
+}
