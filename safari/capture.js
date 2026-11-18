@@ -3,7 +3,8 @@
 (function installSnapvereCapture(root) {
   const PREFIX = "data:image/png;base64,";
   function timestamp(now) {
-    if (!(now instanceof Date) || Number.isNaN(now.getTime())) {
+    if (Object.prototype.toString.call(now) !== "[object Date]" ||
+        !Number.isFinite(now.getTime())) {
       throw new TypeError("Valid timestamp required");
     }
     return now.toISOString().replace(/[:.]/g, "-");
