@@ -1,0 +1,83 @@
+name: SNAPVERE v0.2.18 verified npm security patch update
+
+# One-shot audited update restricted to the existing v0.2.18 PR branch.
+# Only package.json + its generated package-lock.json may be committed.
+# GITHUB_TOKEN is available only in the final push step, after all checks.
+on:
+  push:
+    branches: ["fix/v0.2.18-mf-com-lifecycle-and-release-qa"]
+    paths: [".github/workflows/npm-patch-v0218.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  checked-npm-update:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Install current graph without lifecycle scripts
+        working-directory: apps/desktop
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Update exactly the packages confirmed outdated by GitHub npm report
+        working-directory: apps/desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --save --ignore-scripts --no-audit --no-fund \
+            @tauri-apps/api@2.12.5 lucide-react@1.75.0
+          npm install --save-dev --ignore-scripts --no-audit --no-fund \
+            @tauri-apps/cli@2.12.6
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typecheck, unit tests and build against the updated lockfile
+        working-directory: apps/desktop
+        run: |
+          npm run lint
+          npm run test:unit
+          npm run build
+      - name: Reject high and critical supply-chain vulnerabilities
+        working-directory: apps/desktop
+        run: npm audit --audit-level=high
+      - name: Keep IPC contracts, patched fork and brand checks
+        run: |
+          python tools/check_dependency_policy.py
+          python tools/check_ipc_contract.py
+          python tools/check_frontend_security.py
+          python tools/check_brand_tokens.py
+      - name: Reject updates outside npm manifest and lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          outside=$(git diff --name-only -- . ':!apps/desktop/package.json' ':!apps/desktop/package-lock.json')
+          if [ -n "$outside" ]; then
+            echo "::error::Unexpected changed paths: $outside"
+            exit 1
+          fi
+      - name: Push verified npm changes back to this PR branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/desktop/package.json apps/desktop/package-lock.json
+          if git diff --cached --quiet; then
+            echo 'No npm changes to commit'
+            exit 0
+          fi
+          git commit -m 'chore(deps): verify and update Tauri API/CLI and Lucide'
+          gh auth setup-git
+          git fetch origin "$GITHUB_REF_NAME"
+          git rebase "origin/$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"
