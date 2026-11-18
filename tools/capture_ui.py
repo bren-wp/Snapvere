@@ -59,8 +59,14 @@ TAURI_PREVIEW = r"""
         if (command === "plugin:store|load" || command === "plugin:store|new") return 1;
         // The simulated store must agree with the persisted startup theme.
         // Without this, a light screenshot falsely shows "Dark" as selected.
-        if (command === "plugin:store|get" && args?.key === "theme") {
-          return localStorage.getItem("snapvere-theme") === "light" ? "light" : "dark";
+        // Tauri's Store.get guest JS destructures [value, exists].
+        // Returning a bare string or null makes the preview silently reject
+        // all preferences (or treat "light" as the one-character value "l").
+        if (command === "plugin:store|get") {
+          if (args?.key === "theme") {
+            return [localStorage.getItem("snapvere-theme") === "light" ? "light" : "dark", true];
+          }
+          return [null, false];
         }
         return null;
       }
