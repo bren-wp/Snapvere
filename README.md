@@ -13,9 +13,9 @@ A focused Windows capture workspace from **[BRENDIGO](https://brendigo.com)**.
 [![Product](https://img.shields.io/badge/Product-SNAPVERE-7648eb?style=flat-square)](https://snapvere.com)
 [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-141416?style=flat-square)](https://snapvere.com/download/)
 [![Privacy](https://img.shields.io/badge/Storage-Local--first-141416?style=flat-square)](https://snapvere.com/privacy/)
-[![Release](https://img.shields.io/github/v/release/bren-wp/Snapvere?style=flat-square)](https://github.com/bren-wp/Snapvere/releases)
+[![Updates](https://img.shields.io/badge/Updates-SNAPVERE-7648eb?style=flat-square)](https://snapvere.com/download/)
 
-[**🌐 Public SNAPVERE website (.NET edition)**](https://snapvere.com/) · [**⬇️ Tauri / Rust Windows releases**](https://github.com/bren-wp/Snapvere/releases) · [**🔐 Website privacy**](https://snapvere.com/privacy/)
+[**🌐 Official SNAPVERE website**](https://snapvere.com/) · [**⬇️ Official downloads**](https://snapvere.com/download/) · [**🔐 Website privacy**](https://snapvere.com/privacy/)
 
 <img src="site/og.png" alt="Original SNAPVERE branded product artwork" width="860" />
 
@@ -24,10 +24,10 @@ A focused Windows capture workspace from **[BRENDIGO](https://brendigo.com)**.
 ---
 
 > **Distribution notice:** This repository builds the **Tauri 2 / Rust** Windows
-> edition of SNAPVERE. The latest published GitHub release is **v0.2.17**;
-> **v0.2.18** is a development candidate pending CI and hardware QA. The
-> published v0.2.17 is flagged stable on GitHub but lacks documented physical
-> Windows acceptance; it must be treated as a preview.
+> edition of SNAPVERE. The latest previous published source-code edition is **v0.2.18**.
+> **v0.2.19** is the next source-code candidate and requires CI approval.
+> Physical Windows 10/11 acceptance remains undocumented for the existing
+> public packages, regardless of their GitHub release labels.
 > The publicly deployed snapvere.com product distributes a separate .NET / WinUI 3
 > edition. Their installers, versions, licenses and update paths are not interchangeable.
 > The production website, email download flow, and its binaries are not modified
@@ -62,6 +62,34 @@ perfect translation or pixel-level visual equivalence.
 
 See [localization and QA guidance](docs/LOCALIZATION.md) for the catalog
 structure, supported language codes, native tray mapping and test commands.
+
+## v0.2.19 — stability, manual dependencies and self-hosted updates
+
+- New privacy-respecting, official-only update notification feed at
+  `https://update.snapvere.com/stable.json`, in Home and Settings → About.
+  Users can check manually or turn off automatic startup checks. Updated
+  versions open only the [official SNAPVERE download page](https://snapvere.com/download/);
+  untrusted manifest URLs are rejected and no executable is auto-installed.
+- Remove Dependabot and scheduled dependency updater bots. Refresh npm and
+  Rust dependencies manually, backed by strict TypeScript/Rust, Windows and
+  security CI, and keep lockfiles/SBOM consistent.
+- Update Windows API, bundled SQLite and base64 to their tested current
+  supported major versions. Keep the audited pinned build-tool override
+  until its provenance and an upstream replacement are validated.
+- Resolve Settings window creation/focus errors and recover safely if opening
+  the diagnostics log fails.
+- **Print Screen starts screen selection:** normal EXE launches show the
+  Snapvere window, while the optional Windows login autostart runs it quietly
+  in the system tray with a registered PrintScreen global shortcut.
+  Settings → Hotkeys shows the *actual* OS registration, provides a one-click
+  PrintScreen binding action and explains Windows Snipping Tool conflicts.
+  Without a running tray process, Windows cannot deliver the shortcut.
+- Remove third-party and GitHub links from public app controls: only
+  `snapvere.com` is linked from the UI; the developer name remains plain text.
+- Update server setup and security requirements:
+  [docs/UPDATE-SERVER.md](docs/UPDATE-SERVER.md).
+- Native Windows 10/11 hardware capture, audio, scaling, installer upgrade and
+  per-screen 1:1 reference matching still require physical acceptance.
 
 ## v0.2.18 — COM lifecycle and release QA (development candidate)
 

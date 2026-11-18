@@ -75,10 +75,12 @@ pub fn register_defaults(app: &AppHandle) -> (Option<String>, Option<String>) {
                 .map(|s| s.to_string())
         });
 
-    if let Err(e) = apply(app, capture.clone(), record.clone()) {
+    if let Err(e) = apply(app, capture, record) {
         log(&format!("hotkeys: {e}"));
     }
-    (capture, record)
+    // Never show a guessed PrintScreen binding if Windows reserved it or
+    // registration failed between the availability probe and final bind.
+    current()
 }
 
 /// Probna registracija: je li kombinacija slobodna u sustavu.
@@ -217,7 +219,20 @@ pub fn update_record_hotkey(app: AppHandle, accelerator: String) -> Result<(), S
 
 #[cfg(test)]
 mod shortcut_validation_tests {
-    use super::validate_pair;
+    use super::{validate_pair, DEFAULT_HOTKEYS};
+
+    #[test]
+    fn print_screen_is_first_choice_for_screenshot_shortcut() {
+        assert_eq!(DEFAULT_HOTKEYS.first().copied(), Some("PrintScreen"));
+        assert!(
+            DEFAULT_HOTKEYS.len() >= 2,
+            "Windows may reserve PrintScreen"
+        );
+        assert!(DEFAULT_HOTKEYS
+            .iter()
+            .skip(1)
+            .all(|key| *key != "PrintScreen"));
+    }
 
     #[test]
     fn independent_capture_and_record_keys_are_allowed() {

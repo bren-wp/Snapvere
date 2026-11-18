@@ -19,6 +19,15 @@ use db::Db;
 use logging::log;
 use state::AppState;
 
+/// Windows autostart launches a resident tray instance without a visible
+/// gallery, so PrintScreen remains registered after sign-in. A manual launch
+/// must show the main window rather than seeming to do nothing.
+const BACKGROUND_START_ARG: &str = "--snapvere-startup-hidden";
+
+fn is_background_start(args: impl IntoIterator<Item = String>) -> bool {
+    args.into_iter().any(|arg| arg == BACKGROUND_START_ARG)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Panic hook prije svega ostalog — inače prvi panic prođe bez traga.
@@ -52,7 +61,7 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None::<Vec<&str>>,
+            Some(vec![BACKGROUND_START_ARG]),
         ))
         // ── setup: log, baza, tray, hotkeyi ──────────────────────
         .setup(|app| {
@@ -102,6 +111,16 @@ pub fn run() {
                 log(&format!("pred-kreiranje prozora snimanja: {e}"));
             }
             record::warm_up();
+
+            // Manual .exe launch opens Snapvere. When Windows starts Snapvere
+            // at login it remains in the tray; its registered global
+            // PrintScreen shortcut opens the native capture overlay on demand.
+            if !is_background_start(std::env::args().skip(1)) {
+                if let Err(error) = commands::show_home(app.handle().clone()) {
+                    log(&format!("cannot show Snapvere on launch: {error}"));
+                    return Err(error.into());
+                }
+            }
 
             Ok(())
         })
@@ -257,5 +276,35 @@ fn show_database_error(message: &str) {
             PCWSTR(title.as_ptr()),
             MB_OK | MB_ICONERROR,
         );
+    }
+}
+
+#[cfg(test)]
+mod startup_arg_tests {
+    use super::is_background_start;
+
+    #[test]
+    fn normal_exe_launch_shows_the_main_window() {
+        assert!(!is_background_start(std::iter::empty()));
+        assert!(!is_background_start(["--help".to_owned()]));
+    }
+
+    #[test]
+    fn autostart_with_hidden_flag_keeps_hotkeys_in_tray() {
+        assert!(is_background_start(
+            ["--snapvere-startup-hidden".to_owned()]
+        ));
+        assert!(is_background_start([
+            "--unrelated".to_owned(),
+            "--snapvere-startup-hidden".to_owned(),
+        ]));
+    }
+
+    #[test]
+    fn cannot_hide_by_prefix_or_partial_argument() {
+        assert!(!is_background_start([
+            "--snapvere-startup-hidden=1".to_owned()
+        ]));
+        assert!(!is_background_start(["--hidden".to_owned()]));
     }
 }

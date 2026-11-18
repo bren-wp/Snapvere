@@ -11,7 +11,7 @@ import tomllib
 root = Path(__file__).resolve().parents[1]
 cargo = root / "apps/desktop/src-tauri"
 manifest = (cargo / "Cargo.toml").read_text(encoding="utf-8")
-assert 'rusqlite = { version = "0.42", features = ["bundled"] }' in manifest, (
+assert 'rusqlite = { version = "0.43", features = ["bundled"] }' in manifest, (
     "Bundled SQLite must use a patched rusqlite release"
 )
 lock = tomllib.loads((cargo / "Cargo.lock").read_text(encoding="utf-8"))

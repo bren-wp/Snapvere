@@ -21,6 +21,7 @@ import WindowFrame from "../components/WindowFrame";
 import Viewer from "../components/Viewer";
 import CaptureCard from "../components/home/CaptureCard";
 import EmptyGallery from "../components/home/EmptyGallery";
+import UpdateNotice from "../components/UpdateNotice";
 
 type Filter = "all" | "images" | "videos";
 const PAGE_SIZE = 120;
@@ -201,15 +202,32 @@ export default function Home() {
     }
   };
   const openSettings = async () => {
-    const existing = await WebviewWindow.getByLabel("settings");
-    if (existing) return existing.setFocus();
-    new WebviewWindow("settings", {
-      url: "index.html#settings",
-      title: `Snapvere — ${t("Settings")}`,
-      width: 860,
-      height: 660,
-      center: true,
-    });
+    try {
+      const existing = await WebviewWindow.getByLabel("settings");
+      if (existing) {
+        await existing.show();
+        await existing.setFocus();
+        return;
+      }
+      const settingsWindow = new WebviewWindow("settings", {
+        url: "index.html#settings",
+        title: `Snapvere — ${t("Settings")}`,
+        width: 860,
+        height: 660,
+        center: true,
+      });
+      // WebView2 creation errors are asynchronous; never leave a rejected
+      // event registration or a silent failure after clicking Settings.
+      void settingsWindow.once("tauri://error", (event) => {
+        console.error("Could not open Settings", event.payload);
+        setToast(`${t("Settings")}: ${String(event.payload)}`);
+      }).catch((error) => {
+        console.error("Settings window error listener failed", error);
+      });
+    } catch (error) {
+      console.error("Cannot open Settings", error);
+      setToast(`${t("Settings")}: ${String(error)}`);
+    }
   };
 
   return (
@@ -278,6 +296,7 @@ export default function Home() {
             <ArrowUpRight className="snapvere-action-arrow" size={17} aria-hidden="true" />
           </button>
         </div>
+        <div className="mt-3"><UpdateNotice mode="home" onAction={openSettings} /></div>
       </header>
 
       <section className="snapvere-gallery-controls shrink-0 px-5 py-4" aria-label={t("Gallery controls")}>
