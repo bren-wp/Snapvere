@@ -4,6 +4,10 @@ name: SNAPVERE dependency freshness and security report
 # granted contents:write to jobs running on freshly downloaded dependencies.
 # Dependabot handles update PR creation; this report never writes to GitHub.
 on:
+  # An update to this policy is audited on the PR branch as well.
+  push:
+    branches: ["feature/**", "fix/**"]
+    paths: [".github/workflows/dependency-refresh.yml"]
   workflow_dispatch:
   schedule:
     - cron: '30 4 * * 1'
