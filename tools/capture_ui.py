@@ -75,7 +75,7 @@ TAURI_PREVIEW = r"""
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True, args=["--disable-web-security"])
     app = browser.new_context(viewport={"width": 1120, "height": 740},
-                              device_scale_factor=1, color_scheme="dark")
+                              device_scale_factor=1, color_scheme="dark", reduced_motion="reduce")
     # Re-use an actual SNAPVERE screenshot as the editor's image fixture.
     editor_source = ROOT / "site/screenshots/home.png"
     assert editor_source.is_file(), "SNAPVERE editor preview fixture is missing"
@@ -208,7 +208,7 @@ with sync_playwright() as p:
     # The same real React screens must also be exercised with light-mode tokens.
     # These are synthetic browser previews, not Windows/WebView2 acceptance.
     light = browser.new_context(viewport={"width": 1120, "height": 740},
-                                device_scale_factor=1, color_scheme="light")
+                                device_scale_factor=1, color_scheme="light", reduced_motion="reduce")
     light.add_init_script("try { localStorage.setItem('snapvere-theme', 'light'); } catch {}")
     light.add_init_script("window.__SNAPVERE_EDITOR_IMAGE = " + json.dumps(editor_uri))
     light.add_init_script(TAURI_PREVIEW)
@@ -263,7 +263,7 @@ with sync_playwright() as p:
     light.close()
     app.close()
     compact = browser.new_context(viewport={"width": 920, "height": 650},
-                                  device_scale_factor=1, color_scheme="dark")
+                                  device_scale_factor=1, color_scheme="dark", reduced_motion="reduce")
     compact.add_init_script(TAURI_PREVIEW)
     compact_page = compact.new_page()
     compact_page.goto("http://127.0.0.1:1420/", wait_until="networkidle")
