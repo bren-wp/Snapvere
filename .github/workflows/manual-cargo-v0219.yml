@@ -1,0 +1,66 @@
+name: Snapvere one-shot manually requested Cargo lock update
+on:
+  push:
+    branches: ["fix/v0.2.19-manual-deps-stability-official-links"]
+    paths: [".github/workflows/manual-cargo-v0219.yml"]
+permissions:
+  contents: read
+jobs:
+  manual-upgrade:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+      - name: Regenerate Cargo.lock for manually chosen version constraints
+        working-directory: apps/desktop/src-tauri
+        run: cargo update
+      - name: Check formatting
+        working-directory: apps/desktop/src-tauri
+        run: cargo fmt --all -- --check
+      - name: Run native Windows unit tests with locked graph
+        working-directory: apps/desktop/src-tauri
+        run: cargo test --locked
+      - name: Strict Clippy for all Rust targets
+        working-directory: apps/desktop/src-tauri
+        run: cargo clippy --all-targets --locked -- -D warnings
+      - name: Verify bundled SQLite security
+        run: python tools/check_sqlite_security.py
+      - name: Install and run pinned RustSec advisory scanner
+        shell: pwsh
+        run: |
+          cargo install cargo-audit --version 0.23.0 --locked
+          if ($LASTEXITCODE -ne 0) { throw "cargo-audit installation failed" }
+          cargo audit --file apps/desktop/src-tauri/Cargo.lock
+          if ($LASTEXITCODE -ne 0) { throw "RustSec found an advisory" }
+      - name: Commit regenerated lockfile only after passing all checks
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $other = git diff --name-only -- . ':!apps/desktop/src-tauri/Cargo.lock'
+          if (($other | Out-String).Trim()) { throw "Unexpected changed files: $other" }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/desktop/src-tauri/Cargo.lock
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) { Write-Host 'Lockfile already current'; exit 0 }
+          git commit -m "chore(deps): sync manually reviewed Cargo major updates"
+          if ($LASTEXITCODE -ne 0) { throw "Commit failed" }
+          gh auth setup-git
+          git fetch origin $env:GITHUB_REF_NAME
+          if ($LASTEXITCODE -ne 0) { throw "Fetch failed" }
+          git rebase "origin/$env:GITHUB_REF_NAME"
+          if ($LASTEXITCODE -ne 0) { throw "Rebase failed" }
+          git push origin "HEAD:$env:GITHUB_REF_NAME"
+          if ($LASTEXITCODE -ne 0) { throw "Push failed" }
