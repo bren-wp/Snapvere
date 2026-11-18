@@ -142,6 +142,7 @@ pub fn run() {
             commands::save_edited_image,
             commands::save_image_as,
             commands::copy_base64_to_clipboard,
+            commands::import_clipboard_image,
             commands::start_recording,
             commands::stop_recording,
             commands::cancel_recording,
