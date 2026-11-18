@@ -51,14 +51,14 @@ jobs:
               node --check "$browser/$src"
             done
           done
-      - name: Test captured tab data and seven manifest variants
+      - name: Test local screenshots, full-page geometry, crop bounds and popup states
         run: node --test extensions/tests/*.test.mjs
       - name: Assemble versioned browser-specific source archives
         run: python tools/build_browser_extensions.py --build --zip-dir browser-extension-dist
       - name: Upload seven extension ZIPs for manual browser QA
         uses: actions/upload-artifact@v4
         with:
-          name: Snapvere-Browser-Extensions-v0.1.0
+          name: Snapvere-Browser-Extensions-v0.2.0
           path: browser-extension-dist/*.zip
           if-no-files-found: error
           retention-days: 30
