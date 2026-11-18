@@ -54,8 +54,12 @@ jobs:
                       time.sleep(0.5)
               else:raise SystemExit('Server did not start: '+url)
           PY
+      - name: Test strict screenshot reference comparator
+        run: python -m unittest discover -s tools -p test_compare_ui_references.py
       - name: Screenshot rendered screens
         run: python tools/capture_ui.py
+      - name: Inventory real React previews and explicitly report native Windows coverage gaps
+        run: python tools/compare_ui_references.py --inventory --actual-dir docs/screenshots --report-dir docs/visual-audit
       - name: Measure exact visual differences from the deployed Snapvere website
         continue-on-error: true
         run: python tools/compare_live_site.py
