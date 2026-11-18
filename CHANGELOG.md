@@ -10,6 +10,7 @@ SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO
 - Fix light-mode brand tokens, dark header/toolbar overrides, violet capture-card text contrast, and invalid RGB alpha styles.
 - Synchronize Settings theme changes between open Tauri WebViews via storage and native event notifications.
 - Expand Playwright visual state captures for light/dark, hover, focus, disabled GIF audio, recording palette and Stop error; require fail-closed PNG reference comparisons.
+- Fix native recording HUD popup/error clipping: dynamically expand a caller-restricted 58px-to-216px WebView window, anchor toolbar bottom and correct mixed-DPI centering; assert popup bounds in screenshot tests.
 - Track all unverified native WebView2/DPI cases in `docs/VISUAL-CORRECTIONS-v0.2.18.md` without claiming 1:1 parity.
 - Verify/correct GitHub Release prerelease metadata during publication until physical Windows QA is documented.
 - Correct README release status, document GitHub's 2026-11-18 withdrawal of GHSA-fc5q-39xc-vjpf without treating it as a patched version, and retain fork tests and strict npm audits.
