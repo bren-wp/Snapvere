@@ -14,6 +14,11 @@ SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO
 - Track all unverified native WebView2/DPI cases in `docs/VISUAL-CORRECTIONS-v0.2.18.md` without claiming 1:1 parity.
 - Verify/correct GitHub Release prerelease metadata during publication until physical Windows QA is documented.
 - Correct README release status, document GitHub's 2026-11-18 withdrawal of GHSA-fc5q-39xc-vjpf without treating it as a patched version, and retain fork tests and strict npm audits.
+- Update compatible npm packages: Tauri API 2.12.5, Tauri CLI 2.12.6 and Lucide 1.75.0, together with a regenerated lockfile; audit remaining Cargo-compatible upgrades on Windows.
+- Fix viewer Fit-to-window clipping for huge screenshots; add pure geometry regression tests.
+- Add synthetic 100/125/150/200% DPI snapshots for both themes and local-only PowerShell evidence collector for actual Win10/11 WebView2 windows.
+- Replace stale write-enabled dependency refresh workflow with read-only freshness reports; expand Dependabot review policies, CI policy guards and npm/Cargo CycloneDX SBOM.
+- Add release SBOM checksums; documentation: `docs/SECURITY-STABILITY-v0.2.18.md` and `docs/NATIVE-WINDOWS-QA-v0.2.18.md`.
 - See `docs/AUDIT-v0.2.18-P1-com-release.md`. Native Windows acceptance remains pending.
 
 ## v0.2.17 — P1 bounded audio buffering and safe PCM decoding (published 2026-11-17, hardware QA pending)
