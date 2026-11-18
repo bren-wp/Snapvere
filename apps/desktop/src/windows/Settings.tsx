@@ -451,17 +451,10 @@ export default function Settings() {
               {t("Screen capture and recording by Brendigo.")}
             </p>
             <div className="mt-3 flex flex-wrap gap-3 text-sm">
+              <span className="font-medium text-muted">{t("Developer")}: Brendigo</span>
               <button
                 type="button"
-                onClick={() => void openUrl("https://snapvere.com/").catch((error) => setNotice(String(error)))
-                className="font-medium text-accent underline-offset-4 hover:underline focus-visible:underline"
-                aria-label={t("Open Snapvere website")}
-              >
-                {t("Developer")}: Brendigo
-              </button>
-              <button
-                type="button"
-                onClick={() => void openUrl("https://snapvere.com").catch(console.error)}
+                onClick={() => void openUrl("https://snapvere.com/").catch((error) => setNotice(String(error)))}
                 className="font-medium text-accent underline-offset-4 hover:underline focus-visible:underline"
                 aria-label={t("Open Snapvere website")}
               >
