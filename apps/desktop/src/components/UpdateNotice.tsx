@@ -101,6 +101,7 @@ export default function UpdateNotice({
   }, []);
   useEffect(() => {
     if (autoEnabled) void check();
+    else setState("current");
     return () => controller.current?.abort();
   }, [autoEnabled, check]);
 
