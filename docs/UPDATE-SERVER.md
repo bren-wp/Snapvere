@@ -49,7 +49,7 @@ Upload the manifest atomically (write to a temporary file then rename it) **afte
 
 ## 2. Application behavior
 
-At startup, Home performs a 6.5-second maximum, cache-disabled, credential-free GET to the exact URL above. Settings → About performs the same check and offers a manual **Check for updates** button. Settings also provides **Check automatically on startup**, enabled by default and optional. Unavailable DNS, invalid JSON, an unchanged/older version or an offline PC must never stop normal capture/recording.
+At startup, Home performs a 6.5-second maximum, cache-disabled, credential-free GET to the exact URL above. While visible, the app checks at most hourly, and it rechecks upon regaining focus if at least five minutes have elapsed; **no hidden-window polling or background service** is required. Settings → About performs the same check and offers a manual **Check for updates** button. Settings also provides **Check automatically on startup**, enabled by default and optional. Unavailable DNS, invalid JSON, an unchanged/older version or an offline PC must never stop normal capture/recording.
 
 If the manifest version is newer than the app's local version, Home shows a localized notification. The user may open Settings, where a button opens **only** `https://snapvere.com/download/`. No data or binary URLs from untrusted JSON are followed; malformed, nonofficial download URLs are rejected. The app does **not** download, execute or silently install a binary.
 
