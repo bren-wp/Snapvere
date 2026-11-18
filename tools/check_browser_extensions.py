@@ -42,7 +42,7 @@ for browser in BROWSERS:
         )
         for forbidden in ("XMLHttpRequest", "WebSocket(", "eval(", "new Function(",
                           "document.cookie", "chrome.storage", "browser.storage",
-                          "nativeMessaging", "getAllFrames", "externally_connectable",
+                          "sendNativeMessage(", "connectNative(", "getAllFrames", "externally_connectable",
                           "tabs.update(", "debugger.attach", "getUserMedia("):
             assert forbidden not in source, f"{browser}/{name}: forbidden {forbidden}"
         if name != "workspace.js":
