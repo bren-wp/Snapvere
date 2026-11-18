@@ -67,6 +67,9 @@ export const ipc = {
     invoke<RecordStatus>("pause_recording", { paused }),
   recordingStatus: () => invoke<RecordStatus>("recording_status"),
   closeRecHud: () => invoke<void>("close_rec_hud"),
+  /** Expand the native HUD viewport to show its palette/error, then shrink. */
+  setRecHudExpanded: (expanded: boolean) =>
+    invoke<void>("set_rec_hud_expanded", { expanded }),
   /** Snimano područje za okvir (null izvan snimanja). */
   recFrameRect: () => invoke<RecFrameRect | null>("rec_frame_rect"),
   /** true = sloj za crtanje hvata miš; false = klikovi prolaze kroz njega. */
