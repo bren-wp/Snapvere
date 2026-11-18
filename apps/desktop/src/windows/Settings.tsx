@@ -10,6 +10,7 @@ import { OFFICIAL_DOWNLOAD_URL } from "../lib/updateFeed";
 import { ipc } from "../lib/ipc";
 import { LANGUAGES, type Language } from "../lib/i18n";
 import { useLanguage } from "../lib/LanguageProvider";
+import { printScreenCopy } from "../lib/printScreenHelp";
 import type { ImageFormat, RecordFormat } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
 import { DEFAULTS, normalizeSettings, type AppSettings } from "./settings/preferences";
@@ -52,6 +53,9 @@ export default function Settings() {
   const [s, setS] = useState<AppSettings>(DEFAULTS);
   const [store, setStore] = useState<Store | null>(null);
   const [autostart, setAutostart] = useState(false);
+  const [captureHotkeyActive, setCaptureHotkeyActive] = useState<string | null>(null);
+  const [hotkeyRegistrationChecked, setHotkeyRegistrationChecked] = useState(false);
+  const printHelp = printScreenCopy(language);
   const [notice, setNotice] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -67,7 +71,9 @@ export default function Settings() {
       // Ako je zeljeni hotkey zauzet, jezgra registrira fallback — prikazi STVARNO stanje.
       try {
         const [capture, record] = await ipc.activeHotkeys();
-        if (capture) loaded.hotkey = prettyAccel(capture);
+        setCaptureHotkeyActive(capture);
+        setHotkeyRegistrationChecked(true);
+        loaded.hotkey = capture ? prettyAccel(capture) : "—";
         if (record) loaded.recordHotkey = prettyAccel(record);
       } catch {
         /* noop */
@@ -98,6 +104,8 @@ export default function Settings() {
       if (key === "hotkey") await ipc.updateHotkey(accelerator);
       else await ipc.updateRecordHotkey(accelerator);
       const [capture, recording] = await ipc.activeHotkeys();
+      setCaptureHotkeyActive(capture);
+      setHotkeyRegistrationChecked(true);
       const active = key === "hotkey" ? capture : recording;
       set(key, prettyAccel(active ?? accelerator));
       setNotice(null);
@@ -105,6 +113,8 @@ export default function Settings() {
     } catch (error) {
       const current = await ipc.activeHotkeys().catch(() => null);
       if (current) {
+        setCaptureHotkeyActive(current[0]);
+        setHotkeyRegistrationChecked(true);
         const previous = key === "hotkey" ? current[0] : current[1];
         if (previous) setS((state) => ({ ...state, [key]: prettyAccel(previous) }));
       }
@@ -268,6 +278,26 @@ export default function Settings() {
                 onChange={(accel) => void applyHotkey("hotkey", accel)}
               />
             </Row>
+            <div className="rounded-xl border border-border/70 bg-elevated/30 px-4 py-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p role="status" aria-live="polite" className="min-w-0 flex-1 text-muted">
+                  {hotkeyRegistrationChecked
+                    ? captureHotkeyActive?.toLowerCase() === "printscreen"
+                      ? printHelp.active
+                      : printHelp.blocked
+                    : t("Loading…")}
+                </p>
+                <button
+                  type="button"
+                  disabled={!hotkeyRegistrationChecked || captureHotkeyActive?.toLowerCase() === "printscreen"}
+                  onClick={() => void applyHotkey("hotkey", "PrintScreen")}
+                  className="rounded-lg border border-border px-3 py-2 font-medium text-text hover:bg-elevated focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {printHelp.enable}
+                </button>
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-muted">{printHelp.startup}</p>
+            </div>
             <Row
               label={t("Screen recording")}
               hint={t("Choose an area and use the shortcut again to stop recording.")}
