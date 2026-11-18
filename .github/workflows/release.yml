@@ -188,6 +188,10 @@ jobs:
               update npm/Cargo with lockfiles, strict Clippy, RustSec and SBOM evidence.
             - Update windows, base64 and rusqlite to verified supported major versions.
             - Catch Settings window creation/focus errors and diagnostics log failures.
+            - Make PrintScreen open area selection from the tray, display Home
+              on manual launch, and support opt-in hidden Windows login autostart.
+            - Expose real PrintScreen registration status with a conflict/retry control,
+              and hide the gallery before capturing to avoid self-screenshots.
             - Preserve bounded WASAPI, crash-recoverable gallery and responsive HUD.
             - Verify Portable EXE, NSIS EXE, MSI, SBOM and SHA256SUMS from the same commit.
 
