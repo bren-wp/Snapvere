@@ -66,7 +66,11 @@ TAURI_PREVIEW = r"""
       if (command === "get_frozen_frame") return window.__SNAPVERE_PREVIEW_FRAME_URL;
       if (command === "plugin:window|scale_factor") return 1;
       if (command === "list_screenshots" || command === "search_screenshots" || command === "list_monitors") return [];
-      if (command === "active_hotkeys") return ["PrintScreen", "Ctrl+Shift+R"];
+      if (command === "active_hotkeys") return window.location.search.includes("previewPrintScreenTaken")
+        ? ["Ctrl+Shift+1", "Ctrl+Shift+R"] : ["PrintScreen", "Ctrl+Shift+R"];
+      if (command === "update_hotkey" && window.location.search.includes("previewPrintScreenTaken")) {
+        throw new Error("PrintScreen reserved by Windows Snipping Tool");
+      }
       if (command === "plugin:autostart|is_enabled") return false;
       if (command.startsWith("plugin:event|")) return 1;
       if (command.startsWith("plugin:store|")) {
@@ -160,6 +164,40 @@ with sync_playwright() as p:
         settings.get_by_role("navigation").get_by_role("button", name=tab + " settings", exact=True).click()
         settings.wait_for_timeout(200)
         settings.screenshot(path=str(OUTPUT / ("settings-" + tab.lower() + ".png")))
+    # Confirm that Settings reflects native OS registration rather than merely
+    # displaying the stored PrintScreen preference.
+    settings.get_by_role("navigation").get_by_role(
+        "button", name="Hotkeys settings", exact=True
+    ).click()
+    assert settings.get_by_role("button", name="Use Print Screen", exact=True).is_disabled()
+    assert settings.get_by_text(
+        "Print Screen opens Snapvere's screen selection.", exact=True
+    ).is_visible()
+
+    unavailable = app.new_page()
+    unavailable.goto(
+        "http://127.0.0.1:1420/?previewPrintScreenTaken=1#settings",
+        wait_until="networkidle",
+    )
+    unavailable.get_by_role("navigation").get_by_role(
+        "button", name="Hotkeys settings", exact=True
+    ).click()
+    retry = unavailable.get_by_role("button", name="Use Print Screen", exact=True)
+    retry.wait_for(timeout=20000)
+    assert retry.is_enabled(), "Windows-reserved PrintScreen must offer rebind"
+    assert unavailable.get_by_text(
+        "Print Screen is not registered.", exact=False
+    ).is_visible()
+    unavailable.screenshot(
+        path=str(OUTPUT / "settings-hotkeys-printscreen-unavailable.png")
+    )
+    retry.click()
+    unavailable.get_by_text(
+        "PrintScreen reserved by Windows Snipping Tool", exact=False
+    ).wait_for(timeout=5000)
+    assert retry.is_enabled(), "Failed rebind must leave retry available"
+    unavailable.close()
+
     # Changing Recording to GIF should actually disable microphone/system audio
     # rather than merely drawing grey-looking controls.
     settings.get_by_role("navigation").get_by_role("button", name="Recording settings", exact=True).click()
