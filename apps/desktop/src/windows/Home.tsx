@@ -21,6 +21,7 @@ import WindowFrame from "../components/WindowFrame";
 import Viewer from "../components/Viewer";
 import CaptureCard from "../components/home/CaptureCard";
 import EmptyGallery from "../components/home/EmptyGallery";
+import UpdateNotice from "../components/UpdateNotice";
 
 type Filter = "all" | "images" | "videos";
 const PAGE_SIZE = 120;
@@ -278,6 +279,7 @@ export default function Home() {
             <ArrowUpRight className="snapvere-action-arrow" size={17} aria-hidden="true" />
           </button>
         </div>
+        <div className="mt-3"><UpdateNotice mode="home" onAction={openSettings} /></div>
       </header>
 
       <section className="snapvere-gallery-controls shrink-0 px-5 py-4" aria-label={t("Gallery controls")}>
