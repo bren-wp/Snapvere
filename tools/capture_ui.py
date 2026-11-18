@@ -12,6 +12,20 @@ OUTPUT.mkdir(parents=True, exist_ok=True)
 
 TAURI_PREVIEW = r"""
 (() => {
+  // Screenshot fixtures never contact production update.snapvere.com.
+  // The explicit ?previewUpdate=1 page exercises the update-available UI.
+  const realFetch = window.fetch.bind(window);
+  window.fetch = (resource, options) => {
+    if (resource === "https://update.snapvere.com/stable.json") {
+      const scenario = new URL(window.location.href).searchParams.has("previewUpdate");
+      return Promise.resolve(new Response(JSON.stringify({
+        product: "snapvere-tauri-windows",
+        version: scenario ? "999.0.0" : "0.0.0",
+        notes: scenario ? "Preview of the update-notification design" : ""
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    return realFetch(resource, options);
+  };
   let nextCallback = 1;
   const callbacks = new Map();
   const eventCallbacks = new Map();
@@ -111,6 +125,12 @@ with sync_playwright() as p:
     )
     page.wait_for_timeout(1200)
     page.screenshot(path=str(OUTPUT / "home.png"), full_page=False)
+    update_preview = app.new_page()
+    update_preview.goto("http://127.0.0.1:1420/?previewUpdate=1", wait_until="networkidle")
+    update_preview.get_by_text("New Snapvere version available", exact=False).wait_for(timeout=10000)
+    update_preview.get_by_role("button", name="View update in Settings").wait_for(timeout=10000)
+    update_preview.screenshot(path=str(OUTPUT / "home-update-available.png"))
+    update_preview.close()
     # Reproducible hover/focus captures; never assert these match native Windows
     # baselines just because the DOM state exists in headless Chromium.
     primary = page.get_by_role("group", name="Capture actions").get_by_role(
