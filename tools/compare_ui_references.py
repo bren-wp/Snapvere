@@ -13,10 +13,16 @@ from PIL import Image, ImageChops, ImageStat
 
 # Application/window-state coverage, not the separately deployed marketing site.
 REQUIRED = (
-    "home.png", "home-compact.png", "settings.png",
-    "settings-hotkeys.png", "settings-capture.png", "settings-recording.png",
+    "home.png", "home-compact.png", "home-hover.png", "home-focus.png",
+    "home-light.png", "home-hover-light.png",
+    "settings.png", "settings-hotkeys.png", "settings-capture.png",
+    "settings-recording.png", "settings-recording-gif-disabled.png",
     "settings-save.png", "settings-privacy.png", "settings-about.png",
-    "editor.png", "capture-overlay.png",
+    "settings-light.png", "settings-hotkeys-light.png", "settings-capture-light.png",
+    "settings-recording-light.png", "settings-save-light.png",
+    "settings-privacy-light.png", "settings-about-light.png",
+    "editor.png", "editor-light.png", "capture-overlay.png",
+    "recbar-palette.png", "recbar-stop-error.png",
 )
 # Native Window/WebView2, gallery/player, and non-default control states are
 # intentionally NOT certified by this headless Chromium screenshot harness.
