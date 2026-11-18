@@ -176,6 +176,8 @@ jobs:
             - Reject unexpected Windows COM initialization failures before MP4 startup.
             - Balance a successful COM initialization if Media Foundation startup fails.
             - Test S_OK, S_FALSE, RPC_E_CHANGED_MODE and E_FAIL COM status classification.
+            - Fix light-mode surfaces, button contrast, visual effects and synchronized themes in multiple windows.
+            - Add measurable dark/light, hover/focus/disabled/error screenshots and a strict pixel-reference audit gate.
             - Preserve bounded WASAPI audio, 5.1/7.1 downmix, gallery recovery and 12 languages.
             - Verify Portable EXE, NSIS Setup EXE, MSI and SHA256SUMS from the same commit.
 
