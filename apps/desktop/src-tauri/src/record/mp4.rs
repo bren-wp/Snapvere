@@ -13,7 +13,8 @@
 
 use std::path::Path;
 
-use windows::core::HSTRING;
+use windows::core::{HRESULT, HSTRING};
+use windows::Win32::Foundation::RPC_E_CHANGED_MODE;
 use windows::Win32::Media::MediaFoundation as mf;
 use windows::Win32::Media::MediaFoundation::{
     eAVEncH264VProfile_High, IMFSinkWriter, MFCreateAttributes, MFCreateMediaType,
@@ -36,12 +37,16 @@ pub struct MfSession {
 impl MfSession {
     /// Pokreni MF na TRENUTNOJ dretvi. Mora se držati živ dok traje enkodiranje.
     pub fn start() -> Result<Self, String> {
-        // RPC_E_CHANGED_MODE znači da je dretva već u drugom apartmanu — to je u redu,
-        // samo onda ne smijemo zvati CoUninitialize.
+        // S_OK and S_FALSE own a COM reference, while RPC_E_CHANGED_MODE does not.
         let hr = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
-        let com = hr.is_ok();
-        unsafe { MFStartup(MF_VERSION, MFSTARTUP_NOSOCKET) }
-            .map_err(|e| format!("MFStartup: {e}"))?;
+        let com = com_initialization_owned(hr)?;
+        if let Err(e) = unsafe { MFStartup(MF_VERSION, MFSTARTUP_NOSOCKET) } {
+            // Drop cannot run before the session guard is constructed.
+            if com {
+                unsafe { CoUninitialize() };
+            }
+            return Err(format!("MFStartup: {e}"));
+        }
         Ok(Self { com })
     }
 }
@@ -54,6 +59,35 @@ impl Drop for MfSession {
                 CoUninitialize();
             }
         }
+    }
+}
+
+/// Track whether this CoInitializeEx invocation owns a COM reference.
+fn com_initialization_owned(hr: HRESULT) -> Result<bool, String> {
+    if hr.is_ok() {
+        Ok(true)
+    } else if hr == RPC_E_CHANGED_MODE {
+        Ok(false)
+    } else {
+        Err(format!("CoInitializeEx failed (HRESULT 0x{:08X})", hr.0 as u32))
+    }
+}
+
+#[cfg(test)]
+mod com_lifecycle_tests {
+    use super::*;
+
+    #[test]
+    fn balances_success_and_reuses_existing_apartment() {
+        assert_eq!(com_initialization_owned(HRESULT(0)), Ok(true)); // S_OK
+        assert_eq!(com_initialization_owned(HRESULT(1)), Ok(true)); // S_FALSE
+        assert_eq!(com_initialization_owned(RPC_E_CHANGED_MODE), Ok(false));
+    }
+
+    #[test]
+    fn rejects_unexpected_com_errors() {
+        let error = com_initialization_owned(HRESULT(0x80004005_u32 as i32)).unwrap_err();
+        assert!(error.contains("0x80004005"), "{error}");
     }
 }
 
