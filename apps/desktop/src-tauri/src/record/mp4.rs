@@ -69,7 +69,10 @@ fn com_initialization_owned(hr: HRESULT) -> Result<bool, String> {
     } else if hr == RPC_E_CHANGED_MODE {
         Ok(false)
     } else {
-        Err(format!("CoInitializeEx failed (HRESULT 0x{:08X})", hr.0 as u32))
+        Err(format!(
+            "CoInitializeEx failed (HRESULT 0x{:08X})",
+            hr.0 as u32
+        ))
     }
 }
 
