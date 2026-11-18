@@ -1,0 +1,64 @@
+name: Snapvere one-shot manually requested npm refresh
+on:
+  push:
+    branches: ["fix/v0.2.19-manual-deps-stability-official-links"]
+    paths: [".github/workflows/manual-npm-v0219.yml"]
+permissions:
+  contents: read
+jobs:
+  manual-refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Update every semver-compatible npm package; do not execute install scripts
+        working-directory: apps/desktop
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm update --ignore-scripts --no-audit --no-fund
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify whole app with refreshed dependency graph
+        working-directory: apps/desktop
+        run: |
+          npm run lint
+          npm run test:unit
+          npm run build
+          npm audit --audit-level=high
+      - name: Enforce pinned build-time source and manifest policy
+        run: |
+          python tools/check_dependency_policy.py
+          python tools/check_no_backdoor_patterns.py
+          python tools/check_ipc_contract.py
+          python tools/check_public_distribution.py
+      - name: Commit only the verified lockfile
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          outside=$(git diff --name-only -- . ':!apps/desktop/package-lock.json')
+          if [ -n "$outside" ]; then
+            echo "::error::Unexpected changes: $outside"
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/desktop/package-lock.json
+          if git diff --cached --quiet; then
+            echo 'The npm graph is already current'
+            exit 0
+          fi
+          git commit -m 'chore(deps): refresh manually approved npm lockfile graph'
+          gh auth setup-git
+          git fetch origin "$GITHUB_REF_NAME"
+          git rebase "origin/$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"
