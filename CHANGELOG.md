@@ -9,6 +9,7 @@ SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO
 - Remove Dependabot bot configuration and scheduled updater workflow; explicitly refresh npm and Cargo graphs with tests and security reviews, then delete one-shot upgrade jobs.
 - Upgrade Cargo major dependencies `windows`, `rusqlite` and `base64` and compatible npm packages only when Windows compiler tests, strict Clippy and RustSec succeed; keep lockfiles/SBOM synchronized.
 - Fix unhandled Settings window creation/focus errors and diagnostics log opener failures.
+- Make PrintScreen reliably start area selection while Snapvere is running in the tray, show Home when the EXE is launched manually and run invisibly only for opt-in Windows login autostart. Report the actual registered shortcut, offer a one-click PrintScreen rebind, and explain Windows Snipping Tool conflicts. Avoid self-capture when hotkey is pressed with the gallery visible.
 - Remove GitHub and other external website links from the application UI; preserve official snapvere.com website, license and downloads.
 - Add server deployment guidance in `docs/UPDATE-SERVER.md`. No actual signed installer update is implemented without a securely generated private signing key.
 - Physical Windows 10/11, audio hardware, installed package upgrade and original per-screen 1:1 QA remain unverified.
