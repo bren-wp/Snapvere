@@ -1121,8 +1121,8 @@ pub async fn import_clipboard_image(
 ) -> Result<Screenshot, String> {
     require_window_label(window.label(), &["home"])?;
     tauri::async_runtime::spawn_blocking(move || {
-        let clipboard = app
-            .clipboard()
+        let clipboard_manager = app.clipboard();
+        let clipboard = clipboard_manager
             .read_image()
             .map_err(|e| format!("Clipboard does not contain a readable image: {e}"))?;
         let width = clipboard.width();
