@@ -55,6 +55,13 @@ test('rejects HTML, failures and oversized response without changing product sta
       status:200, headers:{'content-type':'application/json', 'content-length':'20000'}
     });
     await assert.rejects(checkForUpdates('0.2.19'), /too large/);
+    globalThis.fetch = async () => new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array(12_000));
+        controller.close();
+      },
+    }), {status: 200, headers:{'content-type':'application/json'}});
+    await assert.rejects(checkForUpdates('0.2.19'), /too large/);
   } finally {
     globalThis.fetch = prior;
   }
