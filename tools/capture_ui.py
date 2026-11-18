@@ -383,6 +383,77 @@ with sync_playwright() as p:
         raise RuntimeError("Capture overlay rendered black or empty pixels instead of the desktop")
     capture_page.screenshot(path=str(OUTPUT / "capture-overlay.png"))
     selection.close()
+
+    # Synthetic DPR layout sweep: a browser device-scale factor is NOT Windows
+    # per-monitor DPI awareness or native WebView2 hardware QA. It does catch
+    # obvious scaling/overflow regressions across both themes.
+    dpi_results = []
+    for dpi in (100, 125, 150, 200):
+        scale = dpi / 100.0
+        for theme in ("dark", "light"):
+            scaled = browser.new_context(
+                viewport={"width": 1120, "height": 740},
+                device_scale_factor=scale, color_scheme=theme,
+                reduced_motion="reduce",
+            )
+            scaled.add_init_script(
+                "localStorage.setItem('snapvere-theme', " + json.dumps(theme) + ")"
+            )
+            scaled.add_init_script(TAURI_PREVIEW)
+            for screen, address in (("home", "/"), ("settings", "/#settings")):
+                view = scaled.new_page()
+                view.goto("http://127.0.0.1:1420" + address, wait_until="networkidle")
+                if screen == "home":
+                    primary = view.get_by_role(
+                        "group", name="Capture actions"
+                    ).get_by_role("button", name="Capture region", exact=True)
+                    primary.wait_for(timeout=30000)
+                    rects = view.locator(".snapvere-action-card").evaluate_all(
+                        """(nodes) => nodes.map(n => {
+                          const r=n.getBoundingClientRect();
+                          return {x:r.x,y:r.y,right:r.right,bottom:r.bottom};
+                        })"""
+                    )
+                    assert len(rects) == 3, "Capture action cards missing"
+                    assert all(0 <= r["x"] and r["right"] <= 1122 and
+                               0 <= r["y"] and r["bottom"] <= 742
+                               for r in rects), f"{dpi}% {theme}: capture buttons clipped {rects}"
+                else:
+                    view.get_by_role("navigation").get_by_role(
+                        "button", name="Capture settings", exact=True
+                    ).wait_for(timeout=30000)
+                view.wait_for_function(
+                    "(expected) => document.documentElement.dataset.theme === expected",
+                    arg=theme, timeout=10000,
+                )
+                overflow = view.evaluate(
+                    "() => document.documentElement.scrollWidth > innerWidth + 2"
+                )
+                assert not overflow, f"{dpi}% {theme} {screen}: horizontal UI overflow"
+                assert abs(view.evaluate("() => window.devicePixelRatio") - scale) < .001
+                filename = f"dpi-{dpi}-{screen}-{theme}.png"
+                screenshot = view.screenshot(path=str(OUTPUT / filename))
+                import struct
+                image_w, image_h = struct.unpack(">II", screenshot[16:24])
+                assert (image_w, image_h) == (
+                    round(1120 * scale), round(740 * scale)
+                ), f"Wrong physical screenshot dimensions for {filename}"
+                dpi_results.append({
+                    "dpi_simulated_percent": dpi, "theme": theme,
+                    "screen": screen, "image": filename,
+                    "physical_png_size": [image_w, image_h],
+                    "horizontal_overflow": False,
+                })
+                view.close()
+            scaled.close()
+    (ROOT / "docs" / "visual-audit").mkdir(parents=True, exist_ok=True)
+    (ROOT / "docs" / "visual-audit" / "synthetic-dpi-matrix.json").write_text(
+        json.dumps({
+            "kind": "chromium-device-scale-factor-not-native-windows-dpi",
+            "native_windows_acceptance": False,
+            "checks": dpi_results
+        }, indent=2) + "\\n", encoding="utf-8"
+    )
     browser.close()
 
 for path in OUTPUT.glob("*.png"):
