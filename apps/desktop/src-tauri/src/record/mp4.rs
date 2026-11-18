@@ -76,24 +76,6 @@ fn com_initialization_owned(hr: HRESULT) -> Result<bool, String> {
     }
 }
 
-#[cfg(test)]
-mod com_lifecycle_tests {
-    use super::*;
-
-    #[test]
-    fn balances_success_and_reuses_existing_apartment() {
-        assert_eq!(com_initialization_owned(HRESULT(0)), Ok(true)); // S_OK
-        assert_eq!(com_initialization_owned(HRESULT(1)), Ok(true)); // S_FALSE
-        assert_eq!(com_initialization_owned(RPC_E_CHANGED_MODE), Ok(false));
-    }
-
-    #[test]
-    fn rejects_unexpected_com_errors() {
-        let error = com_initialization_owned(HRESULT(0x80004005_u32 as i32)).unwrap_err();
-        assert!(error.contains("0x80004005"), "{error}");
-    }
-}
-
 pub struct Mp4Encoder {
     writer: IMFSinkWriter,
     stream: u32,
@@ -432,5 +414,23 @@ fn convert_rows(bgra: &[u8], wi: usize, row0: usize, yb: &mut [u8], uvb: &mut [u
             uv[x] = (((-38 * rr - 74 * g + 112 * b + 128) >> 8) + 128).clamp(0, 255) as u8;
             uv[x + 1] = (((112 * rr - 94 * g - 18 * b + 128) >> 8) + 128).clamp(0, 255) as u8;
         }
+    }
+}
+
+#[cfg(test)]
+mod com_lifecycle_tests {
+    use super::*;
+
+    #[test]
+    fn balances_success_and_reuses_existing_apartment() {
+        assert_eq!(com_initialization_owned(HRESULT(0)), Ok(true)); // S_OK
+        assert_eq!(com_initialization_owned(HRESULT(1)), Ok(true)); // S_FALSE
+        assert_eq!(com_initialization_owned(RPC_E_CHANGED_MODE), Ok(false));
+    }
+
+    #[test]
+    fn rejects_unexpected_com_errors() {
+        let error = com_initialization_owned(HRESULT(0x80004005_u32 as i32)).unwrap_err();
+        assert!(error.contains("0x80004005"), "{error}");
     }
 }
