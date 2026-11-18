@@ -52,6 +52,38 @@ export function parseUpdateManifest(raw: unknown, currentVersion: string): Avail
     : null;
 }
 
+/**
+ * Limit response bytes while streaming: checking only text.length *after*
+ * response.text() would let a malicious endpoint allocate a huge payload.
+ */
+async function readManifestBounded(response: Response): Promise<string> {
+  if (!response.body) throw new Error("Empty update response");
+  const reader = response.body.getReader();
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_MANIFEST_BYTES) {
+        void reader.cancel().catch(() => {});
+        throw new Error("Update manifest is too large");
+      }
+      parts.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const part of parts) {
+    bytes.set(part, offset);
+    offset += part.byteLength;
+  }
+  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+}
+
 export async function checkForUpdates(
   currentVersion: string,
   cancelSignal?: AbortSignal,
@@ -75,8 +107,7 @@ export async function checkForUpdates(
     }
     const contentType = response.headers.get("content-type") ?? "";
     if (!/^application\/json\b/i.test(contentType)) throw new Error("Unexpected update response");
-    const text = await response.text();
-    if (text.length > MAX_MANIFEST_BYTES) throw new Error("Update manifest is too large");
+    const text = await readManifestBounded(response);
     return parseUpdateManifest(JSON.parse(text) as unknown, currentVersion);
   } finally {
     clearTimeout(timeout);
