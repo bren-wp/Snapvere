@@ -51,7 +51,7 @@ class ReferenceCompareTests(unittest.TestCase):
             for filename in REQUIRED:
                 Image.new("RGB", (2, 2)).save(actual / filename)
             row = audit(actual, reference, root / "report", 16, False)
-            self.assertFalse(row["certified_pixel_perfect"])
+            self.assertFalse(row["exact_reference_match_for_supplied_previews"])
             self.assertTrue(all(
                 x["status"] == "missing_approved_reference" for x in row["comparisons"]
             ))
@@ -64,7 +64,7 @@ class ReferenceCompareTests(unittest.TestCase):
             for filename in REQUIRED:
                 Image.new("RGB", (2, 2)).save(actual / filename)
             row = audit(actual, None, root / "report", 16, True)
-            self.assertFalse(row["certified_pixel_perfect"])
+            self.assertFalse(row["exact_reference_match_for_supplied_previews"])
             self.assertEqual(row["missing_required_previews"], [])
 
 
