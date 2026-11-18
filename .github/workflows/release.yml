@@ -173,11 +173,11 @@ jobs:
             All three Windows executables originate from the same Tauri build and were verified before publication.
 
             ### Changes in v${{ steps.version.outputs.value }}
-            - Bound microphone/system-audio packet sizes and reject malformed large WASAPI buffers before PCM allocation.
-            - Use unaligned-safe PCM16/PCM32/float32 reads and speaker-mask-aware 5.1/7.1 stereo downmix for Windows audio.
-            - Encode MP4 catch-up audio in small bounded chunks; stop with an explicit error when more than two seconds are irrecoverably missing.
-            - Retain existing v0.2.16 device-error handling, SQLite gallery crash recovery, scoped Tauri IPC and all 12 app languages.
-            - Build and verify Portable EXE, NSIS Setup EXE, MSI and SHA256SUMS from the same Tauri/Rust commit.
+            - Reject unexpected Windows COM initialization failures before MP4 startup.
+            - Balance a successful COM initialization if Media Foundation startup fails.
+            - Test S_OK, S_FALSE, RPC_E_CHANGED_MODE and E_FAIL COM status classification.
+            - Preserve bounded WASAPI audio, 5.1/7.1 downmix, gallery recovery and 12 languages.
+            - Verify Portable EXE, NSIS Setup EXE, MSI and SHA256SUMS from the same commit.
 
             **Preview release.** Native Windows 10/11 capture, recorder, audio, multi-monitor,
             accessibility, install/upgrade/uninstall and 1:1 visual comparisons are not yet
@@ -186,3 +186,23 @@ jobs:
             The public snapvere.com service currently distributes a separate .NET/WinUI edition.
             These packages are the Tauri/Rust repository edition, not interchangeable updates.
             This release is unsigned; use SHA256SUMS.txt to check each file.
+
+      - name: Verify GitHub Release is a prerelease pending physical Windows QA
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = 'v${{ steps.version.outputs.value }}'
+          $repo = '${{ github.repository }}'
+          $release = gh api "repos/$repo/releases/tags/$tag" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw "Cannot read release $tag" }
+          if (-not $release.prerelease) {
+            gh release edit $tag --repo $repo --prerelease
+            if ($LASTEXITCODE -ne 0) { throw "Cannot correct prerelease flag $tag" }
+            $release = gh api "repos/$repo/releases/tags/$tag" | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw "Cannot verify prerelease flag $tag" }
+          }
+          if ($release.draft -or -not $release.prerelease) {
+            throw "Release $tag must be a published prerelease until physical Windows QA"
+          }
