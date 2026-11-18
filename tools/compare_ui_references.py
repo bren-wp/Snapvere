@@ -72,11 +72,14 @@ def audit(actual_dir: Path, reference_dir: Path | None, report_dir: Path,
         "missing_required_previews": missing,
         "native_windows_unverified": list(NATIVE_ONLY),
         "comparisons": [],
-        "certified_pixel_perfect": False,
+        "exact_reference_match_for_supplied_previews": False,
+        "native_windows_pixel_perfect_accepted": False,
         "warning": "Chromium previews with stubbed Tauri IPC are NOT native Windows hardware QA.",
     }
     if not inventory_only:
         assert reference_dir is not None
+        if actual_dir.resolve() == reference_dir.resolve():
+            raise ValueError("Approved baseline directory must differ from captured screenshots")
         for actual in actual_files:
             reference = reference_dir / actual.name
             if not reference.is_file():
@@ -85,7 +88,7 @@ def audit(actual_dir: Path, reference_dir: Path | None, report_dir: Path,
             result["comparisons"].append(compare(actual, reference, report_dir / "diffs", threshold))
         # A green result requires complete capture coverage AND exact 0-pixel
         # deviation from externally approved baseline images.
-        result["certified_pixel_perfect"] = bool(
+        result["exact_reference_match_for_supplied_previews"] = bool(
             not missing and actual_files and
             all(row["status"] == "match" for row in result["comparisons"])
         )
@@ -115,7 +118,7 @@ def main():
         return 2
     if args.inventory:
         return 0  # inventory is never a pixel-perfect acceptance certificate
-    return 0 if result["certified_pixel_perfect"] else 1
+    return 0 if result["exact_reference_match_for_supplied_previews"] else 1
 
 
 if __name__ == "__main__":
