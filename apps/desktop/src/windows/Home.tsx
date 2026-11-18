@@ -220,13 +220,13 @@ export default function Home() {
       // event registration or a silent failure after clicking Settings.
       void settingsWindow.once("tauri://error", (event) => {
         console.error("Could not open Settings", event.payload);
-        setToast(t("Could not open Settings."));
+        setToast(`${t("Settings")}: ${String(event.payload)}`);
       }).catch((error) => {
         console.error("Settings window error listener failed", error);
       });
     } catch (error) {
       console.error("Cannot open Settings", error);
-      setToast(t("Could not open Settings."));
+      setToast(`${t("Settings")}: ${String(error)}`);
     }
   };
 
