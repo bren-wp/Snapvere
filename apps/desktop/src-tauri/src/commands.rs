@@ -1342,7 +1342,6 @@ fn show_rec_hud(app: &AppHandle, target: &RecordTarget) -> Result<(), String> {
         .ok_or("HUD prozor nedostaje")?;
 
     // Dno-centar snimanog monitora, malo iznad ruba.
-    let x = target.monitor_x + (target.monitor_w as i32 - REC_HUD_W as i32) / 2;
     let scale = win.scale_factor().map_err(estr)?;
     let base_height = (f64::from(REC_HUD_H) * scale).round().max(1.0) as u32;
     let size = win.inner_size().map_err(estr)?;
@@ -1352,6 +1351,9 @@ fn show_rec_hud(app: &AppHandle, target: &RecordTarget) -> Result<(), String> {
         win.set_size(PhysicalSize::new(size.width, base_height))
             .map_err(estr)?;
     }
+    // Center using the actual physical HWND width; REC_HUD_W is logical and
+    // would shift the toolbar off center at 125%, 150% or 200% scaling.
+    let x = target.monitor_x + (target.monitor_w as i32 - size.width as i32) / 2;
     let y = target.monitor_y + target.monitor_h as i32 - base_height as i32 - 48;
     let _ = win.set_position(PhysicalPosition::new(x, y));
     let _ = win.show();
