@@ -4,6 +4,7 @@ import { load, type Store } from "@tauri-apps/plugin-store";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
+import { emit } from "@tauri-apps/api/event";
 import { ipc } from "../lib/ipc";
 import { LANGUAGES, type Language } from "../lib/i18n";
 import { useLanguage } from "../lib/LanguageProvider";
@@ -121,6 +122,9 @@ export default function Settings() {
     } catch {
       setNotice(t("Theme could not be saved."));
     }
+    void emit("snapvere:theme-changed", theme).catch((error) => {
+      console.error("Could not notify other windows of theme change", error);
+    });
   };
 
   const toggleAutostart = async (on: boolean) => {
