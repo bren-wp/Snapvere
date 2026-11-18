@@ -202,15 +202,32 @@ export default function Home() {
     }
   };
   const openSettings = async () => {
-    const existing = await WebviewWindow.getByLabel("settings");
-    if (existing) return existing.setFocus();
-    new WebviewWindow("settings", {
-      url: "index.html#settings",
-      title: `Snapvere — ${t("Settings")}`,
-      width: 860,
-      height: 660,
-      center: true,
-    });
+    try {
+      const existing = await WebviewWindow.getByLabel("settings");
+      if (existing) {
+        await existing.show();
+        await existing.setFocus();
+        return;
+      }
+      const settingsWindow = new WebviewWindow("settings", {
+        url: "index.html#settings",
+        title: `Snapvere — ${t("Settings")}`,
+        width: 860,
+        height: 660,
+        center: true,
+      });
+      // WebView2 creation errors are asynchronous; never leave a rejected
+      // event registration or a silent failure after clicking Settings.
+      void settingsWindow.once("tauri://error", (event) => {
+        console.error("Could not open Settings", event.payload);
+        setToast(t("Could not open Settings."));
+      }).catch((error) => {
+        console.error("Settings window error listener failed", error);
+      });
+    } catch (error) {
+      console.error("Cannot open Settings", error);
+      setToast(t("Could not open Settings."));
+    }
   };
 
   return (
