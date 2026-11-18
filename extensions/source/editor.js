@@ -153,9 +153,11 @@
   });
   cropBtn.addEventListener("click", () => {
     if (!selection || !base) return;
-    draw();
     const r = rectangle(selection.start, selection.end);
     if (r.width < 3 || r.height < 3) return;
+    // Never bake the purple crop-selection outline into the exported pixels.
+    selection = null;
+    draw();
     const source = snapshot();
     const cropped = document.createElement("canvas");
     cropped.width = r.width; cropped.height = r.height;
