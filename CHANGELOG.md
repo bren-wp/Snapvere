@@ -7,6 +7,10 @@ SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO
 - Fail MP4 startup on unexpected CoInitializeEx HRESULTs; handle S_OK, S_FALSE and RPC_E_CHANGED_MODE according to COM reference ownership.
 - Release successful per-thread COM initialization when MFStartup fails before the session guard exists.
 - Add Windows regression tests for COM status classification.
+- Fix light-mode brand tokens, dark header/toolbar overrides, violet capture-card text contrast, and invalid RGB alpha styles.
+- Synchronize Settings theme changes between open Tauri WebViews via storage and native event notifications.
+- Expand Playwright visual state captures for light/dark, hover, focus, disabled GIF audio, recording palette and Stop error; require fail-closed PNG reference comparisons.
+- Track all unverified native WebView2/DPI cases in `docs/VISUAL-CORRECTIONS-v0.2.18.md` without claiming 1:1 parity.
 - Verify/correct GitHub Release prerelease metadata during publication until physical Windows QA is documented.
 - Correct README release status, document GitHub's 2026-11-18 withdrawal of GHSA-fc5q-39xc-vjpf without treating it as a patched version, and retain fork tests and strict npm audits.
 - See `docs/AUDIT-v0.2.18-P1-com-release.md`. Native Windows acceptance remains pending.
