@@ -1774,3 +1774,15 @@ mod ipc_origin_tests {
         assert!(require_window_label("overlay", &["home"]).is_err());
     }
 }
+
+#[cfg(test)]
+mod rec_hud_geometry_tests {
+    use super::{rec_hud_height, REC_HUD_H, REC_HUD_POPUP_H};
+
+    #[test]
+    fn popups_expand_but_normal_recording_uses_compact_window() {
+        assert_eq!(rec_hud_height(false), REC_HUD_H);
+        assert_eq!(rec_hud_height(true), REC_HUD_POPUP_H);
+        assert!(REC_HUD_POPUP_H >= REC_HUD_H + 128);
+    }
+}
