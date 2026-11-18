@@ -70,6 +70,10 @@ TAURI_PREVIEW = r"""
         return null;
       }
       if (command === "recording_status") return { state: "idle" };
+      if (command === "set_rec_hud_expanded") {
+        window.__SNAPVERE_HUD_EXPANDED = args?.expanded === true;
+        return null;
+      }
       if (command === "plugin:window|is_visible") return true;
       return null;
     }
@@ -183,10 +187,20 @@ with sync_playwright() as p:
     stop.wait_for(timeout=30000)
     hud.get_by_role("button", name="Colour", exact=True).click()
     assert hud.locator('input[type="range"]').count() == 1, "Recording palette did not expand"
+    hud.wait_for_function("() => window.__SNAPVERE_HUD_EXPANDED === true", timeout=5000)
+    palette_rect = hud.locator('input[type="range"]').bounding_box()
+    assert palette_rect and 0 <= palette_rect["y"] < 740 and (
+        palette_rect["y"] + palette_rect["height"] <= 740
+    ), "Recording palette is clipped outside the screenshot viewport"
     hud.screenshot(path=str(OUTPUT / "recbar-palette.png"))
     hud.get_by_role("button", name="Colour", exact=True).click()
     stop.click()
     hud.get_by_role("alert").get_by_text("Could not stop recording. Try again.").wait_for(timeout=5000)
+    hud.wait_for_function("() => window.__SNAPVERE_HUD_EXPANDED === true", timeout=5000)
+    error_rect = hud.get_by_role("alert").bounding_box()
+    assert error_rect and 0 <= error_rect["y"] < 740 and (
+        error_rect["y"] + error_rect["height"] <= 740
+    ), "Recording Stop error alert is clipped outside the screenshot viewport"
     hud.screenshot(path=str(OUTPUT / "recbar-stop-error.png"))
     assert stop.is_enabled(), "Recording HUD must remain usable after Stop IPC fails"
     stop.click()
