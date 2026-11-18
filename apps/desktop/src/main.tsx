@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { listen } from "@tauri-apps/api/event";
 import "./styles.css";
 
 import Home from "./windows/Home";
@@ -38,6 +39,26 @@ try {
   // Use the secure default; Settings can still recover later.
 }
 document.documentElement.setAttribute("data-theme", theme);
+
+// Settings updates other WebView2 windows as well as its own document. The
+// storage event covers WebViews sharing an origin; the native event channel
+// covers independent Tauri WebViews without assuming their storage is shared.
+const applySharedTheme = (value: unknown) => {
+  if (value === "dark" || value === "light") {
+    document.documentElement.setAttribute("data-theme", value);
+  }
+};
+window.addEventListener("storage", (event) => {
+  if (event.key === "snapvere-theme") applySharedTheme(event.newValue);
+});
+void listen<"dark" | "light">("snapvere:theme-changed", ({ payload }) => {
+  applySharedTheme(payload);
+  try {
+    localStorage.setItem("snapvere-theme", payload);
+  } catch {
+    // Keep the current window's appearance usable when local storage is blocked.
+  }
+}).catch((error) => console.error("Cannot subscribe to theme updates", error));
 
 const { kind, params } = resolveWindow();
 
