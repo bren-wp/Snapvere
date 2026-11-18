@@ -3,10 +3,12 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { readCapturePreferences } from "../lib/capturePreferencesStore";
+import { clipboardImportCopy } from "../lib/clipboardImportCopy";
 import { listen } from "@tauri-apps/api/event";
 import {
   ArrowUpRight,
   Crop,
+  ClipboardPaste,
   Monitor,
   Settings as SettingsIcon,
   Search,
@@ -27,7 +29,8 @@ type Filter = "all" | "images" | "videos";
 const PAGE_SIZE = 120;
 
 export default function Home() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const clipboardText = clipboardImportCopy(language);
   const [items, setItems] = useState<Screenshot[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -192,6 +195,21 @@ export default function Home() {
       setCaptureBusy(false);
     }
   };
+  const importFromClipboard = async () => {
+    if (captureBusy) return;
+    setCaptureBusy(true);
+    try {
+      await ipc.importClipboardImage();
+      await load(query);
+      setToast(clipboardText.saved);
+    } catch (error) {
+      console.error("User-initiated clipboard import failed", error);
+      setToast(clipboardText.failed);
+    } finally {
+      setCaptureBusy(false);
+    }
+  };
+
   const recordArea = async () => {
     try {
       await getCurrentWindow().hide();
@@ -337,6 +355,17 @@ export default function Home() {
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={() => void importFromClipboard()}
+            disabled={captureBusy}
+            aria-label={clipboardText.action}
+            title={clipboardText.action}
+            className="snapvere-btn-secondary inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm disabled:opacity-50"
+          >
+            <ClipboardPaste size={16} aria-hidden="true" />
+            <span>{clipboardText.action}</span>
+          </button>
         </div>
       </section>
 
