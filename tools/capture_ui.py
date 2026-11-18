@@ -96,6 +96,15 @@ with sync_playwright() as p:
     )
     page.wait_for_timeout(1200)
     page.screenshot(path=str(OUTPUT / "home.png"), full_page=False)
+    # Reproducible hover/focus captures; never assert these match native Windows
+    # baselines just because the DOM state exists in headless Chromium.
+    primary = page.get_by_role("button", name="Capture region", exact=True)
+    primary.hover()
+    assert primary.evaluate("(el) => el.matches(':hover')"), "Home hover state did not activate"
+    page.screenshot(path=str(OUTPUT / "home-hover.png"))
+    primary.focus()
+    assert primary.evaluate("(el) => document.activeElement === el"), "Home focus was lost"
+    page.screenshot(path=str(OUTPUT / "home-focus.png"))
     settings = app.new_page()
     settings.goto("http://127.0.0.1:1420/#settings", wait_until="networkidle")
     settings.get_by_role("navigation").get_by_role("button", name="General").wait_for(timeout=30000)
@@ -114,6 +123,15 @@ with sync_playwright() as p:
         settings.get_by_role("navigation").get_by_role("button", name=tab + " settings", exact=True).click()
         settings.wait_for_timeout(200)
         settings.screenshot(path=str(OUTPUT / ("settings-" + tab.lower() + ".png")))
+    # Changing Recording to GIF should actually disable microphone/system audio
+    # rather than merely drawing grey-looking controls.
+    settings.get_by_role("navigation").get_by_role("button", name="Recording settings", exact=True).click()
+    settings.get_by_role("button", name="GIF", exact=True).click()
+    assert settings.get_by_role("switch", name="Record microphone").is_disabled()
+    assert settings.get_by_role("switch", name="Record system audio").is_disabled()
+    settings.screenshot(path=str(OUTPUT / "settings-recording-gif-disabled.png"))
+    settings.get_by_role("button", name="MP4", exact=True).click()
+    settings.get_by_role("navigation").get_by_role("button", name="About settings", exact=True).click()
     expected_version = json.loads(
         (ROOT / "apps/desktop/package.json").read_text(encoding="utf-8")
     )["version"]
@@ -142,8 +160,13 @@ with sync_playwright() as p:
     hud.goto("http://127.0.0.1:1420/#recbar", wait_until="networkidle")
     stop = hud.get_by_role("button", name="Stop and save", exact=True)
     stop.wait_for(timeout=30000)
+    hud.get_by_role("button", name="Colour", exact=True).click()
+    assert hud.locator('input[type="range"]').count() == 1, "Recording palette did not expand"
+    hud.screenshot(path=str(OUTPUT / "recbar-palette.png"))
+    hud.get_by_role("button", name="Colour", exact=True).click()
     stop.click()
     hud.get_by_role("alert").get_by_text("Could not stop recording. Try again.").wait_for(timeout=5000)
+    hud.screenshot(path=str(OUTPUT / "recbar-stop-error.png"))
     assert stop.is_enabled(), "Recording HUD must remain usable after Stop IPC fails"
     stop.click()
     hud.wait_for_function("() => window.__SNAPVERE_TEST_STOP_ATTEMPTS === 2", timeout=5000)
@@ -166,6 +189,58 @@ with sync_playwright() as p:
         "Editor overflows horizontally"
     )
     editor.screenshot(path=str(OUTPUT / "editor.png"))
+    # The same real React screens must also be exercised with light-mode tokens.
+    # These are synthetic browser previews, not Windows/WebView2 acceptance.
+    light = browser.new_context(viewport={"width": 1120, "height": 740},
+                                device_scale_factor=1, color_scheme="light")
+    light.add_init_script("try { localStorage.setItem('snapvere-theme', 'light'); } catch {}")
+    light.add_init_script("window.__SNAPVERE_EDITOR_IMAGE = " + json.dumps(editor_uri))
+    light.add_init_script(TAURI_PREVIEW)
+    light_home = light.new_page()
+    light_home.goto("http://127.0.0.1:1420/", wait_until="networkidle")
+    light_home.get_by_role("button", name="Capture region", exact=True).wait_for(timeout=30000)
+    light_home.wait_for_function("() => document.documentElement.dataset.theme === 'light'")
+    style = light_home.evaluate("""() => ({
+      border: getComputedStyle(document.documentElement).getPropertyValue('--brand-border').trim(),
+      brandbar: getComputedStyle(document.querySelector('.snapvere-app-brandbar')).backgroundColor,
+      primaryText: getComputedStyle(document.querySelector('.snapvere-action-card--primary')).color
+    })""")
+    assert style["border"] == "rgba(77, 66, 110, 0.2)", style
+    assert style["brandbar"].startswith("rgba(255, 255, 255,"), style
+    assert style["primaryText"] == "rgb(255, 255, 255)", style
+    assert not light_home.evaluate("() => document.documentElement.scrollWidth > innerWidth + 2")
+    light_home.screenshot(path=str(OUTPUT / "home-light.png"))
+    light_home.get_by_role("button", name="Capture region", exact=True).hover()
+    light_home.screenshot(path=str(OUTPUT / "home-hover-light.png"))
+
+    light_settings = light.new_page()
+    light_settings.goto("http://127.0.0.1:1420/#settings", wait_until="networkidle")
+    light_settings.get_by_role("navigation").get_by_role(
+        "button", name="Capture settings", exact=True
+    ).wait_for(timeout=30000)
+    for tab in ("Capture", "Recording", "Save", "Hotkeys", "General", "Privacy", "About"):
+        light_settings.get_by_role("navigation").get_by_role(
+            "button", name=tab + " settings", exact=True
+        ).click()
+        light_settings.wait_for_timeout(180)
+        light_settings.screenshot(path=str(OUTPUT / ("settings-" + tab.lower() + "-light.png")))
+        assert not light_settings.evaluate(
+            "() => document.documentElement.scrollWidth > innerWidth + 2"
+        ), f"Light Settings overflows in {tab}"
+    light_settings.get_by_role("navigation").get_by_role(
+        "button", name="General settings", exact=True
+    ).click()
+    # Native theme preference is stored via IPC; exercise the actual Settings control.
+    light_settings.get_by_role("button", name="Light", exact=True).click()
+    assert light_settings.evaluate("() => document.documentElement.dataset.theme") == "light"
+    light_settings.screenshot(path=str(OUTPUT / "settings-light.png"))
+
+    light_editor = light.new_page()
+    light_editor.goto("http://127.0.0.1:1420/#editor?p=" + editor_path, wait_until="networkidle")
+    light_editor.wait_for_function("() => document.querySelector('canvas')?.width >= 900",
+                                   timeout=20000)
+    light_editor.screenshot(path=str(OUTPUT / "editor-light.png"))
+    light.close()
     app.close()
     compact = browser.new_context(viewport={"width": 920, "height": 650},
                                   device_scale_factor=1, color_scheme="dark")
