@@ -155,6 +155,20 @@ with sync_playwright() as p:
         )
     settings.screenshot(path=str(OUTPUT / "settings-languages.png"))
 
+    # Theme is a shared product state, not just a Settings-page paint change.
+    # Exercise the user-facing segmented control and verify an already-open Home
+    # WebView updates as well, without a reload.
+    settings.get_by_role("navigation").get_by_role(
+        "button", name="General settings", exact=True
+    ).click()
+    settings.get_by_role("button", name="Light", exact=True).click()
+    page.wait_for_function("() => document.documentElement.dataset.theme === 'light'",
+                           timeout=10000)
+    settings.screenshot(path=str(OUTPUT / "settings-theme-switched-light.png"))
+    settings.get_by_role("button", name="Dark", exact=True).click()
+    page.wait_for_function("() => document.documentElement.dataset.theme === 'dark'",
+                           timeout=10000)
+
     # A failed native Stop must not hide the HUD or permanently disable its controls.
     hud = app.new_page()
     hud.goto("http://127.0.0.1:1420/#recbar", wait_until="networkidle")
