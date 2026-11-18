@@ -133,6 +133,15 @@ jobs:
       - name: NPM security audit (production and development)
         working-directory: apps/desktop
         run: npm audit --audit-level=high
+      - name: Produce auditable npm and Cargo SBOM for this build
+        run: python tools/generate_sbom.py --output dependency-reports/snapvere-sbom.cdx.json
+      - name: Archive version-locked supply-chain inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: Snapvere-SBOM-${{ github.sha }}
+          path: dependency-reports/snapvere-sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 90
 
   rustsec:
     name: RustSec advisory audit of locked Rust dependencies
