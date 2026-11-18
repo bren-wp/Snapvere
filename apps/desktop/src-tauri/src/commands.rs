@@ -1780,6 +1780,6 @@ mod rec_hud_geometry_tests {
     fn popups_expand_but_normal_recording_uses_compact_window() {
         assert_eq!(rec_hud_height(false), REC_HUD_H);
         assert_eq!(rec_hud_height(true), REC_HUD_POPUP_H);
-        assert!(REC_HUD_POPUP_H >= REC_HUD_H + 128);
+        assert!(rec_hud_height(true) >= rec_hud_height(false) + 128);
     }
 }
