@@ -1,4 +1,5 @@
 name: Snapvere one-shot manually requested npm refresh
+# Rerun with the corrected manual-only security policy.
 on:
   push:
     branches: ["fix/v0.2.19-manual-deps-stability-official-links"]
