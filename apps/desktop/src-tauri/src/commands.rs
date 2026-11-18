@@ -1277,10 +1277,7 @@ pub fn recording_status(
 /// Position and size are physical pixels to respect per-monitor DPI, and
 /// the bottom edge stays anchored while the toolbar/popup height changes.
 #[tauri::command]
-pub fn set_rec_hud_expanded(
-    window: tauri::WebviewWindow,
-    expanded: bool,
-) -> Result<(), String> {
+pub fn set_rec_hud_expanded(window: tauri::WebviewWindow, expanded: bool) -> Result<(), String> {
     require_window_label(window.label(), &["recbar"])?;
     let current = window.inner_size().map_err(estr)?;
     let scale = window.scale_factor().map_err(estr)?;
