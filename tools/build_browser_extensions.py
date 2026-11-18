@@ -8,16 +8,20 @@ from zipfile import ZipFile, ZIP_DEFLATED
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "extensions" / "source"
 BROWSERS = ("chrome", "edge", "brave", "opera", "vivaldi", "firefox", "safari")
-ASSETS = ("capture.js", "background.js", "popup.js", "popup.html", "popup.css")
-VERSION = "0.1.0"
+ASSETS = (
+    "capture.js", "workspace.js", "background.js",
+    "popup.js", "popup.html", "popup.css",
+    "editor.js", "editor.html", "editor.css",
+)
+VERSION = "0.2.0"
 
 def make_manifest(browser: str) -> dict:
     result = {
         "manifest_version": 3,
         "name": "SNAPVERE — " + browser.title(),
         "version": VERSION,
-        "description": "Capture visible tabs privately as local PNG screenshots. No uploads or tracking.",
-        "permissions": ["activeTab", "downloads"],
+        "description": "Capture visible tabs, crop regions and scroll webpages; annotate PNG privately.",
+        "permissions": ["activeTab", "downloads", "scripting", "clipboardWrite"],
         "action": {"default_title": "Capture tab with SNAPVERE", "default_popup": "popup.html"},
         "background": ({"scripts": ["capture.js", "background.js"]}
                        if browser in {"firefox", "safari"} else {"service_worker": "background.js"}),
