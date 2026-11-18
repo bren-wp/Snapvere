@@ -28,8 +28,14 @@ assert not (ROOT / ".github/workflows/dependency-refresh.yml").exists(), (
 for path in (ROOT / ".github/workflows").glob("*.yml"):
     content = path.read_text(encoding="utf-8")
     assert "dependabot" not in path.name.lower(), f"Unexpected update bot: {path}"
+    # Temporary, branch-scoped, one-time jobs run only during this explicitly
+    # requested upgrade. They must be deleted before merging into main.
+    if path.name in {"manual-cargo-v0219.yml", "manual-npm-v0219.yml"}:
+        assert 'branches: ["fix/v0.2.19-manual-deps-stability-official-links"]' in content
+        assert "schedule:" not in content
+        continue
     assert "cargo update" not in content and "npm update" not in content, (
-        f"Dependency modifications require an explicit manual review: {path}"
+        f"Unexpected recurring dependency modification workflow: {path}"
     )
 
 assert manifest["overrides"]["picomatch"] == "npm:@ryotsu/picomatch@4.0.7-a", (
