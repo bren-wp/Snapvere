@@ -291,7 +291,9 @@ mod startup_arg_tests {
 
     #[test]
     fn autostart_with_hidden_flag_keeps_hotkeys_in_tray() {
-        assert!(is_background_start(["--snapvere-startup-hidden".to_owned()]));
+        assert!(is_background_start(
+            ["--snapvere-startup-hidden".to_owned()]
+        ));
         assert!(is_background_start([
             "--unrelated".to_owned(),
             "--snapvere-startup-hidden".to_owned(),
@@ -300,7 +302,9 @@ mod startup_arg_tests {
 
     #[test]
     fn cannot_hide_by_prefix_or_partial_argument() {
-        assert!(!is_background_start(["--snapvere-startup-hidden=1".to_owned()]));
+        assert!(!is_background_start([
+            "--snapvere-startup-hidden=1".to_owned()
+        ]));
         assert!(!is_background_start(["--hidden".to_owned()]));
     }
 }
