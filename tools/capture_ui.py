@@ -98,7 +98,9 @@ with sync_playwright() as p:
     page.screenshot(path=str(OUTPUT / "home.png"), full_page=False)
     # Reproducible hover/focus captures; never assert these match native Windows
     # baselines just because the DOM state exists in headless Chromium.
-    primary = page.get_by_role("button", name="Capture region", exact=True)
+    primary = page.get_by_role("group", name="Capture actions").get_by_role(
+        "button", name="Capture region", exact=True
+    )
     primary.hover()
     assert primary.evaluate("(el) => el.matches(':hover')"), "Home hover state did not activate"
     page.screenshot(path=str(OUTPUT / "home-hover.png"))
@@ -212,7 +214,9 @@ with sync_playwright() as p:
     light.add_init_script(TAURI_PREVIEW)
     light_home = light.new_page()
     light_home.goto("http://127.0.0.1:1420/", wait_until="networkidle")
-    light_home.get_by_role("button", name="Capture region", exact=True).wait_for(timeout=30000)
+    light_home.get_by_role("group", name="Capture actions").get_by_role(
+        "button", name="Capture region", exact=True
+    ).wait_for(timeout=30000)
     light_home.wait_for_function("() => document.documentElement.dataset.theme === 'light'")
     style = light_home.evaluate("""() => ({
       border: getComputedStyle(document.documentElement).getPropertyValue('--brand-border').trim(),
@@ -224,7 +228,9 @@ with sync_playwright() as p:
     assert style["primaryText"] == "rgb(255, 255, 255)", style
     assert not light_home.evaluate("() => document.documentElement.scrollWidth > innerWidth + 2")
     light_home.screenshot(path=str(OUTPUT / "home-light.png"))
-    light_home.get_by_role("button", name="Capture region", exact=True).hover()
+    light_home.get_by_role("group", name="Capture actions").get_by_role(
+        "button", name="Capture region", exact=True
+    ).hover()
     light_home.screenshot(path=str(OUTPUT / "home-hover-light.png"))
 
     light_settings = light.new_page()
