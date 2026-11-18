@@ -77,7 +77,19 @@ structure, supported language codes, native tray mapping and test commands.
 - Enforce the GitHub prerelease flag until real Windows 10/11 acceptance is complete.
 - GitHub withdrew the picomatch advisory on 18 November 2026, but no patched
   upstream release exists; retain the reviewed pinned build-only fork and tests.
-- See [technical audit](docs/AUDIT-v0.2.18-P1-com-release.md).
+- Update Tauri API/CLI and Lucide to tested compatible npm patches and keep
+  the actual lockfile synchronized; update compatible Cargo crates only after
+  real Windows Rust/Clippy/RustSec checks pass.
+- Add reviewed weekly Dependabot update PRs and read-only dependency freshness reports;
+  publish lockfile-derived CycloneDX SBOM and its SHA-256 alongside installers.
+- Fix giant screenshot cropping in the viewer's `Fit to window` operation, with
+  image-scale regression tests for images bigger than 10,000 pixels.
+- Extend automated browser previews to 100/125/150/200% simulated DPI (dark/light);
+  add `tools/windows-native-capture.ps1` for locally collected genuine WebView2
+  evidence on physical Windows 10/11.
+- See [security and dependency audit](docs/SECURITY-STABILITY-v0.2.18.md),
+  [native acceptance guide](docs/NATIVE-WINDOWS-QA-v0.2.18.md) and
+  [technical COM audit](docs/AUDIT-v0.2.18-P1-com-release.md).
 
 ## v0.2.17 — bounded audio and multichannel support (published 17 November 2026)
 
