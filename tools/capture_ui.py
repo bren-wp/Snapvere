@@ -57,6 +57,11 @@ TAURI_PREVIEW = r"""
       if (command.startsWith("plugin:event|")) return 1;
       if (command.startsWith("plugin:store|")) {
         if (command === "plugin:store|load" || command === "plugin:store|new") return 1;
+        // The simulated store must agree with the persisted startup theme.
+        // Without this, a light screenshot falsely shows "Dark" as selected.
+        if (command === "plugin:store|get" && args?.key === "theme") {
+          return localStorage.getItem("snapvere-theme") === "light" ? "light" : "dark";
+        }
         return null;
       }
       if (command === "stop_recording") {
@@ -243,6 +248,12 @@ with sync_playwright() as p:
             "button", name=tab + " settings", exact=True
         ).click()
         light_settings.wait_for_timeout(180)
+        if tab == "General":
+            assert light_settings.get_by_role(
+                "button", name="Light", exact=True
+            ).get_attribute("aria-pressed") == "true", (
+                "Light WebView must also show Light as the selected Settings value"
+            )
         light_settings.screenshot(path=str(OUTPUT / ("settings-" + tab.lower() + "-light.png")))
         assert not light_settings.evaluate(
             "() => document.documentElement.scrollWidth > innerWidth + 2"
