@@ -59,7 +59,7 @@ for source_file in (APP / "src").rglob("*"):
     if source_file.suffix not in {".ts", ".tsx", ".html", ".css"}:
         continue
     content = source_file.read_text(encoding="utf-8")
-    for endpoint in re.findall(r'https?://[^\\s"\x27`<>]+', content):
+    for endpoint in re.findall(r"""https?://[^\s"\'`<>)]+""", content):
         host = urlparse(endpoint.rstrip("),;")).hostname
         assert host in allowed_app_hosts, (
             f"Nonofficial external URL in shipped UI: {source_file.relative_to(ROOT)}: {endpoint}"
