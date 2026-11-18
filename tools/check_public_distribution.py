@@ -29,7 +29,13 @@ for clause in ("Commercial license agreement", "Permitted use",
 assert "/license/" in (SITE / "sitemap.xml").read_text(encoding="utf-8")
 for name in ("index.html", "download/index.html", "privacy/index.html"):
     assert 'href="/license/"' in (SITE / name).read_text(encoding="utf-8"), name
-assert "https://snapvere.com/license/" in (APP / "src/windows/Settings.tsx").read_text(encoding="utf-8")
+settings_source = (APP / "src/windows/Settings.tsx").read_text(encoding="utf-8")
+assert "https://snapvere.com/license/" in settings_source
+assert "https://brendigo.com" not in settings_source, "External UI links must be Snapvere links"
+feed_source = (APP / "src/lib/updateFeed.ts").read_text(encoding="utf-8")
+assert "https://update.snapvere.com/stable.json" in feed_source
+assert "https://snapvere.com/download/" in feed_source
+assert "https://update.snapvere.com;" in config["app"]["security"]["csp"]
 
 for base, suffixes in ((SITE, {".html", ".js", ".css"}), (APP / "src", {".html", ".ts", ".tsx", ".css"})):
     for file in base.rglob("*"):
