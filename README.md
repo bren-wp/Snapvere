@@ -68,6 +68,10 @@ structure, supported language codes, native tray mapping and test commands.
 - Correct COM initialization reference handling for MP4 startup and cleanup after
   a Media Foundation startup failure. Reject unexpected COM HRESULT errors.
 - Test S_OK, S_FALSE, RPC_E_CHANGED_MODE and E_FAIL in Windows CI.
+- Correct light-mode borders, header/toolbar backgrounds, primary-action text contrast
+  and RGB alpha effects; propagate theme changes to already-open application windows.
+- Capture React dark/light, hover, focus, disabled, palette and error states in CI,
+  with strict reference comparison and no invented native 1:1 acceptance.
 - Enforce the GitHub prerelease flag until real Windows 10/11 acceptance is complete.
 - GitHub withdrew the picomatch advisory on 18 November 2026, but no patched
   upstream release exists; retain the reviewed pinned build-only fork and tests.
