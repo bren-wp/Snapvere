@@ -4,6 +4,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { ZoomIn, ZoomOut } from "lucide-react";
 import type { Screenshot } from "../../lib/types";
 import StageError from "./StageError";
+import { fitImageScale } from "../../lib/imageViewerGeometry";
 
 // ───────────────────────────────── slika ─────────────────────────────────
 
@@ -41,7 +42,7 @@ export default function ImageStage({
   }, []);
 
   // Rub od 48 px ostavlja mjesta trakama; male slike se ne razvlače preko 100 %.
-  const fit = box.w && box.h ? Math.max(0.1, Math.min((box.w - 96) / natural.w, (box.h - 160) / natural.h, 1)) : 1;
+  const fit = fitImageScale(box.w, box.h, natural.w, natural.h);
   const scale = zoom ?? fit;
   const w = natural.w * scale;
   const h = natural.h * scale;

@@ -83,6 +83,15 @@
 }
 
 [data-theme="light"] {
+  /* Brand materials must change with the theme, not just Tailwind's rgb tokens. */
+  --brand-bg: #f6f7f9;
+  --brand-surface: #ffffff;
+  --brand-elevated: #f0f0f2;
+  --brand-accent: #5f38c2;
+  --brand-accent-hi: #5f38c2;
+  --brand-text: #1c1c1e;
+  --brand-muted: #6e6e73;
+  --brand-border: rgba(77, 66, 110, 0.2);
   --snapvere-bg: 246 247 249;
   --snapvere-surface: 255 255 255;
   --snapvere-elevated: 240 240 242;
@@ -244,7 +253,7 @@ body.hud {
   background: rgb(var(--snapvere-accent));
   color: #fff;
   box-shadow:
-    0 2px 10px rgba(var(--snapvere-accent), 0.55),
+    0 2px 10px rgb(var(--snapvere-accent) / 0.55),
     0 0 0 0.5px rgba(255, 255, 255, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
@@ -418,7 +427,7 @@ body.hud {
 }
 
 ::selection {
-  background: rgba(var(--snapvere-accent), 0.35);
+  background: rgb(var(--snapvere-accent) / 0.35);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -455,9 +464,6 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   border-bottom: 1px solid var(--brand-border);
   background: rgba(20,20,22,.86);
 }
-[data-theme="light"] .snapvere-app-brandbar {
-  background: rgba(255,255,255,.92); border-bottom-color: rgba(25,35,48,.1);
-}
 .snapvere-app-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .snapvere-app-logo {
   width: 40px; height: 40px; flex: 0 0 40px; border-radius: 12px;
@@ -475,13 +481,12 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   color: rgb(var(--snapvere-muted)); font-size: 10px; font-weight: 750; letter-spacing: .14em;
 }
 .snapvere-app-toolbar { border-bottom: 1px solid var(--brand-border); background: rgba(20,20,22,.48); }
-[data-theme="light"] .snapvere-app-toolbar { background: rgba(240,240,242,.45); }
 .snapvere-btn-primary {
   border: 1px solid rgba(167,139,250,.35);
   box-shadow: 0 4px 18px rgba(118,72,235,.21), inset 0 1px 0 rgba(255,255,255,.22);
 }
 .snapvere-btn-primary:hover { box-shadow: 0 8px 28px rgba(118,72,235,.3); }
-.snapvere-btn-secondary { border: 1px solid var(--brand-border); background: rgba(255,255,255,.018); }
+.snapvere-btn-secondary { border: 1px solid var(--brand-border); background: rgb(var(--snapvere-surface) / .28); }
 .snapvere-btn-secondary:hover { border-color: rgba(167,139,250,.4); }
 .snapvere-section-eyebrow {
   color: rgb(var(--snapvere-accent)); font-size: 10px; font-weight: 800; letter-spacing: .15em;
@@ -556,6 +561,15 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .snapvere-app-brandbar { background: rgba(11,16,34,.92); min-height: 76px; }
 .snapvere-app-shell { background: linear-gradient(148deg,#151831, #101629 80%); }
 .snapvere-app-toolbar { background: rgba(16,23,44,.84); }
+/* Keep light materials after the final dark shell declarations to prevent
+   a later equal-specificity selector from reintroducing a dark toolbar. */
+[data-theme="light"] .snapvere-app-brandbar {
+  background: rgba(255,255,255,.96);
+  border-bottom-color: var(--brand-border);
+}
+[data-theme="light"] .snapvere-app-toolbar {
+  background: rgba(240,240,242,.75);
+}
 .snapvere-btn-primary { background-color: #7045d4; border-color: #9570ed; }
 .snapvere-btn-primary:hover { background-color: #875cf2; }
 [data-theme="light"] .snapvere-app-shell { background: rgb(var(--snapvere-bg)); }
@@ -604,6 +618,8 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .snapvere-action-card:not(:disabled):hover { border-color: rgba(167,139,250,.58); transform: translateY(-2px); }
 .snapvere-action-card--primary {
+  /* Light-mode text tokens are dark: never inherit them on violet surfaces. */
+  color: #fff;
   border-color: rgba(167,139,250,.55);
   background: linear-gradient(125deg, #7045d4, #562aa9);
   box-shadow: 0 8px 24px rgba(77,44,148,.22);

@@ -2,7 +2,26 @@
 
 SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO**.
 
-## v0.2.17 — P1 bounded audio buffering and safe PCM decoding (development candidate)
+## v0.2.18 — P1 Media Foundation COM cleanup and prerelease QA (development candidate)
+
+- Fail MP4 startup on unexpected CoInitializeEx HRESULTs; handle S_OK, S_FALSE and RPC_E_CHANGED_MODE according to COM reference ownership.
+- Release successful per-thread COM initialization when MFStartup fails before the session guard exists.
+- Add Windows regression tests for COM status classification.
+- Fix light-mode brand tokens, dark header/toolbar overrides, violet capture-card text contrast, and invalid RGB alpha styles.
+- Synchronize Settings theme changes between open Tauri WebViews via storage and native event notifications.
+- Expand Playwright visual state captures for light/dark, hover, focus, disabled GIF audio, recording palette and Stop error; require fail-closed PNG reference comparisons.
+- Fix native recording HUD popup/error clipping: dynamically expand a caller-restricted 58px-to-216px WebView window, anchor toolbar bottom and correct mixed-DPI centering; assert popup bounds in screenshot tests.
+- Track all unverified native WebView2/DPI cases in `docs/VISUAL-CORRECTIONS-v0.2.18.md` without claiming 1:1 parity.
+- Verify/correct GitHub Release prerelease metadata during publication until physical Windows QA is documented.
+- Correct README release status, document GitHub's 2026-11-18 withdrawal of GHSA-fc5q-39xc-vjpf without treating it as a patched version, and retain fork tests and strict npm audits.
+- Update compatible npm packages: Tauri API 2.12.5, Tauri CLI 2.12.6 and Lucide 1.75.0, together with a regenerated lockfile; audit remaining Cargo-compatible upgrades on Windows.
+- Fix viewer Fit-to-window clipping for huge screenshots; add pure geometry regression tests.
+- Add synthetic 100/125/150/200% DPI snapshots for both themes and local-only PowerShell evidence collector for actual Win10/11 WebView2 windows.
+- Replace stale write-enabled dependency refresh workflow with read-only freshness reports; expand Dependabot review policies, CI policy guards and npm/Cargo CycloneDX SBOM.
+- Add release SBOM checksums; documentation: `docs/SECURITY-STABILITY-v0.2.18.md` and `docs/NATIVE-WINDOWS-QA-v0.2.18.md`.
+- See `docs/AUDIT-v0.2.18-P1-com-release.md`. Native Windows acceptance remains pending.
+
+## v0.2.17 — P1 bounded audio buffering and safe PCM decoding (published 2026-11-17, hardware QA pending)
 
 - Bound microphone and system-audio WASAPI packet frame counts to two seconds of validated device sample rate; reject malformed oversized driver buffers before scratch allocation, while still releasing acquired packets.
 - Decode PCM16, PCM32 and IEEE float32 with unaligned-safe byte-pointer reads, eliminating undefined behavior when a driver returns an unaligned sample pointer.

@@ -1,7 +1,7 @@
 {
   "name": "snapvere-desktop",
   "private": true,
-  "version": "0.2.17",
+  "version": "0.2.18",
   "type": "module",
   "description": "Snapvere — brzi, privatni screenshot i screen-recording alat (desktop)",
   "scripts": {
@@ -11,23 +11,23 @@
     "tauri": "tauri",
     "lint": "tsc --noEmit --pretty false",
     "test:capture": "node --test --experimental-strip-types tests/capturePreferences.test.mjs",
-    "test:unit": "node --test --experimental-strip-types tests/capturePreferences.test.mjs tests/galleryPaging.test.mjs tests/playerPreferences.test.mjs tests/settingsPreferences.test.mjs tests/selectionGeometry.test.mjs tests/languages.test.mjs tests/recordingControls.test.mjs tests/mediaFormatting.test.mjs tests/picomatchSecurity.test.mjs",
+    "test:unit": "node --test --experimental-strip-types tests/capturePreferences.test.mjs tests/galleryPaging.test.mjs tests/playerPreferences.test.mjs tests/settingsPreferences.test.mjs tests/selectionGeometry.test.mjs tests/languages.test.mjs tests/recordingControls.test.mjs tests/mediaFormatting.test.mjs tests/imageViewerGeometry.test.mjs tests/picomatchSecurity.test.mjs",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "test:security": "node --test tests/picomatchSecurity.test.mjs"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/api": "^2.12.5",
     "@tauri-apps/plugin-autostart": "^2.7.0",
     "@tauri-apps/plugin-dialog": "^2.8.4",
     "@tauri-apps/plugin-opener": "^2.7.3",
     "@tauri-apps/plugin-store": "^2.5.1",
-    "lucide-react": "^1.72.0",
+    "lucide-react": "^1.75.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.5",
-    "@tauri-apps/cli": "^2.12.4",
+    "@tauri-apps/cli": "^2.12.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@typescript/typescript6": "^6.0.2",

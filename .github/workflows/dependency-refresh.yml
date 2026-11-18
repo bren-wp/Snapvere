@@ -1,26 +1,29 @@
-name: Refresh tested SNAPVERE v0.2.9 dependencies in existing PR
+name: SNAPVERE dependency freshness and security report
 
-# One-shot branch-scoped updater (Rustfmt import order fixed for native audit and major upgrades). A push caused by GITHUB_TOKEN does not
-# recursively trigger another workflow. Re-run final CI against the commit
-# produced by the updater (e.g. manually dispatch quality on the PR branch).
+# The former v0.2.9-only updater silently ignored all current branches and
+# granted contents:write to jobs running on freshly downloaded dependencies.
+# Dependabot handles update PR creation; this report never writes to GitHub.
 on:
+  # An update to this policy is audited on the PR branch as well.
   push:
-    branches: [feature/snapvere-v0.2.9-premium-modular-audit]
-    paths: ['.github/workflows/dependency-refresh.yml']
+    branches: ["feature/**", "fix/**"]
+    paths: [".github/workflows/dependency-refresh.yml"]
+  workflow_dispatch:
+  schedule:
+    - cron: '30 4 * * 1'
+
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: snapvere-deps-v029
-  # Replace obsolete attempts that use an older vulnerable Cargo.toml.
+  group: snapvere-dependency-audit-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  frontend:
-    if: github.ref == 'refs/heads/feature/snapvere-v0.2.9-premium-modular-audit'
-    name: Refresh npm dependency manifest and lockfile; test before committing
+  npm:
+    name: Check npm dependency freshness and security
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
@@ -28,100 +31,62 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
-      - name: Refresh stable npm and migrate Tailwind 4 packages, safely regenerate the exact lockfile
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Install locked npm graph without lifecycle scripts
+        working-directory: apps/desktop
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Assert locked graph security
+        working-directory: apps/desktop
+        run: npm audit --audit-level=high
+      - name: Export npm outdated report without changing package files
         working-directory: apps/desktop
         shell: bash
         run: |
           set -euo pipefail
-          # Dependency lifecycle scripts are untrusted: do not run them while
-          # any GitHub write credentials are accessible to this job.
-          npm ci --ignore-scripts --no-audit --no-fund
-          npm update --ignore-scripts --no-audit --no-fund
-          npm install --save --ignore-scripts --no-audit --no-fund \
-            @tauri-apps/api@latest @tauri-apps/plugin-autostart@latest \
-            @tauri-apps/plugin-dialog@latest @tauri-apps/plugin-opener@latest \
-            @tauri-apps/plugin-store@latest lucide-react@latest \
-            react@latest react-dom@latest
-          npm install --save-dev --ignore-scripts --no-audit --no-fund \
-            @tauri-apps/cli@latest @types/react@latest @types/react-dom@latest \
-            @vitejs/plugin-react@latest vite@latest typescript@latest \
-            postcss@latest tailwindcss@latest @tailwindcss/postcss@latest \
-            @typescript/typescript6@latest
-          # Tailwind 4 performs its own prefixing, so autoprefixer is dead code.
-          npm uninstall --save-dev --ignore-scripts --no-audit --no-fund autoprefixer
-          npm ci --ignore-scripts --no-audit --no-fund
-          npm run lint
-          npm run test:unit
-          npm run build
-          npm audit --audit-level=high
-          npm outdated || true
-      - name: Verify Tailwind 4 CSS-first production contract
-        run: python tools/check_tailwind4.py
-      - name: Commit only tested npm manifest and lockfile
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/desktop/package.json apps/desktop/package-lock.json
-          if git diff --cached --quiet; then
-            echo "No npm updates required"
-            exit 0
+          mkdir -p ../../dependency-reports
+          npm outdated --json > ../../dependency-reports/npm-outdated.json || status=$?
+          if [ "${status:-0}" -ne 0 ] && [ "${status:-0}" -ne 1 ]; then
+            echo "npm outdated failed unexpectedly (exit ${status})"
+            exit "${status}"
           fi
-          git commit -m "chore(deps): update tested stable npm and React dependencies"
-          gh auth setup-git
-          git fetch origin "${GITHUB_REF_NAME}"
-          git rebase "origin/${GITHUB_REF_NAME}"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          cat ../../dependency-reports/npm-outdated.json
+      - name: Upload npm freshness report
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapvere-npm-freshness
+          path: dependency-reports/npm-outdated.json
+          if-no-files-found: error
+          retention-days: 30
 
   rust:
-    needs: frontend
-    name: Refresh compatible Rust dependency graph; test on Windows
-    runs-on: windows-latest
-    timeout-minutes: 80
+    name: Verify Cargo security and report outdated crates
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: apps/desktop/src-tauri -> target
-      - name: Update Cargo.lock against actual compatible crates
-        working-directory: apps/desktop/src-tauri
-        run: cargo update
-      - name: Check Rust formatting
-        working-directory: apps/desktop/src-tauri
-        run: cargo fmt --all -- --check
-      - name: Run all Rust tests
-        working-directory: apps/desktop/src-tauri
-        run: cargo test --locked
-      - name: Strict Rust lint
-        working-directory: apps/desktop/src-tauri
-        run: cargo clippy --all-targets --locked -- -D warnings
-      - name: Commit only tested Cargo.lock
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: pwsh
+      - name: Install pinned RustSec scanner and cargo-outdated
         run: |
-          $ErrorActionPreference = 'Stop'
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add apps/desktop/src-tauri/Cargo.lock
-          git diff --cached --quiet
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host 'No Rust lockfile updates required'
-            exit 0
-          }
-          git commit -m 'chore(deps): update tested Rust crates; remove unused plugin dependencies'
-          gh auth setup-git
-          git fetch origin $env:GITHUB_REF_NAME
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot fetch PR branch' }
-          git rebase "origin/$env:GITHUB_REF_NAME"
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot rebase onto updated PR' }
-          git push origin "HEAD:$env:GITHUB_REF_NAME"
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot push validated Cargo.lock' }
+          cargo install cargo-audit --version 0.23.0 --locked
+          cargo install cargo-outdated --locked
+      - name: Assert bundled SQLite is patched
+        run: python tools/check_sqlite_security.py
+      - name: Audit locked crates
+        run: cargo audit --file apps/desktop/src-tauri/Cargo.lock
+      - name: Report compatible and breaking Cargo updates without writing lockfile
+        working-directory: apps/desktop/src-tauri
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ../../../dependency-reports
+          cargo outdated --format json > ../../../dependency-reports/cargo-outdated.json
+      - name: Upload Cargo freshness report
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapvere-cargo-freshness
+          path: dependency-reports/cargo-outdated.json
+          if-no-files-found: error
+          retention-days: 30

@@ -57,6 +57,17 @@ TAURI_PREVIEW = r"""
       if (command.startsWith("plugin:event|")) return 1;
       if (command.startsWith("plugin:store|")) {
         if (command === "plugin:store|load" || command === "plugin:store|new") return 1;
+        // The simulated store must agree with the persisted startup theme.
+        // Without this, a light screenshot falsely shows "Dark" as selected.
+        // Tauri's Store.get guest JS destructures [value, exists].
+        // Returning a bare string or null makes the preview silently reject
+        // all preferences (or treat "light" as the one-character value "l").
+        if (command === "plugin:store|get") {
+          if (args?.key === "theme") {
+            return [localStorage.getItem("snapvere-theme") === "light" ? "light" : "dark", true];
+          }
+          return [null, false];
+        }
         return null;
       }
       if (command === "stop_recording") {
@@ -65,6 +76,10 @@ TAURI_PREVIEW = r"""
         return null;
       }
       if (command === "recording_status") return { state: "idle" };
+      if (command === "set_rec_hud_expanded") {
+        window.__SNAPVERE_HUD_EXPANDED = args?.expanded === true;
+        return null;
+      }
       if (command === "plugin:window|is_visible") return true;
       return null;
     }
@@ -75,7 +90,7 @@ TAURI_PREVIEW = r"""
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True, args=["--disable-web-security"])
     app = browser.new_context(viewport={"width": 1120, "height": 740},
-                              device_scale_factor=1, color_scheme="dark")
+                              device_scale_factor=1, color_scheme="dark", reduced_motion="reduce")
     # Re-use an actual SNAPVERE screenshot as the editor's image fixture.
     editor_source = ROOT / "site/screenshots/home.png"
     assert editor_source.is_file(), "SNAPVERE editor preview fixture is missing"
@@ -96,6 +111,17 @@ with sync_playwright() as p:
     )
     page.wait_for_timeout(1200)
     page.screenshot(path=str(OUTPUT / "home.png"), full_page=False)
+    # Reproducible hover/focus captures; never assert these match native Windows
+    # baselines just because the DOM state exists in headless Chromium.
+    primary = page.get_by_role("group", name="Capture actions").get_by_role(
+        "button", name="Capture region", exact=True
+    )
+    primary.hover()
+    assert primary.evaluate("(el) => el.matches(':hover')"), "Home hover state did not activate"
+    page.screenshot(path=str(OUTPUT / "home-hover.png"))
+    primary.focus()
+    assert primary.evaluate("(el) => document.activeElement === el"), "Home focus was lost"
+    page.screenshot(path=str(OUTPUT / "home-focus.png"))
     settings = app.new_page()
     settings.goto("http://127.0.0.1:1420/#settings", wait_until="networkidle")
     settings.get_by_role("navigation").get_by_role("button", name="General").wait_for(timeout=30000)
@@ -114,6 +140,15 @@ with sync_playwright() as p:
         settings.get_by_role("navigation").get_by_role("button", name=tab + " settings", exact=True).click()
         settings.wait_for_timeout(200)
         settings.screenshot(path=str(OUTPUT / ("settings-" + tab.lower() + ".png")))
+    # Changing Recording to GIF should actually disable microphone/system audio
+    # rather than merely drawing grey-looking controls.
+    settings.get_by_role("navigation").get_by_role("button", name="Recording settings", exact=True).click()
+    settings.get_by_role("button", name="GIF", exact=True).click()
+    assert settings.get_by_role("switch", name="Record microphone").is_disabled()
+    assert settings.get_by_role("switch", name="Record system audio").is_disabled()
+    settings.screenshot(path=str(OUTPUT / "settings-recording-gif-disabled.png"))
+    settings.get_by_role("button", name="MP4", exact=True).click()
+    settings.get_by_role("navigation").get_by_role("button", name="About settings", exact=True).click()
     expected_version = json.loads(
         (ROOT / "apps/desktop/package.json").read_text(encoding="utf-8")
     )["version"]
@@ -137,13 +172,42 @@ with sync_playwright() as p:
         )
     settings.screenshot(path=str(OUTPUT / "settings-languages.png"))
 
+    # Theme is a shared product state, not just a Settings-page paint change.
+    # Exercise the user-facing segmented control and verify an already-open Home
+    # WebView updates as well, without a reload.
+    settings.get_by_role("navigation").get_by_role(
+        "button", name="General settings", exact=True
+    ).click()
+    settings.get_by_role("button", name="Light", exact=True).click()
+    page.wait_for_function("() => document.documentElement.dataset.theme === 'light'",
+                           timeout=10000)
+    settings.screenshot(path=str(OUTPUT / "settings-theme-switched-light.png"))
+    settings.get_by_role("button", name="Dark", exact=True).click()
+    page.wait_for_function("() => document.documentElement.dataset.theme === 'dark'",
+                           timeout=10000)
+
     # A failed native Stop must not hide the HUD or permanently disable its controls.
     hud = app.new_page()
     hud.goto("http://127.0.0.1:1420/#recbar", wait_until="networkidle")
     stop = hud.get_by_role("button", name="Stop and save", exact=True)
     stop.wait_for(timeout=30000)
+    hud.get_by_role("button", name="Colour", exact=True).click()
+    assert hud.locator('input[type="range"]').count() == 1, "Recording palette did not expand"
+    hud.wait_for_function("() => window.__SNAPVERE_HUD_EXPANDED === true", timeout=5000)
+    palette_rect = hud.locator('input[type="range"]').bounding_box()
+    assert palette_rect and 0 <= palette_rect["y"] < 740 and (
+        palette_rect["y"] + palette_rect["height"] <= 740
+    ), "Recording palette is clipped outside the screenshot viewport"
+    hud.screenshot(path=str(OUTPUT / "recbar-palette.png"))
+    hud.get_by_role("button", name="Colour", exact=True).click()
     stop.click()
     hud.get_by_role("alert").get_by_text("Could not stop recording. Try again.").wait_for(timeout=5000)
+    hud.wait_for_function("() => window.__SNAPVERE_HUD_EXPANDED === true", timeout=5000)
+    error_rect = hud.get_by_role("alert").bounding_box()
+    assert error_rect and 0 <= error_rect["y"] < 740 and (
+        error_rect["y"] + error_rect["height"] <= 740
+    ), "Recording Stop error alert is clipped outside the screenshot viewport"
+    hud.screenshot(path=str(OUTPUT / "recbar-stop-error.png"))
     assert stop.is_enabled(), "Recording HUD must remain usable after Stop IPC fails"
     stop.click()
     hud.wait_for_function("() => window.__SNAPVERE_TEST_STOP_ATTEMPTS === 2", timeout=5000)
@@ -166,9 +230,75 @@ with sync_playwright() as p:
         "Editor overflows horizontally"
     )
     editor.screenshot(path=str(OUTPUT / "editor.png"))
+    # The same real React screens must also be exercised with light-mode tokens.
+    # These are synthetic browser previews, not Windows/WebView2 acceptance.
+    light = browser.new_context(viewport={"width": 1120, "height": 740},
+                                device_scale_factor=1, color_scheme="light", reduced_motion="reduce")
+    light.add_init_script("try { localStorage.setItem('snapvere-theme', 'light'); } catch {}")
+    light.add_init_script("window.__SNAPVERE_EDITOR_IMAGE = " + json.dumps(editor_uri))
+    light.add_init_script(TAURI_PREVIEW)
+    light_home = light.new_page()
+    light_home.goto("http://127.0.0.1:1420/", wait_until="networkidle")
+    light_home.get_by_role("group", name="Capture actions").get_by_role(
+        "button", name="Capture region", exact=True
+    ).wait_for(timeout=30000)
+    light_home.wait_for_function("() => document.documentElement.dataset.theme === 'light'")
+    style = light_home.evaluate("""() => ({
+      border: getComputedStyle(document.documentElement).getPropertyValue('--brand-border').trim(),
+      brandbar: getComputedStyle(document.querySelector('.snapvere-app-brandbar')).backgroundColor,
+      primaryText: getComputedStyle(document.querySelector('.snapvere-action-card--primary')).color
+    })""")
+    assert style["border"] == "rgba(77, 66, 110, 0.2)", style
+    assert style["brandbar"].startswith("rgba(255, 255, 255,"), style
+    assert style["primaryText"] == "rgb(255, 255, 255)", style
+    assert not light_home.evaluate("() => document.documentElement.scrollWidth > innerWidth + 2")
+    light_home.screenshot(path=str(OUTPUT / "home-light.png"))
+    light_home.get_by_role("group", name="Capture actions").get_by_role(
+        "button", name="Capture region", exact=True
+    ).hover()
+    light_home.screenshot(path=str(OUTPUT / "home-hover-light.png"))
+
+    light_settings = light.new_page()
+    light_settings.goto("http://127.0.0.1:1420/#settings", wait_until="networkidle")
+    light_settings.get_by_role("navigation").get_by_role(
+        "button", name="Capture settings", exact=True
+    ).wait_for(timeout=30000)
+    for tab in ("Capture", "Recording", "Save", "Hotkeys", "General", "Privacy", "About"):
+        light_settings.get_by_role("navigation").get_by_role(
+            "button", name=tab + " settings", exact=True
+        ).click()
+        light_settings.wait_for_timeout(180)
+        if tab == "General":
+            # Select the visible preference via the real Segmented control. The
+            # mock store does not guarantee cross-process preference persistence;
+            # never photograph a light theme with Dark still selected.
+            light_settings.get_by_role("button", name="Light", exact=True).click()
+            assert light_settings.get_by_role(
+                "button", name="Light", exact=True
+            ).get_attribute("aria-pressed") == "true", (
+                "Selecting Light must update the segmented control state"
+            )
+        light_settings.screenshot(path=str(OUTPUT / ("settings-" + tab.lower() + "-light.png")))
+        assert not light_settings.evaluate(
+            "() => document.documentElement.scrollWidth > innerWidth + 2"
+        ), f"Light Settings overflows in {tab}"
+    light_settings.get_by_role("navigation").get_by_role(
+        "button", name="General settings", exact=True
+    ).click()
+    # Native theme preference is stored via IPC; exercise the actual Settings control.
+    light_settings.get_by_role("button", name="Light", exact=True).click()
+    assert light_settings.evaluate("() => document.documentElement.dataset.theme") == "light"
+    light_settings.screenshot(path=str(OUTPUT / "settings-light.png"))
+
+    light_editor = light.new_page()
+    light_editor.goto("http://127.0.0.1:1420/#editor?p=" + editor_path, wait_until="networkidle")
+    light_editor.wait_for_function("() => document.querySelector('canvas')?.width >= 900",
+                                   timeout=20000)
+    light_editor.screenshot(path=str(OUTPUT / "editor-light.png"))
+    light.close()
     app.close()
     compact = browser.new_context(viewport={"width": 920, "height": 650},
-                                  device_scale_factor=1, color_scheme="dark")
+                                  device_scale_factor=1, color_scheme="dark", reduced_motion="reduce")
     compact.add_init_script(TAURI_PREVIEW)
     compact_page = compact.new_page()
     compact_page.goto("http://127.0.0.1:1420/", wait_until="networkidle")
@@ -253,6 +383,77 @@ with sync_playwright() as p:
         raise RuntimeError("Capture overlay rendered black or empty pixels instead of the desktop")
     capture_page.screenshot(path=str(OUTPUT / "capture-overlay.png"))
     selection.close()
+
+    # Synthetic DPR layout sweep: a browser device-scale factor is NOT Windows
+    # per-monitor DPI awareness or native WebView2 hardware QA. It does catch
+    # obvious scaling/overflow regressions across both themes.
+    dpi_results = []
+    for dpi in (100, 125, 150, 200):
+        scale = dpi / 100.0
+        for theme in ("dark", "light"):
+            scaled = browser.new_context(
+                viewport={"width": 1120, "height": 740},
+                device_scale_factor=scale, color_scheme=theme,
+                reduced_motion="reduce",
+            )
+            scaled.add_init_script(
+                "localStorage.setItem('snapvere-theme', " + json.dumps(theme) + ")"
+            )
+            scaled.add_init_script(TAURI_PREVIEW)
+            for screen, address in (("home", "/"), ("settings", "/#settings")):
+                view = scaled.new_page()
+                view.goto("http://127.0.0.1:1420" + address, wait_until="networkidle")
+                if screen == "home":
+                    primary = view.get_by_role(
+                        "group", name="Capture actions"
+                    ).get_by_role("button", name="Capture region", exact=True)
+                    primary.wait_for(timeout=30000)
+                    rects = view.locator(".snapvere-action-card").evaluate_all(
+                        """(nodes) => nodes.map(n => {
+                          const r=n.getBoundingClientRect();
+                          return {x:r.x,y:r.y,right:r.right,bottom:r.bottom};
+                        })"""
+                    )
+                    assert len(rects) == 3, "Capture action cards missing"
+                    assert all(0 <= r["x"] and r["right"] <= 1122 and
+                               0 <= r["y"] and r["bottom"] <= 742
+                               for r in rects), f"{dpi}% {theme}: capture buttons clipped {rects}"
+                else:
+                    view.get_by_role("navigation").get_by_role(
+                        "button", name="Capture settings", exact=True
+                    ).wait_for(timeout=30000)
+                view.wait_for_function(
+                    "(expected) => document.documentElement.dataset.theme === expected",
+                    arg=theme, timeout=10000,
+                )
+                overflow = view.evaluate(
+                    "() => document.documentElement.scrollWidth > innerWidth + 2"
+                )
+                assert not overflow, f"{dpi}% {theme} {screen}: horizontal UI overflow"
+                assert abs(view.evaluate("() => window.devicePixelRatio") - scale) < .001
+                filename = f"dpi-{dpi}-{screen}-{theme}.png"
+                screenshot = view.screenshot(path=str(OUTPUT / filename))
+                import struct
+                image_w, image_h = struct.unpack(">II", screenshot[16:24])
+                assert (image_w, image_h) == (
+                    round(1120 * scale), round(740 * scale)
+                ), f"Wrong physical screenshot dimensions for {filename}"
+                dpi_results.append({
+                    "dpi_simulated_percent": dpi, "theme": theme,
+                    "screen": screen, "image": filename,
+                    "physical_png_size": [image_w, image_h],
+                    "horizontal_overflow": False,
+                })
+                view.close()
+            scaled.close()
+    (ROOT / "docs" / "visual-audit").mkdir(parents=True, exist_ok=True)
+    (ROOT / "docs" / "visual-audit" / "synthetic-dpi-matrix.json").write_text(
+        json.dumps({
+            "kind": "chromium-device-scale-factor-not-native-windows-dpi",
+            "native_windows_acceptance": False,
+            "checks": dpi_results
+        }, indent=2) + "\\n", encoding="utf-8"
+    )
     browser.close()
 
 for path in OUTPUT.glob("*.png"):

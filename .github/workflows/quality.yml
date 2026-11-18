@@ -74,6 +74,8 @@ jobs:
         run: python tools/check_ipc_contract.py
       - name: Enforce per-window Tauri capability isolation
         run: python tools/check_tauri_capabilities.py
+      - name: Reject unsafe dependency updater permissions and version drift
+        run: python tools/check_dependency_policy.py
       - name: Reject duplicate release version before merging application changes
         if: github.event_name == 'pull_request'
         shell: bash
@@ -131,6 +133,15 @@ jobs:
       - name: NPM security audit (production and development)
         working-directory: apps/desktop
         run: npm audit --audit-level=high
+      - name: Produce auditable npm and Cargo SBOM for this build
+        run: python tools/generate_sbom.py --output dependency-reports/snapvere-sbom.cdx.json
+      - name: Archive version-locked supply-chain inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: Snapvere-SBOM-${{ github.sha }}
+          path: dependency-reports/snapvere-sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 90
 
   rustsec:
     name: RustSec advisory audit of locked Rust dependencies
@@ -173,6 +184,18 @@ jobs:
       - name: Build frontend for Tauri
         working-directory: apps/desktop
         run: npm run build
+      - name: Validate native Windows QA capture PowerShell syntax (no desktop capture in CI)
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'tools/windows-native-capture.ps1').Path,
+            [ref]$tokens, [ref]$parseErrors
+          ) | Out-Null
+          if ($parseErrors.Count -ne 0) {
+            throw "Windows native capture script syntax errors: $($parseErrors | Out-String)"
+          }
       - name: Verify Rust format without changing source
         working-directory: apps/desktop/src-tauri
         run: cargo fmt --all -- --check

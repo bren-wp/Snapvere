@@ -69,6 +69,7 @@ protected_ipc = {
     "set_draw_interactive": ["recdraw"],
     "set_blur_regions": ["recdraw"],
     "close_rec_hud": ["recbar"],
+    "set_rec_hud_expanded": ["recbar"],
     "begin_region_capture": ["home"],
     "capture_fullscreen": ["home"],
     "save_edited_image": ["overlay", "editor"],

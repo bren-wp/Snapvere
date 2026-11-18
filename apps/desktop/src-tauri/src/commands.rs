@@ -609,6 +609,17 @@ pub fn ensure_rec_windows(app: &AppHandle) -> Result<(), String> {
 /// preuska traka tiho odreže desne gumbe — flex djeca su `shrink-0`.
 const REC_HUD_W: u32 = 820;
 const REC_HUD_H: u32 = 58;
+// A palette/error cannot render above a 58px native HWND. Expand the
+// transparent HUD only while a popup is open, preserving its screen bottom.
+const REC_HUD_POPUP_H: u32 = 216;
+
+fn rec_hud_height(expanded: bool) -> u32 {
+    if expanded {
+        REC_HUD_POPUP_H
+    } else {
+        REC_HUD_H
+    }
+}
 
 fn open_editor_window(app: &AppHandle, file_path: &str) -> Result<(), String> {
     // Newly saved gallery images may not have been listed yet, so their
@@ -1262,6 +1273,32 @@ pub fn recording_status(
     Ok(record::status(&app))
 }
 
+/// Resize only the recording HUD, only to reviewed fixed dimensions.
+/// Position and size are physical pixels to respect per-monitor DPI, and
+/// the bottom edge stays anchored while the toolbar/popup height changes.
+#[tauri::command]
+pub fn set_rec_hud_expanded(window: tauri::WebviewWindow, expanded: bool) -> Result<(), String> {
+    require_window_label(window.label(), &["recbar"])?;
+    let current = window.inner_size().map_err(estr)?;
+    let scale = window.scale_factor().map_err(estr)?;
+    let target = (f64::from(rec_hud_height(expanded)) * scale)
+        .round()
+        .max(1.0) as u32;
+    if current.height == target {
+        return Ok(());
+    }
+    let position = window.outer_position().map_err(estr)?;
+    let new_y = i64::from(position.y) + i64::from(current.height) - i64::from(target);
+    let new_y = new_y.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
+    window
+        .set_position(PhysicalPosition::new(position.x, new_y))
+        .map_err(estr)?;
+    window
+        .set_size(PhysicalSize::new(current.width, target))
+        .map_err(estr)?;
+    Ok(())
+}
+
 /// Odredi monitor za snimanje: eksplicitni id, inače onaj pod mišem.
 fn resolve_target(
     app: &AppHandle,
@@ -1302,8 +1339,19 @@ fn show_rec_hud(app: &AppHandle, target: &RecordTarget) -> Result<(), String> {
         .ok_or("HUD prozor nedostaje")?;
 
     // Dno-centar snimanog monitora, malo iznad ruba.
-    let x = target.monitor_x + (target.monitor_w as i32 - REC_HUD_W as i32) / 2;
-    let y = target.monitor_y + target.monitor_h as i32 - REC_HUD_H as i32 - 48;
+    let scale = win.scale_factor().map_err(estr)?;
+    let base_height = (f64::from(REC_HUD_H) * scale).round().max(1.0) as u32;
+    let size = win.inner_size().map_err(estr)?;
+    // Previous recording may have ended with a popup open; always restart
+    // with a compact native HWND before computing the next HUD position.
+    if size.height != base_height {
+        win.set_size(PhysicalSize::new(size.width, base_height))
+            .map_err(estr)?;
+    }
+    // Center using the actual physical HWND width; REC_HUD_W is logical and
+    // would shift the toolbar off center at 125%, 150% or 200% scaling.
+    let x = target.monitor_x + (target.monitor_w as i32 - size.width as i32) / 2;
+    let y = target.monitor_y + target.monitor_h as i32 - base_height as i32 - 48;
     let _ = win.set_position(PhysicalPosition::new(x, y));
     let _ = win.show();
     raise_topmost(&win);
@@ -1721,5 +1769,17 @@ mod ipc_origin_tests {
         assert!(require_window_label("overlay", &["overlay"]).is_ok());
         assert!(require_window_label("home", &["settings"]).is_err());
         assert!(require_window_label("overlay", &["home"]).is_err());
+    }
+}
+
+#[cfg(test)]
+mod rec_hud_geometry_tests {
+    use super::{rec_hud_height, REC_HUD_H, REC_HUD_POPUP_H};
+
+    #[test]
+    fn popups_expand_but_normal_recording_uses_compact_window() {
+        assert_eq!(rec_hud_height(false), REC_HUD_H);
+        assert_eq!(rec_hud_height(true), REC_HUD_POPUP_H);
+        assert!(rec_hud_height(true) >= rec_hud_height(false) + 128);
     }
 }

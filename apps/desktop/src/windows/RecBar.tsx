@@ -63,6 +63,14 @@ export default function RecBar() {
   const [palette, setPalette] = useState(false);
   const closing = useRef(false);
 
+  // A 58px native HUD clips popovers positioned above its toolbar. Ask Rust
+  // for a taller window only while the palette or an error is visible.
+  useEffect(() => {
+    void ipc.setRecHudExpanded(palette || Boolean(actionError)).catch((error) => {
+      console.error("Could not resize recording HUD for popup", error);
+    });
+  }, [palette, actionError]);
+
   // Tick iz Rusta (~4x/s) je izvor istine za tajmer — nema drifta u JS-u.
   useEffect(() => {
     const subs = [
@@ -147,7 +155,7 @@ export default function RecBar() {
   return (
     <div
       data-tauri-drag-region
-      className="relative flex h-full w-full cursor-grab select-none items-center gap-1.5 rounded-2xl bg-black/85 px-3 text-white shadow-[0_10px_40px_rgba(0,0,0,0.55)] ring-1 ring-white/15 backdrop-blur-xl active:cursor-grabbing"
+      className="absolute bottom-0 left-0 flex h-[58px] w-full cursor-grab select-none items-center gap-1.5 rounded-2xl bg-black/85 px-3 text-white shadow-[0_10px_40px_rgba(0,0,0,0.55)] ring-1 ring-white/15 backdrop-blur-xl active:cursor-grabbing"
     >
       {actionError && (
         <div role="alert" className="absolute bottom-[calc(100%+8px)] left-3 right-3 rounded-xl border border-red-400/50 bg-[#301719] px-3 py-2 text-xs font-medium text-white shadow-lg">

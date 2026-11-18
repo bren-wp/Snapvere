@@ -111,6 +111,8 @@ jobs:
         run: python tools/check_ipc_contract.py
       - name: Enforce per-window Tauri capability isolation
         run: python tools/check_tauri_capabilities.py
+      - name: Enforce read-only dependency update policy
+        run: python tools/check_dependency_policy.py
       - name: Build Windows NSIS EXE and WiX MSI bundles
         working-directory: apps/desktop
         run: npm run tauri -- build --bundles nsis,msi
@@ -130,13 +132,17 @@ jobs:
           Copy-Item $portable (Join-Path $dist "Snapvere-Portable.exe")
           Copy-Item $nsis.FullName (Join-Path $dist "Snapvere-Setup.exe")
           Copy-Item $msi.FullName (Join-Path $dist "Snapvere-Setup.msi")
+          python tools/generate_sbom.py --output "dist-installers/Snapvere-SBOM.cdx.json"
+          if ($LASTEXITCODE -ne 0) { throw "Could not generate supply-chain SBOM" }
           $expected = @('Snapvere-Portable.exe','Snapvere-Setup.exe','Snapvere-Setup.msi')
           foreach ($name in $expected) {
             $f = Join-Path $dist $name
             if (-not (Test-Path $f)) { throw "Required Windows artifact missing: $name" }
             if ((Get-Item $f).Length -lt 1000000) { throw "Unexpectedly small artifact: $name" }
           }
-          $hashes = foreach ($name in $expected) {
+          # Also authenticate the published SBOM against the release manifest.
+          $checksumTargets = @($expected) + @('Snapvere-SBOM.cdx.json')
+          $hashes = foreach ($name in $checksumTargets) {
             $file = Join-Path $dist $name
             $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $name"
@@ -168,16 +174,23 @@ jobs:
             - **Snapvere-Portable.exe** — run directly; no installer or administrator access required (Windows WebView2 runtime is required)
             - **Snapvere-Setup.exe** — NSIS installer
             - **Snapvere-Setup.msi** — MSI installer
-            - **SHA256SUMS.txt** — integrity checksums for all packages
+            - **SHA256SUMS.txt** — integrity checksums for all packages and the dependency inventory
+            - **Snapvere-SBOM.cdx.json** — reproducible CycloneDX 1.6 dependency inventory from npm and Cargo lockfiles
 
             All three Windows executables originate from the same Tauri build and were verified before publication.
 
             ### Changes in v${{ steps.version.outputs.value }}
-            - Bound microphone/system-audio packet sizes and reject malformed large WASAPI buffers before PCM allocation.
-            - Use unaligned-safe PCM16/PCM32/float32 reads and speaker-mask-aware 5.1/7.1 stereo downmix for Windows audio.
-            - Encode MP4 catch-up audio in small bounded chunks; stop with an explicit error when more than two seconds are irrecoverably missing.
-            - Retain existing v0.2.16 device-error handling, SQLite gallery crash recovery, scoped Tauri IPC and all 12 app languages.
-            - Build and verify Portable EXE, NSIS Setup EXE, MSI and SHA256SUMS from the same Tauri/Rust commit.
+            - Reject unexpected Windows COM initialization failures before MP4 startup.
+            - Balance a successful COM initialization if Media Foundation startup fails.
+            - Test S_OK, S_FALSE, RPC_E_CHANGED_MODE and E_FAIL COM status classification.
+            - Fix light-mode surfaces, button contrast, visual effects and synchronized themes in multiple windows.
+            - Add measurable dark/light, hover/focus/disabled/error screenshots and a strict pixel-reference audit gate.
+            - Fix clipped recording HUD palette/error via on-demand native window expansion and accurate mixed-DPI centering.
+            - Update compatible Tauri API/CLI, Lucide and validated Rust lockfile dependencies; preserve audited fork and strict security gates.
+            - Fix "Fit to window" clipping for large images and test 100/125/150/200% simulated DPI in dark/light.
+            - Include lockfile-derived CycloneDX SBOM and SHA256SUMS for all artifacts.
+            - Preserve bounded WASAPI audio, 5.1/7.1 downmix, gallery recovery and 12 languages.
+            - Verify Portable EXE, NSIS Setup EXE, MSI and SHA256SUMS from the same commit.
 
             **Preview release.** Native Windows 10/11 capture, recorder, audio, multi-monitor,
             accessibility, install/upgrade/uninstall and 1:1 visual comparisons are not yet
@@ -186,3 +199,23 @@ jobs:
             The public snapvere.com service currently distributes a separate .NET/WinUI edition.
             These packages are the Tauri/Rust repository edition, not interchangeable updates.
             This release is unsigned; use SHA256SUMS.txt to check each file.
+
+      - name: Verify GitHub Release is a prerelease pending physical Windows QA
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = 'v${{ steps.version.outputs.value }}'
+          $repo = '${{ github.repository }}'
+          $release = gh api "repos/$repo/releases/tags/$tag" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw "Cannot read release $tag" }
+          if (-not $release.prerelease) {
+            gh release edit $tag --repo $repo --prerelease
+            if ($LASTEXITCODE -ne 0) { throw "Cannot correct prerelease flag $tag" }
+            $release = gh api "repos/$repo/releases/tags/$tag" | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw "Cannot verify prerelease flag $tag" }
+          }
+          if ($release.draft -or -not $release.prerelease) {
+            throw "Release $tag must be a published prerelease until physical Windows QA"
+          }

@@ -24,8 +24,10 @@ A focused Windows capture workspace from **[BRENDIGO](https://brendigo.com)**.
 ---
 
 > **Distribution notice:** This repository builds the **Tauri 2 / Rust** Windows
-> edition of SNAPVERE. The latest confirmed GitHub release is **v0.2.16**;
-> **v0.2.17** is being developed in [PR #27](https://github.com/bren-wp/Snapvere/pull/27).
+> edition of SNAPVERE. The latest published GitHub release is **v0.2.17**;
+> **v0.2.18** is a development candidate pending CI and hardware QA. The
+> published v0.2.17 is flagged stable on GitHub but lacks documented physical
+> Windows acceptance; it must be treated as a preview.
 > The publicly deployed snapvere.com product distributes a separate .NET / WinUI 3
 > edition. Their installers, versions, licenses and update paths are not interchangeable.
 > The production website, email download flow, and its binaries are not modified
@@ -61,19 +63,40 @@ perfect translation or pixel-level visual equivalence.
 See [localization and QA guidance](docs/LOCALIZATION.md) for the catalog
 structure, supported language codes, native tray mapping and test commands.
 
-## What's new in v0.2.17 — safer recordings (development PR #27)
+## v0.2.18 — COM lifecycle and release QA (development candidate)
 
-- **Audio memory limits:** validate incoming WASAPI packet sizes before conversion
-  and reject irrecoverable post-sleep audio gaps instead of exhausting memory or
-  writing long blocks of missing sound.
-- **Reliable PCM decoding:** Windows audio buffers can be read safely even when
-  samples arrive at unaligned addresses.
-- **Smoother recording workload:** write recovered MP4 audio in bounded 500-ms
-  chunks, and keep the existing failure-aware MP4 finalization policy.
-- **Security remains a release gate:** the upstream `picomatch` ReDoS advisory
-  currently blocks the strict npm audit. This is not an accepted exception.
-- Review the [technical audit](docs/AUDIT-v0.2.17-P1-audio-memory.md).
-  Build CI and real Windows 10/11 device testing remain acceptance requirements.
+- Correct COM initialization reference handling for MP4 startup and cleanup after
+  a Media Foundation startup failure. Reject unexpected COM HRESULT errors.
+- Test S_OK, S_FALSE, RPC_E_CHANGED_MODE and E_FAIL in Windows CI.
+- Correct light-mode borders, header/toolbar backgrounds, primary-action text contrast
+  and RGB alpha effects; propagate theme changes to already-open application windows.
+- Capture React dark/light, hover, focus, disabled, palette and error states in CI,
+  with strict reference comparison and no invented native 1:1 acceptance.
+- Fix clipped recording HUD palette/error popovers by expanding its native WebView2
+  window only while needed, while retaining its 58px control bar and mixed-DPI centering.
+- Enforce the GitHub prerelease flag until real Windows 10/11 acceptance is complete.
+- GitHub withdrew the picomatch advisory on 18 November 2026, but no patched
+  upstream release exists; retain the reviewed pinned build-only fork and tests.
+- Update Tauri API/CLI and Lucide to tested compatible npm patches and keep
+  the actual lockfile synchronized; update compatible Cargo crates only after
+  real Windows Rust/Clippy/RustSec checks pass.
+- Add reviewed weekly Dependabot update PRs and read-only dependency freshness reports;
+  publish lockfile-derived CycloneDX SBOM and its SHA-256 alongside installers.
+- Fix giant screenshot cropping in the viewer's `Fit to window` operation, with
+  image-scale regression tests for images bigger than 10,000 pixels.
+- Extend automated browser previews to 100/125/150/200% simulated DPI (dark/light);
+  add `tools/windows-native-capture.ps1` for locally collected genuine WebView2
+  evidence on physical Windows 10/11.
+- See [security and dependency audit](docs/SECURITY-STABILITY-v0.2.18.md),
+  [native acceptance guide](docs/NATIVE-WINDOWS-QA-v0.2.18.md) and
+  [technical COM audit](docs/AUDIT-v0.2.18-P1-com-release.md).
+
+## v0.2.17 — bounded audio and multichannel support (published 17 November 2026)
+
+- Bound WASAPI packets and MP4 audio backlog; safely decode misaligned PCM samples.
+- Preserve 5.1/7.1 center dialogue and surround channels in stereo downmix.
+- CI passed; physical Windows and 1:1 visual verification remain pending.
+- See [technical audit](docs/AUDIT-v0.2.17-P1-audio-memory.md).
 
 ## In v0.2.16 — recording and audio-device integrity
 

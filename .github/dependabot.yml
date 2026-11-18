@@ -1,25 +1,55 @@
 version: 2
+
+# Reviewed update PRs, never untested automatic merges. Security updates
+# stay enabled and are not suppressed by the minor/patch grouping.
 updates:
-  - package-ecosystem: npm
-    directory: /apps/desktop
+  - package-ecosystem: "npm"
+    directory: "/apps/desktop"
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "Europe/Zagreb"
+    open-pull-requests-limit: 10
     groups:
-      frontend-dependencies:
+      npm-compatible:
         patterns:
           - "*"
-  - package-ecosystem: cargo
-    directory: /apps/desktop/src-tauri
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Build-only patched fork needs explicit provenance/advisory review.
+      - dependency-name: "picomatch"
+
+  - package-ecosystem: "cargo"
+    directory: "/apps/desktop/src-tauri"
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: "weekly"
+      day: "monday"
+      time: "04:30"
+      timezone: "Europe/Zagreb"
+    open-pull-requests-limit: 10
     groups:
-      rust-dependencies:
+      rust-compatible:
         patterns:
           - "*"
-  - package-ecosystem: github-actions
-    directory: /
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
     schedule:
-      interval: weekly
+      interval: "weekly"
+      day: "monday"
+      time: "05:00"
+      timezone: "Europe/Zagreb"
     open-pull-requests-limit: 5
+    groups:
+      actions-compatible:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"

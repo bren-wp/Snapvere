@@ -131,6 +131,7 @@ pub fn run() {
             commands::set_draw_interactive,
             commands::set_blur_regions,
             commands::close_rec_hud,
+            commands::set_rec_hud_expanded,
             commands::rec_frame_rect,
             commands::list_screenshots,
             commands::search_screenshots,
