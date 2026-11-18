@@ -728,7 +728,9 @@ pub fn dispatch_region_capture(app: &AppHandle, mode: CaptureMode) {
                 // An OS capture failure should not leave the product silently
                 // hidden in the tray, especially during the first PrintScreen.
                 if let Err(restore_error) = show_home(app.clone()) {
-                    log(&format!("could not restore gallery after failed capture: {restore_error}"));
+                    log(&format!(
+                        "could not restore gallery after failed capture: {restore_error}"
+                    ));
                 }
                 let _ = app.emit("snapvere:toast", format!("Capture nije uspio: {e}"));
             }
