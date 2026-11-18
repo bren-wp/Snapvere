@@ -11,6 +11,8 @@ Windows **Tauri/Rust** source of SNAPVERE. This work is not a visual acceptance 
 3. **Primary-action contrast:** `.snapvere-action-card` inherited light-mode dark text inside the violet primary capture card. Its primary state now explicitly uses white foreground.
 4. **Invalid color syntax:** the two `rgba(var(--snapvere-accent), ...)` expressions used a space-separated RGB custom property as if it were comma-separated. Replaced with valid `rgb(var(--snapvere-accent) / alpha)`.
 5. **Cross-window theme synchronization:** an already-mounted Home/Editor/Settings WebView was not guaranteed to follow a theme choice made in another window. Listen for same-origin `storage` changes and the Tauri `snapvere:theme-changed` event; emit updates from Settings.
+6. **Real recording HUD popup clipping:** the native recording HUD previously had a fixed 820×58 logical-pixel window, while its palette and failure alert were absolutely positioned **above** the toolbar. That content could not appear outside the 58px native window. A caller-restricted Rust IPC now expands the HUD to 216 logical pixels only while a popup/error is active, keeps the bottom screen edge anchored and collapses when closed. The React toolbar stays 58px high at the bottom of the window.
+7. **Mixed-DPI HUD centering:** native placement previously centered an unscaled logical width inside physical monitor coordinates. The placement now uses the real physical window width.
 
 ## Browser preview evidence added
 
