@@ -249,10 +249,14 @@ with sync_playwright() as p:
         ).click()
         light_settings.wait_for_timeout(180)
         if tab == "General":
+            # Select the visible preference via the real Segmented control. The
+            # mock store does not guarantee cross-process preference persistence;
+            # never photograph a light theme with Dark still selected.
+            light_settings.get_by_role("button", name="Light", exact=True).click()
             assert light_settings.get_by_role(
                 "button", name="Light", exact=True
             ).get_attribute("aria-pressed") == "true", (
-                "Light WebView must also show Light as the selected Settings value"
+                "Selecting Light must update the segmented control state"
             )
         light_settings.screenshot(path=str(OUTPUT / ("settings-" + tab.lower() + "-light.png")))
         assert not light_settings.evaluate(
