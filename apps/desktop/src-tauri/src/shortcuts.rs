@@ -75,10 +75,12 @@ pub fn register_defaults(app: &AppHandle) -> (Option<String>, Option<String>) {
                 .map(|s| s.to_string())
         });
 
-    if let Err(e) = apply(app, capture.clone(), record.clone()) {
+    if let Err(e) = apply(app, capture, record) {
         log(&format!("hotkeys: {e}"));
     }
-    (capture, record)
+    // Never show a guessed PrintScreen binding if Windows reserved it or
+    // registration failed between the availability probe and final bind.
+    current()
 }
 
 /// Probna registracija: je li kombinacija slobodna u sustavu.
