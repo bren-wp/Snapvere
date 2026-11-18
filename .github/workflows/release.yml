@@ -180,17 +180,21 @@ jobs:
             All three Windows executables originate from the same Tauri build and were verified before publication.
 
             ### Changes in v${{ steps.version.outputs.value }}
-            - Reject unexpected Windows COM initialization failures before MP4 startup.
-            - Balance a successful COM initialization if Media Foundation startup fails.
-            - Test S_OK, S_FALSE, RPC_E_CHANGED_MODE and E_FAIL COM status classification.
-            - Fix light-mode surfaces, button contrast, visual effects and synchronized themes in multiple windows.
-            - Add measurable dark/light, hover/focus/disabled/error screenshots and a strict pixel-reference audit gate.
-            - Fix clipped recording HUD palette/error via on-demand native window expansion and accurate mixed-DPI centering.
-            - Update compatible Tauri API/CLI, Lucide and validated Rust lockfile dependencies; preserve audited fork and strict security gates.
-            - Fix "Fit to window" clipping for large images and test 100/125/150/200% simulated DPI in dark/light.
-            - Include lockfile-derived CycloneDX SBOM and SHA256SUMS for all artifacts.
-            - Preserve bounded WASAPI audio, 5.1/7.1 downmix, gallery recovery and 12 languages.
-            - Verify Portable EXE, NSIS Setup EXE, MSI and SHA256SUMS from the same commit.
+            - Add an official self-hosted update notification feed via update.snapvere.com,
+              with startup/manual checks, offline recovery and all 12 languages.
+            - Open only snapvere.com for download and license; remove GitHub and other
+              third-party links from the application UI.
+            - Remove Dependabot and recurring dependency update bots; manually
+              update npm/Cargo with lockfiles, strict Clippy, RustSec and SBOM evidence.
+            - Update windows, base64 and rusqlite to verified supported major versions.
+            - Catch Settings window creation/focus errors and diagnostics log failures.
+            - Preserve bounded WASAPI, crash-recoverable gallery and responsive HUD.
+            - Verify Portable EXE, NSIS EXE, MSI, SBOM and SHA256SUMS from the same commit.
+
+            **Update security:** The built-in update check is informational only.
+            No installer is downloaded or executed automatically. New downloads
+            are opened on the official website and should be verified against
+            publisher signatures and published SHA-256 hashes.
 
             **Preview release.** Native Windows 10/11 capture, recorder, audio, multi-monitor,
             accessibility, install/upgrade/uninstall and 1:1 visual comparisons are not yet
