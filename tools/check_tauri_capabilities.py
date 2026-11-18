@@ -72,6 +72,7 @@ protected_ipc = {
     "set_rec_hud_expanded": ["recbar"],
     "begin_region_capture": ["home"],
     "capture_fullscreen": ["home"],
+    "import_clipboard_image": ["home"],
     "save_edited_image": ["overlay", "editor"],
     "list_screenshots": ["home"],
     "search_screenshots": ["home"],
