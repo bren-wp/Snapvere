@@ -2,7 +2,16 @@
 
 SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO**.
 
-## v0.2.17 — P1 bounded audio buffering and safe PCM decoding (development candidate)
+## v0.2.18 — P1 Media Foundation COM cleanup and prerelease QA (development candidate)
+
+- Fail MP4 startup on unexpected CoInitializeEx HRESULTs; handle S_OK, S_FALSE and RPC_E_CHANGED_MODE according to COM reference ownership.
+- Release successful per-thread COM initialization when MFStartup fails before the session guard exists.
+- Add Windows regression tests for COM status classification.
+- Verify/correct GitHub Release prerelease metadata during publication until physical Windows QA is documented.
+- Correct README release status, document GitHub's 2026-11-18 withdrawal of GHSA-fc5q-39xc-vjpf without treating it as a patched version, and retain fork tests and strict npm audits.
+- See `docs/AUDIT-v0.2.18-P1-com-release.md`. Native Windows acceptance remains pending.
+
+## v0.2.17 — P1 bounded audio buffering and safe PCM decoding (published 2026-11-17, hardware QA pending)
 
 - Bound microphone and system-audio WASAPI packet frame counts to two seconds of validated device sample rate; reject malformed oversized driver buffers before scratch allocation, while still releasing acquired packets.
 - Decode PCM16, PCM32 and IEEE float32 with unaligned-safe byte-pointer reads, eliminating undefined behavior when a driver returns an unaligned sample pointer.
