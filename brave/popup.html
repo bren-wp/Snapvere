@@ -17,22 +17,34 @@
       </div>
       <span class="label">LOCAL</span>
     </header>
-    <section class="panel" aria-label="Screenshot action">
+    <section class="panel" aria-label="Screenshot actions">
       <h1>Capture your tab</h1>
-      <p>Save the visible part of the current tab as a PNG file on your device.</p>
-      <button id="capture" class="capture" type="button">
-        <span aria-hidden="true">▣</span> Capture visible tab
-      </button>
+      <p>Keep screenshots on your device. Choose what to capture or open the editor.</p>
+      <div class="action-stack">
+        <button class="capture" type="button" data-action="visible">
+          <span aria-hidden="true">▣</span> Save visible tab PNG
+        </button>
+        <button class="secondary" type="button" data-action="area">
+          <span aria-hidden="true">⊞</span> Select area &amp; crop
+        </button>
+        <button class="secondary" type="button" data-action="full">
+          <span aria-hidden="true">↧</span> Full webpage
+        </button>
+        <button class="secondary" type="button" data-action="edit">
+          <span aria-hidden="true">✎</span> Edit visible tab
+        </button>
+      </div>
       <p id="status" class="status" role="status" aria-live="polite">Ready to capture.</p>
-      <p id="note" class="note">Only the active tab is accessed when you click.</p>
+      <p id="note" class="note">Select area opens a private crop tool. Full webpage scrolls the active tab, then restores its previous position.</p>
     </section>
     <footer>
-      <span>No account · No cloud uploads</span>
+      <span>No account · No uploads</span>
       <a href="https://snapvere.com/" target="_blank" rel="noopener noreferrer"
          aria-label="Official Snapvere website">snapvere.com</a>
     </footer>
   </main>
   <script src="capture.js"></script>
+  <script src="workspace.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

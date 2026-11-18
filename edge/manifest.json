@@ -1,11 +1,13 @@
 {
   "manifest_version": 3,
   "name": "SNAPVERE — Edge",
-  "version": "0.1.0",
-  "description": "Capture visible tabs privately as local PNG screenshots. No uploads or tracking.",
+  "version": "0.2.0",
+  "description": "Capture visible tabs, crop regions and scroll webpages; annotate PNG privately.",
   "permissions": [
     "activeTab",
-    "downloads"
+    "downloads",
+    "scripting",
+    "clipboardWrite"
   ],
   "action": {
     "default_title": "Capture tab with SNAPVERE",
