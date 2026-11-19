@@ -1105,10 +1105,7 @@ fn valid_clipboard_image(width: u32, height: u32, len: usize) -> bool {
     let pixels = u64::from(width) * u64::from(height);
     pixels > 0
         && pixels <= 28_000_000
-        && pixels
-            .checked_mul(4)
-            .and_then(|n| usize::try_from(n).ok())
-            == Some(len)
+        && pixels.checked_mul(4).and_then(|n| usize::try_from(n).ok()) == Some(len)
 }
 
 /// Import an image copied in the SNAPVERE browser editor (or any PNG-capable
@@ -1128,7 +1125,10 @@ pub async fn import_clipboard_image(
         let width = clipboard.width();
         let height = clipboard.height();
         if !valid_clipboard_image(width, height, clipboard.rgba().len()) {
-            return Err("Clipboard image is empty, corrupt or exceeds the 28-million-pixel safety limit".into());
+            return Err(
+                "Clipboard image is empty, corrupt or exceeds the 28-million-pixel safety limit"
+                    .into(),
+            );
         }
         let rgba = image::RgbaImage::from_raw(width, height, clipboard.rgba().to_vec())
             .ok_or("Could not decode clipboard RGBA image")?;
