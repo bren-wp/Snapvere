@@ -174,7 +174,21 @@
     window.scrollTo({ left: 0, top: y, behavior: "instant" });
     return { y: window.scrollY, url: window.location.href };
   }
+  // In-page fail-safe survives a user accidentally closing the extension
+  // popup during a multi-strip capture. It runs in the extension isolated
+  // world and restores scroll after 30s even if the popup's finally is lost.
+  function armScrollRestore(x, y) {
+    if (window.__snapvereScrollRestore) clearTimeout(window.__snapvereScrollRestore);
+    window.__snapvereScrollRestore = setTimeout(() => {
+      window.scrollTo({ left: x, top: y, behavior: "instant" });
+      delete window.__snapvereScrollRestore;
+    }, 30_000);
+  }
   function restoreDocument(x, y) {
+    if (window.__snapvereScrollRestore) {
+      clearTimeout(window.__snapvereScrollRestore);
+      delete window.__snapvereScrollRestore;
+    }
     window.scrollTo({ left: x, top: y, behavior: "instant" });
   }
 
@@ -200,6 +214,7 @@
     let scale;
     let completed = 0;
     try {
+      await execute(api, tab.id, armScrollRestore, [metrics.originalX, metrics.originalY]);
       for (let index = 0; index < positions.length; index++) {
         // Prevent leaking a screenshot of a different tab if the user changes focus.
         const active = await currentTab(api);
