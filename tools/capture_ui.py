@@ -12,6 +12,20 @@ OUTPUT.mkdir(parents=True, exist_ok=True)
 
 TAURI_PREVIEW = r"""
 (() => {
+  // Screenshot fixtures never contact production update.snapvere.com.
+  // The explicit ?previewUpdate=1 page exercises the update-available UI.
+  const realFetch = window.fetch.bind(window);
+  window.fetch = (resource, options) => {
+    if (resource === "https://update.snapvere.com/stable.json") {
+      const scenario = new URL(window.location.href).searchParams.has("previewUpdate");
+      return Promise.resolve(new Response(JSON.stringify({
+        product: "snapvere-tauri-windows",
+        version: scenario ? "999.0.0" : "0.0.0",
+        notes: scenario ? "Preview of the update-notification design" : ""
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    return realFetch(resource, options);
+  };
   let nextCallback = 1;
   const callbacks = new Map();
   const eventCallbacks = new Map();
@@ -52,7 +66,11 @@ TAURI_PREVIEW = r"""
       if (command === "get_frozen_frame") return window.__SNAPVERE_PREVIEW_FRAME_URL;
       if (command === "plugin:window|scale_factor") return 1;
       if (command === "list_screenshots" || command === "search_screenshots" || command === "list_monitors") return [];
-      if (command === "active_hotkeys") return ["PrintScreen", "Ctrl+Shift+R"];
+      if (command === "active_hotkeys") return window.location.search.includes("previewPrintScreenTaken")
+        ? ["Ctrl+Shift+1", "Ctrl+Shift+R"] : ["PrintScreen", "Ctrl+Shift+R"];
+      if (command === "update_hotkey" && window.location.search.includes("previewPrintScreenTaken")) {
+        throw new Error("PrintScreen reserved by Windows Snipping Tool");
+      }
       if (command === "plugin:autostart|is_enabled") return false;
       if (command.startsWith("plugin:event|")) return 1;
       if (command.startsWith("plugin:store|")) {
@@ -111,6 +129,12 @@ with sync_playwright() as p:
     )
     page.wait_for_timeout(1200)
     page.screenshot(path=str(OUTPUT / "home.png"), full_page=False)
+    update_preview = app.new_page()
+    update_preview.goto("http://127.0.0.1:1420/?previewUpdate=1", wait_until="networkidle")
+    update_preview.get_by_text("New Snapvere version available", exact=False).wait_for(timeout=10000)
+    update_preview.get_by_role("button", name="View update in Settings").wait_for(timeout=10000)
+    update_preview.screenshot(path=str(OUTPUT / "home-update-available.png"))
+    update_preview.close()
     # Reproducible hover/focus captures; never assert these match native Windows
     # baselines just because the DOM state exists in headless Chromium.
     primary = page.get_by_role("group", name="Capture actions").get_by_role(
@@ -140,6 +164,40 @@ with sync_playwright() as p:
         settings.get_by_role("navigation").get_by_role("button", name=tab + " settings", exact=True).click()
         settings.wait_for_timeout(200)
         settings.screenshot(path=str(OUTPUT / ("settings-" + tab.lower() + ".png")))
+    # Confirm that Settings reflects native OS registration rather than merely
+    # displaying the stored PrintScreen preference.
+    settings.get_by_role("navigation").get_by_role(
+        "button", name="Hotkeys settings", exact=True
+    ).click()
+    assert settings.get_by_role("button", name="Use Print Screen", exact=True).is_disabled()
+    assert settings.get_by_text(
+        "Print Screen opens Snapvere's screen selection.", exact=True
+    ).is_visible()
+
+    unavailable = app.new_page()
+    unavailable.goto(
+        "http://127.0.0.1:1420/?previewPrintScreenTaken=1#settings",
+        wait_until="networkidle",
+    )
+    unavailable.get_by_role("navigation").get_by_role(
+        "button", name="Hotkeys settings", exact=True
+    ).click()
+    retry = unavailable.get_by_role("button", name="Use Print Screen", exact=True)
+    retry.wait_for(timeout=20000)
+    assert retry.is_enabled(), "Windows-reserved PrintScreen must offer rebind"
+    assert unavailable.get_by_text(
+        "Print Screen is not registered.", exact=False
+    ).is_visible()
+    unavailable.screenshot(
+        path=str(OUTPUT / "settings-hotkeys-printscreen-unavailable.png")
+    )
+    retry.click()
+    unavailable.get_by_text(
+        "PrintScreen reserved by Windows Snipping Tool", exact=False
+    ).wait_for(timeout=5000)
+    assert retry.is_enabled(), "Failed rebind must leave retry available"
+    unavailable.close()
+
     # Changing Recording to GIF should actually disable microphone/system audio
     # rather than merely drawing grey-looking controls.
     settings.get_by_role("navigation").get_by_role("button", name="Recording settings", exact=True).click()

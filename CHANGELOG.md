@@ -2,6 +2,19 @@
 
 SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO**.
 
+## v0.2.19 — official self-hosted updates, manual dependencies and stability (release candidate)
+
+- Add public version-only update feed check (`https://update.snapvere.com/stable.json`) with no cookies, redirection, telemetry, binary download or install. Home/Settings notifications support all 12 languages, user-controlled startup checks, official-only download link and manual retries.
+- Defend against malformed product/version, nonofficial URLs, oversized manifests, unexpected content types and offline server failures. CSP permits only the update subdomain for outbound fetch; unit tests and network policy enforce the exception.
+- Remove Dependabot bot configuration and scheduled updater workflow; explicitly refresh npm and Cargo graphs with tests and security reviews, then delete one-shot upgrade jobs.
+- Upgrade Cargo major dependencies `windows`, `rusqlite` and `base64` and compatible npm packages only when Windows compiler tests, strict Clippy and RustSec succeed; keep lockfiles/SBOM synchronized.
+- Fix unhandled Settings window creation/focus errors and diagnostics log opener failures.
+- Make PrintScreen reliably start area selection while Snapvere is running in the tray, show Home when the EXE is launched manually and run invisibly only for opt-in Windows login autostart. Report the actual registered shortcut, offer a one-click PrintScreen rebind, and explain Windows Snipping Tool conflicts. Avoid self-capture when hotkey is pressed with the gallery visible.
+- Remove GitHub and other external website links from the application UI; preserve official snapvere.com website, license and downloads.
+- Add server deployment guidance in `docs/UPDATE-SERVER.md`. No actual signed installer update is implemented without a securely generated private signing key.
+- Physical Windows 10/11, audio hardware, installed package upgrade and original per-screen 1:1 QA remain unverified.
+
+
 ## v0.2.18 — P1 Media Foundation COM cleanup and prerelease QA (development candidate)
 
 - Fail MP4 startup on unexpected CoInitializeEx HRESULTs; handle S_OK, S_FALSE and RPC_E_CHANGED_MODE according to COM reference ownership.

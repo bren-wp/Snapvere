@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Read-only checks for Snapvere public branding and Windows installer terms."""
 import json
+import re
+from urllib.parse import urlparse
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,7 +31,13 @@ for clause in ("Commercial license agreement", "Permitted use",
 assert "/license/" in (SITE / "sitemap.xml").read_text(encoding="utf-8")
 for name in ("index.html", "download/index.html", "privacy/index.html"):
     assert 'href="/license/"' in (SITE / name).read_text(encoding="utf-8"), name
-assert "https://snapvere.com/license/" in (APP / "src/windows/Settings.tsx").read_text(encoding="utf-8")
+settings_source = (APP / "src/windows/Settings.tsx").read_text(encoding="utf-8")
+assert "https://snapvere.com/license/" in settings_source
+assert "https://brendigo.com" not in settings_source, "External UI links must be Snapvere links"
+feed_source = (APP / "src/lib/updateFeed.ts").read_text(encoding="utf-8")
+assert "https://update.snapvere.com/stable.json" in feed_source
+assert "https://snapvere.com/download/" in feed_source
+assert "https://update.snapvere.com;" in config["app"]["security"]["csp"]
 
 for base, suffixes in ((SITE, {".html", ".js", ".css"}), (APP / "src", {".html", ".ts", ".tsx", ".css"})):
     for file in base.rglob("*"):
@@ -40,6 +48,23 @@ for base, suffixes in ((SITE, {".html", ".js", ".css"}), (APP / "src", {".html",
             assert domain not in content, (
                 f"GitHub references must not appear in the public UI: {file.relative_to(ROOT)}"
             )
+# Every hardcoded HTTP(S) endpoint in shipped app source must be first-party.
+# 127.0.0.1/asset.localhost/ipc.localhost are development/native media origins,
+# not navigable public support/download links.
+allowed_app_hosts = {
+    "snapvere.com", "update.snapvere.com",
+    "127.0.0.1", "asset.localhost", "ipc.localhost",
+}
+for source_file in (APP / "src").rglob("*"):
+    if source_file.suffix not in {".ts", ".tsx", ".html", ".css"}:
+        continue
+    content = source_file.read_text(encoding="utf-8")
+    for endpoint in re.findall(r"""https?://[^\s"\'`<>)]+""", content):
+        host = urlparse(endpoint.rstrip("),;")).hostname
+        assert host in allowed_app_hosts, (
+            f"Nonofficial external URL in shipped UI: {source_file.relative_to(ROOT)}: {endpoint}"
+        )
+
 caps = json.loads((TAURI / "capabilities/default.json").read_text(encoding="utf-8"))
 runtime = (TAURI / "src/lib.rs").read_text(encoding="utf-8")
 for unused, capability in (("tauri_plugin_fs::init()", "fs:default"),

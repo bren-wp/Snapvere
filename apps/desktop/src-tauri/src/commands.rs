@@ -707,9 +707,31 @@ pub fn dispatch_region_capture(app: &AppHandle, mode: CaptureMode) {
     let spawned = std::thread::Builder::new()
         .name("snapvere-capture".into())
         .spawn(move || {
+            // PrintScreen can fire while the gallery is the foreground window.
+            // Hide it before taking the frozen desktop frame, just as the
+            // gallery Capture button does. Otherwise Snapvere captures itself.
+            let home_was_visible = app
+                .get_webview_window("home")
+                .and_then(|home| home.is_visible().ok())
+                .unwrap_or(false);
+            if home_was_visible {
+                if let Some(home) = app.get_webview_window("home") {
+                    if let Err(error) = home.hide() {
+                        log(&format!("could not hide gallery for PrintScreen: {error}"));
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(180));
+            }
             let result = logging::guard("region capture", || region_capture_blocking(&app, mode));
             CAPTURE_BUSY.store(false, Ordering::SeqCst);
             if let Err(e) = result {
+                // An OS capture failure should not leave the product silently
+                // hidden in the tray, especially during the first PrintScreen.
+                if let Err(restore_error) = show_home(app.clone()) {
+                    log(&format!(
+                        "could not restore gallery after failed capture: {restore_error}"
+                    ));
+                }
                 let _ = app.emit("snapvere:toast", format!("Capture nije uspio: {e}"));
             }
         });
