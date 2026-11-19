@@ -55,3 +55,63 @@ test("an unsupported active page does not silently make a screenshot", async () 
   const a = workspace();
   await assert.rejects(a.captureFullPage({ tabs: {}, scripting: {} }), /unsupported/i);
 });
+
+function fullPageTabRace(switchOnQuery) {
+  const context = {
+    console, Blob, Date, Number,
+    document: { createElement() { return {}; } },
+    // Avoid 650ms timers in the isolated deterministic test.
+    setTimeout(fn) { queueMicrotask(fn); return 1; },
+    clearTimeout() {},
+  };
+  runInNewContext(code, context);
+  let queries = 0;
+  let captured = 0;
+  let restored = 0;
+  let editorOpened = 0;
+  const api = {
+    tabs: {
+      async query() {
+        queries += 1;
+        return [{ id: queries >= switchOnQuery ? 44 : 33, windowId: 5 }];
+      },
+      async captureVisibleTab() { captured += 1; return "data:image/png;base64,AA=="; },
+      async create() { editorOpened += 1; },
+    },
+    scripting: {
+      async executeScript({ func, args }) {
+        const name = func.name;
+        if (name === "measureDocument") return [{ result: {
+          width: 300, height: 200, viewportWidth: 300, viewportHeight: 200,
+          originalX: 0, originalY: 15, url: "https://example.com/",
+        } }];
+        if (name === "moveDocument") return [{ result: {
+          y: args[0], url: "https://example.com/",
+        } }];
+        if (name === "restoreDocument") restored += 1;
+        return [{ result: null }];
+      },
+    },
+  };
+  return { run: () => context.SnapvereWorkspace.captureFullPage(api),
+    stats: () => ({ queries, captured, restored, editorOpened }) };
+}
+
+test("full-page capture refuses a tab switch during compositor delay", async () => {
+  // Original tab is seen by initial query and pre-scroll check. The next
+  // active-tab query runs after the 650ms wait and finds a different tab.
+  const flow = fullPageTabRace(3);
+  await assert.rejects(flow.run(), /Active tab changed/);
+  assert.equal(flow.stats().captured, 0);
+  assert.equal(flow.stats().editorOpened, 0);
+  assert.equal(flow.stats().restored, 1);
+});
+
+test("full-page capture discards frame if active tab changes during captureVisibleTab", async () => {
+  // Tab switch occurs while browser screenshot API is processing the frame.
+  const flow = fullPageTabRace(4);
+  await assert.rejects(flow.run(), /Active tab changed/);
+  assert.equal(flow.stats().captured, 1);
+  assert.equal(flow.stats().editorOpened, 0);
+  assert.equal(flow.stats().restored, 1);
+});
