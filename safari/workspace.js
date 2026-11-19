@@ -144,6 +144,16 @@
     });
   }
 
+  async function ensureOriginalTab(api, original) {
+    // Check the original window, never the foreground browser window. A
+    // background switch or another window opening must not yield pixels from
+    // a different tab under the original page's screenshot identity.
+    const active = await api.tabs.query({ active: true, windowId: original.windowId });
+    if (active.length !== 1 || active[0].id !== original.id) {
+      throw new Error("Active tab changed during capture; no screenshot was saved.");
+    }
+  }
+
   async function openEditor(api, blob, mode) {
     const id = await saveDraft(blob, mode);
     await api.tabs.create({
@@ -228,15 +238,23 @@
       await execute(api, tab.id, armScrollRestore, [metrics.originalX, metrics.originalY]);
       for (let index = 0; index < positions.length; index++) {
         // Prevent leaking a screenshot of a different tab if the user changes focus.
-        const active = await currentTab(api);
-        if (active.id !== tab.id) throw new Error("Active tab changed during capture");
+        await ensureOriginalTab(api, tab);
         const state = await execute(api, tab.id, moveDocument, [positions[index]]);
         if (state.url !== metrics.url) throw new Error("Page navigated during capture");
         if (Math.abs(state.y - positions[index]) > 3) {
           throw new Error("Page layout changed while scrolling");
         }
         await sleep(FRAME_DELAY_MS);
+        // The user might switch tabs during the 650 ms compositor delay.
+        // Checking only before scrolling is insufficient, especially on the
+        // last frame where no next iteration exists to catch that switch.
+        await ensureOriginalTab(api, tab);
         const png = await api.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+        await ensureOriginalTab(api, tab);
+        const currentUrl = await execute(api, tab.id, () => window.location.href);
+        if (currentUrl !== metrics.url) {
+          throw new Error("Page navigated during screenshot; frame discarded.");
+        }
         const img = await loadPng(png);
         if (index === 0) {
           scale = img.naturalWidth / metrics.viewportWidth;
