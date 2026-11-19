@@ -68,12 +68,22 @@
       await new Promise((resolve, reject) => {
         const tx = db.transaction(STORE, "readwrite");
         tx.objectStore(STORE).put({ id, blob, mode, created: Date.now() });
-        // Delete stale previews; drafts are local and not persistent gallery files.
+        // Bound local storage to eight recent captures, and prune expired
+        // drafts on every new capture. A browser closed while idle may retain
+        // stale entries until its next use; nothing is uploaded.
+        const candidates = [];
         const request = tx.objectStore(STORE).openCursor();
         request.onsuccess = () => {
           const cursor = request.result;
-          if (!cursor) return;
+          if (!cursor) {
+            candidates.sort((a, b) => a.created - b.created);
+            for (const entry of candidates.slice(0, Math.max(0, candidates.length - 8))) {
+              tx.objectStore(STORE).delete(entry.id);
+            }
+            return;
+          }
           if (Date.now() - cursor.value.created > 30 * 60 * 1000) cursor.delete();
+          else candidates.push({ id: cursor.value.id, created: cursor.value.created });
           cursor.continue();
         };
         tx.oncomplete = resolve;
@@ -89,11 +99,12 @@
     const db = await openDb();
     try {
       return await new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE, "readonly");
+        const tx = db.transaction(STORE, "readwrite");
         const req = tx.objectStore(STORE).get(id);
         req.onsuccess = () => {
           const entry = req.result;
           if (!entry || Date.now() - entry.created > 30 * 60 * 1000) {
+            if (entry) tx.objectStore(STORE).delete(id);
             reject(new Error("This capture expired. Take a new screenshot."));
           } else {
             resolve(entry);
