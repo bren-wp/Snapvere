@@ -13,7 +13,7 @@ from PIL import Image, ImageChops, ImageStat
 
 # Application/window-state coverage, not the separately deployed marketing site.
 REQUIRED = (
-    "home.png", "home-compact.png", "home-hover.png", "home-focus.png",
+    "home.png", "home-clipboard-import-error.png", "home-compact.png", "home-hover.png", "home-focus.png",
     "home-light.png", "home-hover-light.png",
     "settings.png", "settings-hotkeys.png", "settings-capture.png",
     "settings-recording.png", "settings-recording-gif-disabled.png",

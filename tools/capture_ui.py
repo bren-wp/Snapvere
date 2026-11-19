@@ -64,6 +64,9 @@ TAURI_PREVIEW = r"""
       }
       if (command === "get_frozen_rgba") return previewRgbaPacket();
       if (command === "get_frozen_frame") return window.__SNAPVERE_PREVIEW_FRAME_URL;
+      if (command === "import_clipboard_image") {
+        throw new Error("Simulated empty clipboard — no OS clipboard is accessed in CI");
+      }
       if (command === "plugin:window|scale_factor") return 1;
       if (command === "list_screenshots" || command === "search_screenshots" || command === "list_monitors") return [];
       if (command === "active_hotkeys") return window.location.search.includes("previewPrintScreenTaken")
@@ -129,6 +132,18 @@ with sync_playwright() as p:
     )
     page.wait_for_timeout(1200)
     page.screenshot(path=str(OUTPUT / "home.png"), full_page=False)
+    clipboard_import = page.get_by_role("button", name="Import from clipboard", exact=True)
+    clipboard_import.wait_for(timeout=10000)
+    bounds = clipboard_import.bounding_box()
+    assert bounds and bounds["x"] >= 0 and bounds["y"] >= 0
+    assert bounds["x"] + bounds["width"] <= 1122, "Clipboard import button overflows desktop viewport"
+    assert bounds["y"] + bounds["height"] <= 742, "Clipboard import button is clipped"
+    clipboard_import.click()
+    page.get_by_text(
+        "Clipboard import failed. Copy a PNG image", exact=False
+    ).wait_for(timeout=5000)
+    assert clipboard_import.is_enabled(), "Failed clipboard import must release capture controls"
+    page.screenshot(path=str(OUTPUT / "home-clipboard-import-error.png"))
     update_preview = app.new_page()
     update_preview.goto("http://127.0.0.1:1420/?previewUpdate=1", wait_until="networkidle")
     update_preview.get_by_text("New Snapvere version available", exact=False).wait_for(timeout=10000)

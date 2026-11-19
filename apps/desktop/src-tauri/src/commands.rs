@@ -1098,6 +1098,54 @@ pub fn copy_base64_to_clipboard(
     copy_rgba_to_clipboard(&app, &img)
 }
 
+/// Clipboard imports are explicitly initiated from Home; malicious or
+/// accidental giant clipboard images are rejected before allocating a second
+/// RGBA buffer or attempting PNG encoding for the gallery.
+fn valid_clipboard_image(width: u32, height: u32, len: usize) -> bool {
+    let pixels = u64::from(width) * u64::from(height);
+    pixels > 0
+        && pixels <= 28_000_000
+        && pixels.checked_mul(4).and_then(|n| usize::try_from(n).ok()) == Some(len)
+}
+
+/// Import an image copied in the SNAPVERE browser editor (or any PNG-capable
+/// local app) using an explicit Home button. Nothing monitors the clipboard
+/// in the background. The native clipboard call runs off the UI thread.
+#[tauri::command]
+pub async fn import_clipboard_image(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+) -> Result<Screenshot, String> {
+    require_window_label(window.label(), &["home"])?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let clipboard_manager = app.clipboard();
+        let clipboard = clipboard_manager
+            .read_image()
+            .map_err(|e| format!("Clipboard does not contain a readable image: {e}"))?;
+        let width = clipboard.width();
+        let height = clipboard.height();
+        if !valid_clipboard_image(width, height, clipboard.rgba().len()) {
+            return Err(
+                "Clipboard image is empty, corrupt or exceeds the 28-million-pixel safety limit"
+                    .into(),
+            );
+        }
+        let rgba = image::RgbaImage::from_raw(width, height, clipboard.rgba().to_vec())
+            .ok_or("Could not decode clipboard RGBA image")?;
+        let state = app.state::<AppState>();
+        save_to_gallery(
+            &app,
+            &state,
+            &rgba,
+            CaptureSource::Clipboard,
+            ImageFormat::Png,
+            100,
+        )
+    })
+    .await
+    .map_err(|e| format!("Clipboard import worker failed: {e}"))?
+}
+
 // ─────────────────────────── snimanje ekrana ───────────────────────────
 
 /// Pokreni snimanje. `region` je u koordinatama monitora (fizički px); bez njega
@@ -1803,5 +1851,25 @@ mod rec_hud_geometry_tests {
         assert_eq!(rec_hud_height(false), REC_HUD_H);
         assert_eq!(rec_hud_height(true), REC_HUD_POPUP_H);
         assert!(rec_hud_height(true) >= rec_hud_height(false) + 128);
+    }
+}
+
+#[cfg(test)]
+mod browser_clipboard_import_tests {
+    use super::valid_clipboard_image;
+
+    #[test]
+    fn permits_normal_screenshots_and_bounded_browser_pages() {
+        assert!(valid_clipboard_image(1920, 1080, 1920 * 1080 * 4));
+        assert!(valid_clipboard_image(3000, 9000, 3000 * 9000 * 4));
+    }
+
+    #[test]
+    fn rejects_empty_corrupted_and_potentially_exhaustive_rgba() {
+        assert!(!valid_clipboard_image(0, 600, 0));
+        assert!(!valid_clipboard_image(100, 100, 4));
+        assert!(!valid_clipboard_image(100, 100, 100 * 100 * 3));
+        assert!(!valid_clipboard_image(5000, 10000, 5000 * 10000 * 4));
+        assert!(!valid_clipboard_image(u32::MAX, u32::MAX, usize::MAX));
     }
 }

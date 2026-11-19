@@ -644,7 +644,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .snapvere-gallery-overview { min-width: 0; }
 .snapvere-gallery-title { margin-top: 2px; }
 .snapvere-gallery-count { color: rgb(var(--snapvere-muted)); font-size: 11px; margin-top: 3px; }
-.snapvere-gallery-tools { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex: 1; min-width: 0; }
+.snapvere-gallery-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; flex: 1; min-width: 0; }
 .snapvere-gallery-search { width: min(100%, 300px); min-width: 145px; }
 .snapvere-gallery-search input { color: rgb(var(--snapvere-text)); border: 1px solid var(--brand-border); }
 .snapvere-gallery-search input::placeholder { color: rgb(var(--snapvere-muted)); }

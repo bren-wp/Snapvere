@@ -31,6 +31,7 @@ pub enum CaptureSource {
     Fullscreen,
     Window,
     Recording,
+    Clipboard,
 }
 
 impl CaptureSource {
@@ -40,6 +41,7 @@ impl CaptureSource {
             CaptureSource::Fullscreen => "fullscreen",
             CaptureSource::Window => "window",
             CaptureSource::Recording => "recording",
+            CaptureSource::Clipboard => "clipboard",
         }
     }
 }
