@@ -3,69 +3,79 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 
-const popupJs = readFileSync(new URL("../source/popup.js", import.meta.url), "utf8");
-
-function makePopup(captureVisibleTab) {
-  const nodes = new Map(
-    ["capture", "status", "note"].map((id) => [id, {
-      id, disabled: false, textContent: "", dataset: {}, listeners: {},
-      addEventListener(name, fn) { this.listeners[name] = fn; },
-    }])
-  );
-  const document = { getElementById: (id) => nodes.get(id) };
-  const root = {
-    console,
-    document,
-    browser: { tabs: {}, downloads: {} },
-    SnapvereCapture: { captureVisibleTab },
+const code = readFileSync(new URL("../source/popup.js", import.meta.url), "utf8");
+function make(capture, space) {
+  const buttons = ["visible", "area", "full", "edit"].map(mode => ({
+    dataset: { action: mode }, disabled: false, handlers: {},
+    addEventListener(name, cb) { this.handlers[name] = cb; }
+  }));
+  const node = (id) => ({ textContent: "", dataset: {} });
+  const status = node("status"), note = node("note");
+  const document = {
+    querySelectorAll: () => buttons,
+    getElementById: (id) => ({ status, note })[id],
   };
-  runInNewContext(popupJs, root);
-  return {
-    capture: nodes.get("capture"),
-    status: nodes.get("status"),
-    note: nodes.get("note"),
-    click() { return nodes.get("capture").listeners.click(); },
+  const context = {
+    console, document, browser: {},
+    SnapvereCapture: { captureVisibleTab: capture },
+    SnapvereWorkspace: {
+      captureForEditor: space.area || (async () => "local"),
+      captureFullPage: space.full || (async () => "local"),
+    },
   };
+  runInNewContext(code, context);
+  return { buttons, status, note, click: (id) => buttons.find(b => b.dataset.action === id).handlers.click() };
 }
+async function tick() { await new Promise(resolve => setTimeout(resolve, 1)); }
 
-test("successful save updates popup status and restores its capture button", async () => {
-  let calls = 0;
-  const popup = makePopup(async () => {
-    calls += 1;
-    return { filename: "Snapvere/Snapvere-2026-11-19.png", downloadId: 7 };
-  });
-  await popup.click();
-  assert.equal(calls, 1);
-  assert.equal(popup.capture.disabled, false);
+test("visible tab saves locally, other buttons are independent", async () => {
+  const popup = make(async () => ({ filename:"Snapvere/shot.png", downloadId: 2 }), {});
+  popup.click("visible");
+  await tick();
   assert.equal(popup.status.dataset.state, "success");
-  assert.match(popup.status.textContent, /saved to Downloads/);
-  assert.equal(popup.note.textContent, "Snapvere/Snapvere-2026-11-19.png");
+  assert.equal(popup.note.textContent, "Snapvere/shot.png");
+  assert.ok(popup.buttons.every(x => x.disabled === false));
 });
-
-test("a double click cannot start multiple simultaneous screen captures", async () => {
+test("region action opens crop workflow, edit opens draw workflow", async () => {
+  const modes = [];
+  const popup = make(async () => undefined, {
+    area: async (_api, mode) => modes.push(mode),
+  });
+  popup.click("area");
+  await tick();
+  popup.click("edit");
+  await tick();
+  assert.deepEqual(modes, ["crop", "draw"]);
+});
+test("full webpage shows actual progress and then editor status", async () => {
+  const popup = make(async () => undefined, {
+    full: async (_api, onProgress) => { onProgress(1, 3); onProgress(3, 3); },
+  });
+  popup.click("full");
+  await tick();
+  assert.equal(popup.status.dataset.state, "success");
+  assert.match(popup.status.textContent, /private editor/);
+});
+test("one click in progress blocks all other capture requests", async () => {
   let release;
   let calls = 0;
-  const popup = makePopup(() => {
-    calls += 1;
-    return new Promise((resolve) => { release = resolve; });
-  });
-  const pending = popup.click();
-  assert.equal(popup.capture.disabled, true);
-  await popup.click();
+  const popup = make(() => {
+    calls++;
+    return new Promise(resolve => { release = resolve; });
+  }, {});
+  popup.click("visible");
+  assert.ok(popup.buttons.every(x => x.disabled));
+  popup.click("area");
   assert.equal(calls, 1);
-  release({ filename: "Snapvere/test.png", downloadId: 1 });
-  await pending;
-  assert.equal(popup.capture.disabled, false);
-  assert.equal(popup.status.dataset.state, "success");
+  release({ filename:"Snapvere/shot.png", downloadId:1 });
+  await tick();
+  assert.ok(popup.buttons.every(x => !x.disabled));
 });
-
-test("protected page or failed downloads display a recoverable error", async () => {
-  const popup = makePopup(async () => {
-    throw new Error("A protected browser page cannot be captured");
-  });
-  await popup.click();
-  assert.equal(popup.capture.disabled, false);
+test("capture failure is visible, bounded and restores actions", async () => {
+  const popup = make(async () => { throw new Error("Capture denied by browser"); }, {});
+  popup.click("visible");
+  await tick();
   assert.equal(popup.status.dataset.state, "error");
-  assert.match(popup.status.textContent, /Could not save this tab/);
-  assert.match(popup.note.textContent, /protected browser pages/);
+  assert.match(popup.note.textContent, /denied/);
+  assert.ok(popup.buttons.every(x => !x.disabled));
 });
