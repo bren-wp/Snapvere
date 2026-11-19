@@ -24,7 +24,7 @@ The manifests request only `activeTab`, `downloads`, `scripting` and **write-onl
 - `scripting`: execute bounded page-size/scroll-position functions **only in that granted tab** for Full webpage.
 - `downloads`: save a PNG to the user's normal Downloads folder.
 - `clipboardWrite`: copy edited PNG into the system clipboard after clicking **Copy for Windows app**. There is no clipboard read.
-- Captures stay in a local extension-owned IndexedDB draft cache, with a 30-minute retention limit for loaded drafts; they are not sent off-device. The user can close the editor without exporting.
+- Captures stay in a local extension-owned IndexedDB draft cache, with at most eight recent drafts. Drafts become inaccessible after 30 minutes and are removed when next accessed or a new capture is stored (not immediately if the browser stays idle); no capture is sent off-device. Users can close the editor without exporting.
 - No `host_permissions`, native messaging, content scripts on all sites, telemetry, cookies, network fetch, clipboard reading, or automatic installer launch.
 - The only website link shown in popup/editor is `https://snapvere.com/`.
 
