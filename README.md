@@ -64,6 +64,13 @@ perfect translation or pixel-level visual equivalence.
 See [localization and QA guidance](docs/LOCALIZATION.md) for the catalog
 structure, supported language codes, native tray mapping and test commands.
 
+## v0.2.21 — screenshot reliability and truthful update status
+
+- Windows About → Updates distinguishes **not checked** from **confirmed current**, with translations for all 12 languages; a failed update fetch removes outdated banners and leaves the manual retry action available.
+- Browser extension **v0.2.1** exports finished screenshots without accidentally including the temporary crop-selection border, even while a region is selected. Both PNG download and OS clipboard use the same clean image.
+- Area and editor capture reject a browser tab change before or after the screenshot. All seven independently packaged browser editions include the correction and automated regression tests.
+- Native Windows/WinUI hardware QA and independent approved-reference comparisons remain a separate release gate, not implied by successful CI.
+
 ## v0.2.19 — stability, manual dependencies and self-hosted updates
 
 - New privacy-respecting, official-only update notification feed at
