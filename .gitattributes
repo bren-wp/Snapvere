@@ -1,0 +1,8 @@
+# Deterministic source and extension archives on Windows, Linux and macOS.
+# Do not normalize native binaries, screenshots, installers or font files.
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.json  text eol=lf
+*.html  text eol=lf
+*.css   text eol=lf
+*.py    text eol=lf
