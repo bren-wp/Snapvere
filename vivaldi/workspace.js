@@ -164,7 +164,11 @@
 
   async function captureForEditor(api, mode = "draw") {
     const tab = await currentTab(api);
+    // A user can switch tabs while the extension is preparing the editor.
+    // Never label another tab's pixels as the originally selected page.
+    await ensureOriginalTab(api, tab);
     const url = await api.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+    await ensureOriginalTab(api, tab);
     const img = await loadPng(url);
     if (img.naturalWidth * img.naturalHeight > MAX_PIXELS) {
       throw new Error("Visible tab exceeds the safe pixel limit");
