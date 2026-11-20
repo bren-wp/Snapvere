@@ -12,6 +12,8 @@ on:
       - 'extensions/**'
       - 'tools/build_browser_extensions.py'
       - 'tools/check_browser_extensions.py'
+      - 'tools/audit_browser_extension_graph.py'
+      - 'tools/check_extension_design_tokens.py'
       - '.github/workflows/browser-extensions.yml'
   pull_request:
     paths:
@@ -25,6 +27,8 @@ on:
       - 'extensions/**'
       - 'tools/build_browser_extensions.py'
       - 'tools/check_browser_extensions.py'
+      - 'tools/audit_browser_extension_graph.py'
+      - 'tools/check_extension_design_tokens.py'
       - '.github/workflows/browser-extensions.yml'
   workflow_dispatch:
 permissions:
@@ -44,10 +48,14 @@ jobs:
         run: python tools/build_browser_extensions.py --check
       - name: Least-privilege and first-party links audit
         run: python tools/check_browser_extensions.py
+      - name: Verify all seven extension assets are reachable (static dead-code/file graph)
+        run: python tools/audit_browser_extension_graph.py
+      - name: Check desktop pixel token parity, keyboard and compact layout rules
+        run: python tools/check_extension_design_tokens.py
       - name: Validate all browser JavaScript syntax
         run: |
           for browser in chrome edge brave opera vivaldi firefox safari; do
-            for src in capture.js background.js popup.js; do
+            for src in capture.js workspace.js background.js popup.js editor.js; do
               node --check "$browser/$src"
             done
           done
