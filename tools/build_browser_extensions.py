@@ -15,6 +15,21 @@ ASSETS = (
 )
 VERSION = "0.2.1"
 
+
+def canonical_text_bytes(value: bytes) -> bytes:
+    """Normalize only CRLF, never change actual source text or file contents.
+
+    Git for Windows can check out a tracked .json/.js/.css/.html file with
+    CRLF even when canonical Git blobs use LF. The checker must compare
+    logical source content, while generated ZIP bytes remain LF-only and
+    deterministic across operating systems.
+    """
+    normalized = value.replace(b"\r\n", b"\n")
+    if b"\r" in normalized:
+        raise AssertionError("Unsupported standalone carriage return in extension source")
+    return normalized
+
+
 def make_manifest(browser: str) -> dict:
     result = {
         "manifest_version": 3,
@@ -37,7 +52,7 @@ def make_manifest(browser: str) -> dict:
     return result
 
 def expected(browser: str) -> dict[str, bytes]:
-    result = {name: (SOURCE / name).read_bytes() for name in ASSETS}
+    result = {name: canonical_text_bytes((SOURCE / name).read_bytes()) for name in ASSETS}
     result["manifest.json"] = (json.dumps(make_manifest(browser), ensure_ascii=False, indent=2) + "\n").encode("utf-8")
     return result
 
@@ -59,7 +74,7 @@ def main() -> None:
                 raise AssertionError(f"Unexpected {browser} files: {sorted(extras)}")
             for name, content in bundle.items():
                 target = output / name
-                if not target.is_file() or target.read_bytes() != content:
+                if not target.is_file() or canonical_text_bytes(target.read_bytes()) != content:
                     raise AssertionError(f"Outdated {target.relative_to(ROOT)}; run --build")
         else:
             output.mkdir(parents=True, exist_ok=True)

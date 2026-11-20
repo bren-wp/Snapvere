@@ -80,6 +80,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python tools/test_browser_extension_line_endings.py
+          python tools/build_browser_extensions.py --check
           python tools/build_browser_extensions.py --build --zip-dir extension-package-validation
           python tools/check_extension_zip_contents.py --dir extension-package-validation
           version=$(node -p "require('./apps/desktop/package.json').version")
@@ -218,6 +220,15 @@ jobs:
           if ($parseErrors.Count -ne 0) {
             throw "Windows native capture script syntax errors: $($parseErrors | Out-String)"
           }
+      - name: Windows regression gate for browser source line endings
+        shell: pwsh
+        run: |
+          python tools/test_browser_extension_line_endings.py
+          if ($LASTEXITCODE -ne 0) { throw "Browser CRLF/LF regression failed" }
+          python tools/build_browser_extensions.py --check
+          if ($LASTEXITCODE -ne 0) { throw "Windows checkout changed extension content" }
+          python tools/audit_browser_extension_graph.py
+          if ($LASTEXITCODE -ne 0) { throw "Windows extension source audit failed" }
       - name: Verify Rust format without changing source
         working-directory: apps/desktop/src-tauri
         run: cargo fmt --all -- --check

@@ -11,6 +11,8 @@ on:
       - 'safari/**'
       - 'extensions/**'
       - 'tools/build_browser_extensions.py'
+      - 'tools/test_browser_extension_line_endings.py'
+      - '.gitattributes'
       - 'tools/check_browser_extensions.py'
       - 'tools/audit_browser_extension_graph.py'
       - 'tools/check_extension_design_tokens.py'
@@ -28,6 +30,8 @@ on:
       - 'safari/**'
       - 'extensions/**'
       - 'tools/build_browser_extensions.py'
+      - 'tools/test_browser_extension_line_endings.py'
+      - '.gitattributes'
       - 'tools/check_browser_extensions.py'
       - 'tools/audit_browser_extension_graph.py'
       - 'tools/check_extension_design_tokens.py'
@@ -49,7 +53,9 @@ jobs:
         with:
           node-version: '24'
       - name: Check reproducible browser-specific sources
-        run: python tools/build_browser_extensions.py --check
+        run: |
+          python tools/test_browser_extension_line_endings.py
+          python tools/build_browser_extensions.py --check
       - name: Least-privilege and first-party links audit
         run: python tools/check_browser_extensions.py
       - name: Verify all seven extension assets are reachable (static dead-code/file graph)
