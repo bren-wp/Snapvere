@@ -8,6 +8,7 @@ TypeScript dead-code checks and the Rust module graph audit.
 from html.parser import HTMLParser
 from pathlib import Path
 import json
+from build_browser_extensions import canonical_text_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
 BROWSERS = ("chrome", "edge", "brave", "opera", "vivaldi", "firefox", "safari")
@@ -65,7 +66,9 @@ def audit(base: Path) -> dict[str, int]:
         f"unexpected references {referenced - ASSETS}"
     )
     for name in ASSETS:
-        assert (base / name).read_bytes() == (SOURCE / name).read_bytes(), (
+        assert canonical_text_bytes((base / name).read_bytes()) == canonical_text_bytes(
+            (SOURCE / name).read_bytes()
+        ), (
             f"{base.name}/{name}: stale or divergent code"
         )
     return {"assets": len(referenced), "html": 2, "scripts": 5, "styles": 2}
