@@ -24,8 +24,9 @@ A focused Windows capture workspace from **[BRENDIGO](https://brendigo.com)**.
 ---
 
 > **Distribution notice:** This repository builds the **Tauri 2 / Rust** Windows
-> edition of SNAPVERE. The latest previous published source-code edition is **v0.2.18**.
-> **v0.2.19** is the next source-code candidate and requires CI approval.
+> edition of SNAPVERE. The latest published source-code edition before
+> this change is **v0.2.20**. **v0.2.21** is the next quality-fix candidate
+> and must pass Windows, RustSec, frontend and extension CI before publication.
 > Physical Windows 10/11 acceptance remains undocumented for the existing
 > public packages, regardless of their GitHub release labels.
 > The publicly deployed snapvere.com product distributes a separate .NET / WinUI 3
@@ -62,6 +63,13 @@ perfect translation or pixel-level visual equivalence.
 
 See [localization and QA guidance](docs/LOCALIZATION.md) for the catalog
 structure, supported language codes, native tray mapping and test commands.
+
+## v0.2.21 — screenshot reliability and truthful update status
+
+- Windows About → Updates distinguishes **not checked** from **confirmed current**, with translations for all 12 languages; a failed update fetch removes outdated banners and leaves the manual retry action available.
+- Browser extension **v0.2.1** exports finished screenshots without accidentally including the temporary crop-selection border, even while a region is selected. Both PNG download and OS clipboard use the same clean image.
+- Area and editor capture reject a browser tab change before or after the screenshot. All seven independently packaged browser editions include the correction and automated regression tests.
+- Native Windows/WinUI hardware QA and independent approved-reference comparisons remain a separate release gate, not implied by successful CI.
 
 ## v0.2.19 — stability, manual dependencies and self-hosted updates
 

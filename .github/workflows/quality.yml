@@ -76,6 +76,24 @@ jobs:
         run: python tools/check_tauri_capabilities.py
       - name: Reject unsafe dependency updater permissions and version drift
         run: python tools/check_dependency_policy.py
+      - name: Smoke-test release ZIPs and official update manifest at the exact PR commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/build_browser_extensions.py --build --zip-dir extension-package-validation
+          python tools/check_extension_zip_contents.py --dir extension-package-validation
+          version=$(node -p "require('./apps/desktop/package.json').version")
+          python tools/generate_update_manifest.py --version "$version" --out extension-package-validation/Snapvere-update-stable.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path("extension-package-validation/Snapvere-update-stable.json")
+          data = json.loads(path.read_text(encoding="utf-8"))
+          assert data["product"] == "snapvere-tauri-windows"
+          assert data["download_url"] == "https://snapvere.com/download/"
+          assert len(list(path.parent.glob("Snapvere-*-extension-0.2.1.zip"))) == 7
+          print("All seven browser ZIPs and version-only update feed passed release rehearsal")
+          PY
       - name: Reject duplicate release version before merging application changes
         if: github.event_name == 'pull_request'
         shell: bash
@@ -97,6 +115,10 @@ jobs:
           echo "Release tag v$version is available for this application change."
       - name: Verify matching public and desktop design tokens
         run: python tools/check_brand_tokens.py
+      - name: Audit browser extension dead-file graph and desktop design token parity
+        run: |
+          python tools/audit_browser_extension_graph.py
+          python tools/check_extension_design_tokens.py
       - name: Check capture overlay pipeline and legacy brand references
         run: python tools/check_capture_pipeline.py
       - name: Parse site and app config

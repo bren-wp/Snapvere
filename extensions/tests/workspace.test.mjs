@@ -115,3 +115,38 @@ test("full-page capture discards frame if active tab changes during captureVisib
   assert.equal(flow.stats().editorOpened, 0);
   assert.equal(flow.stats().restored, 1);
 });
+
+function setupEditorTabSwitch(switchAtQuery) {
+  const context = { console, Blob, Date, Number };
+  runInNewContext(code, context);
+  let checks = 0, screenshots = 0, drafts = 0;
+  const api = {
+    tabs: {
+      async query() {
+        checks++;
+        return [{ id: checks >= switchAtQuery ? 8 : 7, windowId: 9 }];
+      },
+      async captureVisibleTab(windowId) {
+        assert.equal(windowId, 9);
+        screenshots++;
+        return "data:image/png;base64,AQID";
+      },
+    },
+  };
+  const originalSave = context.SnapvereWorkspace.openEditor;
+  void originalSave; // Never reached: switched tabs abort before image decoding.
+  return {
+    async run() { await context.SnapvereWorkspace.captureForEditor(api, "crop"); },
+    stats: () => ({ checks, screenshots, drafts }),
+  };
+}
+test("region capture refuses a tab switch before the screenshot", async () => {
+  const flow = setupEditorTabSwitch(2);
+  await assert.rejects(flow.run(), /Active tab changed/);
+  assert.equal(flow.stats().screenshots, 0);
+});
+test("region capture refuses pixels if browser switched tabs while taking screenshot", async () => {
+  const flow = setupEditorTabSwitch(3);
+  await assert.rejects(flow.run(), /Active tab changed/);
+  assert.equal(flow.stats().screenshots, 1);
+});

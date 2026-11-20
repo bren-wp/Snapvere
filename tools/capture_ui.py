@@ -229,6 +229,20 @@ with sync_playwright() as p:
         "Snapvere · Version " + expected_version, exact=True
     ).wait_for(timeout=20000)
 
+    # Disabling automatic updates does not mean we verified that the installed
+    # version is current. The user must see an idle status until checking.
+    automatic = settings.get_by_label("Check automatically on startup")
+    automatic.uncheck()
+    settings.get_by_text(
+        "Automatic checks are off. Use Check for updates to check manually.",
+        exact=True,
+    ).wait_for(timeout=5000)
+    settings.screenshot(path=str(OUTPUT / "settings-updates-automatic-off.png"))
+    settings.get_by_role("button", name="Check for updates", exact=True).click()
+    settings.get_by_text("You have the latest version.", exact=True).wait_for(timeout=10000)
+    assert not automatic.is_checked(), "Manual checks must not re-enable automatic updates"
+    automatic.check()
+
     # Language selector must work across all 12 locales without clipping controls.
     settings.get_by_role("navigation").get_by_role("button", name="General settings").click()
     selector = settings.get_by_role("combobox")  # name changes when the locale changes

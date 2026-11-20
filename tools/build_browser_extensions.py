@@ -3,7 +3,7 @@
 import argparse
 import json
 from pathlib import Path
-from zipfile import ZipFile, ZIP_DEFLATED
+from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "extensions" / "source"
@@ -13,7 +13,7 @@ ASSETS = (
     "popup.js", "popup.html", "popup.css",
     "editor.js", "editor.html", "editor.css",
 )
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 
 def make_manifest(browser: str) -> dict:
     result = {
@@ -69,8 +69,14 @@ def main() -> None:
                 args.zip_dir.mkdir(parents=True, exist_ok=True)
                 dest = args.zip_dir / f"Snapvere-{browser}-extension-{VERSION}.zip"
                 with ZipFile(dest, "w", ZIP_DEFLATED) as archive:
-                    for name in sorted(bundle):
-                        archive.write(output / name, arcname=name)
+                    for name, payload in sorted(bundle.items()):
+                        # A checked-out file's timestamp is not part of its
+                        # identity. Fixed ZIP metadata makes two builds from
+                        # the same source byte-for-byte reproducible.
+                        item = ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+                        item.compress_type = ZIP_DEFLATED
+                        item.external_attr = 0o100644 << 16
+                        archive.writestr(item, payload, compress_type=ZIP_DEFLATED, compresslevel=9)
                 print(dest)
         print(f"SNAPVERE {browser}: {len(bundle)} bundled files verified" if args.check else
               f"SNAPVERE {browser}: {len(bundle)} bundled files generated")

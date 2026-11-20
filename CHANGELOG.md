@@ -2,6 +2,15 @@
 
 SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO**.
 
+## v0.2.21 — safe browser PNG export and trustworthy update status (development candidate)
+
+- Browser extensions v0.2.1 render the **clean final PNG** for download and Windows clipboard, excluding dashed crop-selection outlines and unfinished pointer strokes. The editor preview retains visible selection guides.
+- Browser area/edit captures verify the **original active tab before and after the browser screenshot**. If another tab becomes active, no screenshot is opened or saved. Added deterministic concurrency tests.
+- Windows Settings no longer says **"You have the latest version"** when automatic update checks were disabled and no request ran. The interface shows a distinct idle state in all twelve supported languages. Server errors clear stale version-available notices; manual checks remain available.
+- Playwright checks the automatic-updates-off state and manual retry without silently opting users back into automatic polling.
+- Rebuild all seven browser-specific v0.2.1 bundles from the canonical extension sources and keep optional clipboard handoff fully local.
+- Does **not** claim physical Windows 10/11, native camera/microphone, exact 1:1 pixel parity, browser-store publication, Safari signed package or automatic installer updates are verified.
+
 ## v0.2.19 — official self-hosted updates, manual dependencies and stability (release candidate)
 
 - Add public version-only update feed check (`https://update.snapvere.com/stable.json`) with no cookies, redirection, telemetry, binary download or install. Home/Settings notifications support all 12 languages, user-controlled startup checks, official-only download link and manual retries.

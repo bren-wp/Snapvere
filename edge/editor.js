@@ -32,49 +32,56 @@
     const bottom = Math.min(canvas.height, Math.max(a.y, b.y));
     return { x, y, width: Math.max(0, right - x), height: Math.max(0, bottom - y) };
   }
-  function stroke(op) {
-    ctx.save();
-    ctx.strokeStyle = op.color;
-    ctx.fillStyle = op.color;
-    ctx.lineWidth = op.size;
-    ctx.lineJoin = ctx.lineCap = "round";
+  function stroke(target, op) {
+    target.save();
+    target.strokeStyle = op.color;
+    target.fillStyle = op.color;
+    target.lineWidth = op.size;
+    target.lineJoin = target.lineCap = "round";
     if (op.kind === "pen") {
-      ctx.beginPath();
-      op.points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+      target.beginPath();
+      op.points.forEach((p, i) => i ? target.lineTo(p.x, p.y) : target.moveTo(p.x, p.y));
       if (op.points.length === 1) {
         const p = op.points[0];
-        ctx.arc(p.x, p.y, op.size / 2, 0, Math.PI * 2);
-        ctx.fill();
-      } else ctx.stroke();
+        target.arc(p.x, p.y, op.size / 2, 0, Math.PI * 2);
+        target.fill();
+      } else target.stroke();
     } else if (op.kind === "rectangle") {
       const rect = rectangle(op.start, op.end);
-      ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+      target.strokeRect(rect.x, rect.y, rect.width, rect.height);
     } else if (op.kind === "text") {
-      ctx.font = "bold " + Math.max(14, op.size * 5) + "px system-ui";
-      ctx.fillText(op.value, op.start.x, op.start.y);
+      target.font = "bold " + Math.max(14, op.size * 5) + "px system-ui";
+      target.fillText(op.value, op.start.x, op.start.y);
     }
-    ctx.restore();
+    target.restore();
   }
-  function draw() {
+  function paint(target, showEditingGuides) {
     if (!base) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(base, 0, 0);
-    operations.forEach(stroke);
-    if (pending && tool !== "crop") stroke(pending);
-    if (selection) {
+    target.clearRect(0, 0, canvas.width, canvas.height);
+    target.drawImage(base, 0, 0);
+    operations.forEach(op => stroke(target, op));
+    // The dashed crop border and an unfinished pointer stroke belong only
+    // to the screen preview, never to a saved or clipboard-shared PNG.
+    if (showEditingGuides && pending && tool !== "crop") stroke(target, pending);
+    if (showEditingGuides && selection) {
       const r = rectangle(selection.start, selection.end);
-      ctx.save();
-      ctx.setLineDash([9, 6]);
-      ctx.strokeStyle = "#e0b0ff";
-      ctx.lineWidth = Math.max(2, canvas.width / 1000);
-      ctx.strokeRect(r.x, r.y, r.width, r.height);
-      ctx.restore();
+      target.save();
+      target.setLineDash([9, 6]);
+      target.strokeStyle = "#e0b0ff";
+      target.lineWidth = Math.max(2, canvas.width / 1000);
+      target.strokeRect(r.x, r.y, r.width, r.height);
+      target.restore();
     }
   }
+  function draw() { paint(ctx, true); }
   function snapshot() {
+    if (!base) throw new Error("No image is loaded");
     const out = document.createElement("canvas");
-    out.width = canvas.width; out.height = canvas.height;
-    out.getContext("2d").drawImage(canvas, 0, 0);
+    out.width = canvas.width;
+    out.height = canvas.height;
+    const cleanContext = out.getContext("2d");
+    if (!cleanContext) throw new Error("Canvas export unavailable");
+    paint(cleanContext, false);
     return out;
   }
   function toBlob(source = canvas) {
@@ -172,7 +179,7 @@
     busy = true;
     draw();
     try {
-      const url = canvas.toDataURL("image/png");
+      const url = snapshot().toDataURL("image/png");
       const filename = "Snapvere/Snapvere-" + new Date().toISOString().replace(/[:.]/g, "-") + ".png";
       const id = await api.downloads.download({ url, filename, conflictAction: "uniquify", saveAs: false });
       if (!Number.isInteger(id)) throw new Error("Browser did not start download");
@@ -193,7 +200,7 @@
       }
       // User initiated; clipboard is the only bridge. No local network server,
       // nativeMessaging permission, file-system path or hidden data transfer.
-      const png = toBlob();
+      const png = toBlob(snapshot());
       await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
       message("Image copied. In Snapvere for Windows, choose Import from clipboard.");
     } catch (error) {
