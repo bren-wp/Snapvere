@@ -6,6 +6,12 @@ Seven independently installable-source WebExtensions in the repository root:
 
 Every directory contains its own manifest and all required assets. Shared canonical source lives in `extensions/source/`, and `tools/build_browser_extensions.py` verifies that each browser copy exactly matches it. No extension runtime depends on GitHub or a remote script.
 
+## Reliability improvements in v0.2.1
+
+- The crop selection outline and unfinished pointer strokes remain **visual guides only**. Saved PNGs and images copied to Windows now render from the clean annotation state, without accidentally baking the dotted crop box into the screenshot.
+- **Select area / Edit visible tab** also validate the original active browser tab immediately before and after capture, refusing an accidental screenshot of another tab when the user switches windows.
+- Automated browser tests now verify those failure and export paths. The seven browser variants continue to share identical audited source assets.
+
 ## Features
 
 - **Visible tab** — save a PNG to `Downloads/Snapvere/` as before.
