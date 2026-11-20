@@ -60,6 +60,29 @@ def run() -> None:
                         path=str(OUT / f"{page_name}-{theme}-{width}px.png"),
                         full_page=True,
                     )
+                    if page_name == "editor":
+                        # Crop starts hidden. Once an area is selected, the
+                        # Apply crop button becomes visible: verify this actual
+                        # interaction state instead of exempting it forever.
+                        page.evaluate("""() => {
+                            document.getElementById("apply-crop").hidden = false;
+                        }""")
+                        crop = page.locator("#apply-crop").bounding_box()
+                        assert crop and crop["width"] >= 25, (
+                            f"{page_name}/{theme}/{width}: revealed crop button has no width"
+                        )
+                        assert crop["x"] >= -2 and crop["x"] + crop["width"] <= width + 2, (
+                            f"{page_name}/{theme}/{width}: crop button clipped"
+                        )
+                        assert page.evaluate(
+                            "() => document.documentElement.scrollWidth"
+                        ) <= width + 2, (
+                            f"{page_name}/{theme}/{width}: horizontal overflow after crop appears"
+                        )
+                        page.screenshot(
+                            path=str(OUT / f"{page_name}-crop-{theme}-{width}px.png"),
+                            full_page=True,
+                        )
                     print(f"{page_name}/{theme}/{width}px: no horizontal overflow or clipped controls")
                     ctx.close()
         browser.close()
