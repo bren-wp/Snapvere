@@ -299,11 +299,12 @@ jobs:
             throw "Unexpected release asset count $($actualAssets.Count); expected $($requiredAssets.Count)"
           }
           $checksumFiles = @(Get-Content 'dist-installers/SHA256SUMS.txt' | ForEach-Object {
-            if ($_ -notmatch '^[0-9a-f]{64}  ([^\\/]+)
-) {
+            $parts = $_ -split '  ', 2
+            if ($parts.Count -ne 2 -or $parts[0].Length -ne 64 -or
+                $parts[0] -match '[^0-9a-f]') {
               throw "Malformed release checksum entry: $_"
             }
-            $Matches[1]
+            $parts[1]
           })
           $unhashed = @($requiredAssets | Where-Object {
             $_ -ne 'SHA256SUMS.txt' -and $checksumFiles -notcontains $_
