@@ -5,6 +5,9 @@ on:
     paths:
       - '.github/workflows/release.yml'
       - 'apps/**'
+      - 'tools/build_browser_extensions.py'
+      - 'tools/test_browser_extension_line_endings.py'
+      - '.gitattributes'
   workflow_dispatch:
 permissions:
   contents: read
@@ -116,6 +119,10 @@ jobs:
       - name: Audit all seven extensions and their static/dead-file graph
         shell: pwsh
         run: |
+          # This release previously failed because Git for Windows checked out
+          # JSON with CRLF while the canonical manifests were generated with LF.
+          python tools/test_browser_extension_line_endings.py
+          if ($LASTEXITCODE -ne 0) { throw "LF/CRLF source regression failed" }
           python tools/build_browser_extensions.py --check
           if ($LASTEXITCODE -ne 0) { throw "Browser packages differ from audited canonical source" }
           python tools/check_browser_extensions.py
