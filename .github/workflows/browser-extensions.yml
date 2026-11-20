@@ -58,7 +58,7 @@ jobs:
       - name: Upload seven extension ZIPs for manual browser QA
         uses: actions/upload-artifact@v4
         with:
-          name: Snapvere-Browser-Extensions-v0.2.0
+          name: Snapvere-Browser-Extensions-v0.2.1
           path: browser-extension-dist/*.zip
           if-no-files-found: error
           retention-days: 30
