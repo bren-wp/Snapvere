@@ -1,4 +1,4 @@
-# SNAPVERE browser extensions — v0.2.0 (development)
+# SNAPVERE browser extensions — v0.2.1 (development)
 
 Seven independently installable-source WebExtensions in the repository root:
 
