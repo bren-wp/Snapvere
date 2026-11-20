@@ -13,7 +13,7 @@ ASSETS = (
     "popup.js", "popup.html", "popup.css",
     "editor.js", "editor.html", "editor.css",
 )
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 
 def make_manifest(browser: str) -> dict:
     result = {
