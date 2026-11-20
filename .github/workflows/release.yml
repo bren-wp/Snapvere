@@ -219,7 +219,7 @@ jobs:
             - **Seven browser extension ZIP packages v0.2.1** — Chrome, Firefox, Edge, Brave, Opera, Vivaldi and Safari independently bundled source packages (Safari requires Apple packaging/signing)
             - **Snapvere-update-stable.json** — server-ready version notification manifest; upload it as `stable.json` to your configured `update.snapvere.com` only after the matching Tauri release is available on the official download page
 
-            All eleven installer/extension artifacts and the update manifest are covered by SHA256SUMS.txt.
+            All ten Windows installer/browser extension artifacts, the SBOM and the update manifest are covered by SHA256SUMS.txt.
             The browser ZIPs are developer/source packages, not approved or signed browser-store distributions.
 
             All three Windows executables originate from the same Tauri build, and the seven extension ZIPs are generated from audited source at the same release commit.
