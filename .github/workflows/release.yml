@@ -157,6 +157,8 @@ jobs:
           # SAME release and covered by the SAME release checksums.
           python tools/build_browser_extensions.py --build --zip-dir dist-installers
           if ($LASTEXITCODE -ne 0) { throw "Could not create seven browser ZIP packages" }
+          python tools/check_extension_zip_contents.py --dir dist-installers
+          if ($LASTEXITCODE -ne 0) { throw "Release ZIP audit failed" }
           python tools/generate_update_manifest.py --version "${{ steps.version.outputs.value }}" --out "dist-installers/Snapvere-update-stable.json"
           if ($LASTEXITCODE -ne 0) { throw "Could not generate the version-only update manifest" }
           $browserArchives = @('chrome','firefox','edge','brave','opera','vivaldi','safari') |
