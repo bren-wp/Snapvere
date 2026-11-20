@@ -63,6 +63,8 @@ jobs:
         run: node --test extensions/tests/*.test.mjs
       - name: Assemble versioned browser-specific source archives
         run: python tools/build_browser_extensions.py --build --zip-dir browser-extension-dist
+      - name: Verify every ZIP against canonical audited files and deterministic metadata
+        run: python tools/check_extension_zip_contents.py --dir browser-extension-dist
       - name: Upload seven extension ZIPs for manual browser QA
         uses: actions/upload-artifact@v4
         with:
