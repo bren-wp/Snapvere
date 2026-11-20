@@ -180,20 +180,19 @@ jobs:
             All three Windows executables originate from the same Tauri build and were verified before publication.
 
             ### Changes in v${{ steps.version.outputs.value }}
-            - Add an official self-hosted update notification feed via update.snapvere.com,
-              with startup/manual checks, offline recovery and all 12 languages.
-            - Open only snapvere.com for download and license; remove GitHub and other
-              third-party links from the application UI.
-            - Remove Dependabot and recurring dependency update bots; manually
-              update npm/Cargo with lockfiles, strict Clippy, RustSec and SBOM evidence.
-            - Update windows, base64 and rusqlite to verified supported major versions.
-            - Catch Settings window creation/focus errors and diagnostics log failures.
-            - Make PrintScreen open area selection from the tray, display Home
-              on manual launch, and support opt-in hidden Windows login autostart.
-            - Expose real PrintScreen registration status with a conflict/retry control,
-              and hide the gallery before capturing to avoid self-screenshots.
-            - Preserve bounded WASAPI, crash-recoverable gallery and responsive HUD.
-            - Verify Portable EXE, NSIS EXE, MSI, SBOM and SHA256SUMS from the same commit.
+            - Fix inaccurate update status: when automatic update checks are off,
+              Settings no longer claims that the installed version was verified.
+              Failed server checks also clear stale version notifications.
+            - Keep user-initiated update checks with a timeout, official HTTPS
+              `update.snapvere.com` manifest and `snapvere.com` download link.
+            - Include source-corrected browser extensions v0.2.1 in the repository:
+              crop selection guides are excluded from saved/copied PNGs, and
+              area/edit capture aborts on active-tab switching.
+            - Add Playwright, Node.js and security regressions for these flows.
+            - Preserve Print Screen, optional Windows tray startup, safe clipboard
+              import, bounded recording, local gallery and existing permissions.
+            - Manually reviewed npm/Rust dependency lockfiles, strict Clippy,
+              RustSec, SBOM and SHA-256 verification; no recurring update bot.
 
             **Update security:** The built-in update check is informational only.
             No installer is downloaded or executed automatically. New downloads
