@@ -34,6 +34,7 @@ def run() -> None:
                         body: document.body.getBoundingClientRect().width,
                         documentWidth: document.documentElement.scrollWidth,
                         buttons: [...document.querySelectorAll("button")]
+                          .filter(button => button.getClientRects().length > 0)
                           .map(button => {
                             const r = button.getBoundingClientRect();
                             return {name: button.textContent.trim(), left: r.left,
