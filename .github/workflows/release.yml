@@ -130,8 +130,15 @@ jobs:
               if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax error: $browser/$asset" }
             }
           }
-          node --test extensions/tests/*.test.mjs
-          if ($LASTEXITCODE -ne 0) { throw "Extension behavior regression failed" }
+          Push-Location extensions
+          try {
+            # PowerShell does not perform Bash-style wildcard expansion for
+            # native executables; Node's test discovery is cross-platform.
+            node --test
+            if ($LASTEXITCODE -ne 0) { throw "Extension behavior regression failed" }
+          } finally {
+            Pop-Location
+          }
       - name: Build Windows NSIS EXE and WiX MSI bundles
         working-directory: apps/desktop
         run: npm run tauri -- build --bundles nsis,msi
