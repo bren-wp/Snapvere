@@ -17,6 +17,11 @@ TARGETS = [
     (ROOT / "site", {".js", ".css"}),
     (ROOT / "tools", {".py", ".mjs", ".ps1"}),
 ]
+EXTRA_FILES = (
+    ROOT / "apps/desktop/postcss.config.js",
+    ROOT / "apps/desktop/vite.config.ts",
+    ROOT / "netlify.toml",
+)
 missing = []
 checked = 0
 
@@ -31,6 +36,12 @@ for directory, extensions in TARGETS:
         checked += 1
         if "snapvere by brendigo" not in first:
             missing.append(str(path.relative_to(ROOT)))
+
+for path in EXTRA_FILES:
+    content = path.read_text(encoding="utf-8-sig")
+    checked += 1
+    if "snapvere by brendigo" not in content[:250].casefold():
+        missing.append(str(path.relative_to(ROOT)))
 
 if missing:
     raise SystemExit(
