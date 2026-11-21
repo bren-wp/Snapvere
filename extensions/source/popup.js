@@ -1,3 +1,4 @@
+/* Snapvere by Brendigo */
 "use strict";
 const api = globalThis.browser || globalThis.chrome;
 const buttons = [...document.querySelectorAll("[data-action]")];

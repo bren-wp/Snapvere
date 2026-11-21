@@ -1,3 +1,4 @@
+/* Snapvere by Brendigo */
 /* Chromium: loaded by a Manifest V3 service worker.
  * Firefox/Safari: capture.js is listed first as a background script.
  */
