@@ -96,7 +96,8 @@ mod tests {
                 .collect();
             tasks
                 .into_iter()
-                .filter(|task| task.join().expect("worker join"))
+                .map(|task| task.join().expect("worker join"))
+                .filter(|success| *success)
                 .count()
         });
         assert_eq!(successes, 1);
