@@ -34,11 +34,12 @@ A focused Windows capture workspace from **[BRENDIGO](https://brendigo.com)**.
 > The production website, email download flow, and its binaries are not modified
 > by this GitHub release.
 >
-> **Commercial installer agreement:** Windows NSIS/MSI setup packages include the
-> [Brendigo commercial end-user license](https://snapvere.com/license/), which is
-> presented for acceptance before installation. Business use does not require an
-> activation key. Existing MIT-licensed source and third-party license grants
-> remain valid. The separate public WinUI distribution has its own release path.
+> **Installer terms:** Windows NSIS/MSI setup packages include the
+> [bundled Snapvere commercial EULA](legal/SNAPVERE-COMMERCIAL-EULA.txt), presented
+> before installation. Personal and business use needs no activation key.
+> Existing MIT-licensed source and third-party license grants remain valid.
+> The separate public WinUI edition has its own release and licensing process.
+> The distribution agreement requires qualified legal review before publication.
 
 ## Languages · 12 available
 
