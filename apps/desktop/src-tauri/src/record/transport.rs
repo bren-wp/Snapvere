@@ -106,7 +106,12 @@ pub(super) enum Encoder {
 }
 
 impl Encoder {
-    pub(super) fn write(&mut self, bgra: &[u8], time_100ns: i64, dur_100ns: i64) -> Result<(), String> {
+    pub(super) fn write(
+        &mut self,
+        bgra: &[u8],
+        time_100ns: i64,
+        dur_100ns: i64,
+    ) -> Result<(), String> {
         match self {
             #[cfg(windows)]
             Encoder::Mp4(e) => e.write(bgra, time_100ns, dur_100ns),
@@ -114,7 +119,12 @@ impl Encoder {
         }
     }
 
-    pub(super) fn write_audio(&mut self, pcm: &[i16], time_100ns: i64, dur_100ns: i64) -> Result<(), String> {
+    pub(super) fn write_audio(
+        &mut self,
+        pcm: &[i16],
+        time_100ns: i64,
+        dur_100ns: i64,
+    ) -> Result<(), String> {
         match self {
             #[cfg(windows)]
             Encoder::Mp4(e) => e.write_audio(pcm, time_100ns, dur_100ns),
