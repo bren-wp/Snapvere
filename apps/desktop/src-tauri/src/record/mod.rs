@@ -403,6 +403,7 @@ pub fn set_paused(app: &AppHandle, paused: bool) -> Result<RecordStatus, String>
         }
     })?;
     let st = status(app);
+    crate::tray::set_phase(app, st.phase);
     let _ = app.emit("snapvere:rec-state", &st);
     Ok(st)
 }

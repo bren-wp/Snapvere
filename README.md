@@ -72,6 +72,11 @@ screen-recording shortcuts ready without opening the gallery. Closing the main w
 hides it; **Quit** in the tray menu exits completely. A second login-startup invocation
 never interrupts an already-running instance by opening a window.
 
+The tray menu now also provides **Pause Recording** and **Resume Recording** actions,
+localized in all 12 languages. These controls follow the actual recording phase
+and stay disabled when they are not applicable. The tray tooltip distinguishes
+actively recording from paused.
+
 Change this at any time in **Settings → General → Launch on startup**; an explicit
 off setting remains off across relaunches. Windows may place the icon in the hidden
 notification-area overflow: use **Taskbar settings → Other system tray icons** to
