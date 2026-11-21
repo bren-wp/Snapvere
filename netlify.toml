@@ -1,3 +1,4 @@
+# Snapvere by Brendigo
 # Netlify konfiguracija za Snapvere landing.
 # Sajt je čisti statički HTML/CSS/JS — nema build koraka.
 # Objavljuje se sadržaj foldera `site/`.

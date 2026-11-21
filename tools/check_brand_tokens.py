@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Prevent branding, color and wordmark drift across Snapvere surfaces."""
 import re
 from pathlib import Path

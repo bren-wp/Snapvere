@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! Selection/annotation palette and pure cursor/font helpers.
 import { MousePointer2, ArrowUpRight, Square, Circle, Minus, PenTool, Highlighter, EyeOff, Type, ListOrdered } from "lucide-react";
 import type { EditorTool } from "../types";

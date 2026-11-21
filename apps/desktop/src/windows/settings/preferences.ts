@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import type { ImageFormat, RecordFormat } from "../../lib/types";
 
 export interface AppSettings {

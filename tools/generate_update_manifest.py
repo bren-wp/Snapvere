@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Generate a *version-only* manifest to be uploaded manually to the official server.
 
 This file is NOT a signed Tauri updater payload, remote executable URL or

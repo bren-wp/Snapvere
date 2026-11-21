@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 /**
  * Prevent overlapping Stop/Discard invocations. An acknowledgement holds the
  * lock until the native rec-done event; a failure releases it so the user can

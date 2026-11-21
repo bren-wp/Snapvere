@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Render extension HTML in Chromium at narrow/desktop widths and both OS themes.
 
 This tests responsive DOM geometry and produces authentic HTML previews. It

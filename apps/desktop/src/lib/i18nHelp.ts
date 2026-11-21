@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 /** Privacy, licensing, support text and error recovery translations. */
 export const HELP_KEYS = [
   "Your captures stay on your computer",

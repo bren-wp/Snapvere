@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! Animirani GIF izlaz.
 //!
 //! Cross-platform put (radi i kad Media Foundation nije dostupan) i namjerno ponuđen

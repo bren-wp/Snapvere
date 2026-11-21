@@ -1,79 +1,100 @@
-//! Logiranje i hvatanje panika.
-//!
-//! U release buildu (`windows_subsystem = "windows"`) nema konzole, pa se `println!`
-//! gubi. Bez traga u datoteci "aplikacija se samo ugasi" je nedijagnosticirljivo.
-//! Ovdje postavljamo:
-//!   1. log datoteku u `app.path().app_data_dir()/logs/snapvere.log`,
-//!   2. panic hook koji zapiše poruku + lokaciju prije nego dretva umre.
+//! Snapvere by Brendigo — bounded local diagnostics and panic capture.
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::PathBuf;
-use std::sync::OnceLock;
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 static LOG_PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
+static LOG_WRITE_LOCK: Mutex<()> = Mutex::new(());
 
-/// Maksimalna veličina log datoteke; preko toga se rotira u `.1`.
 const MAX_LOG_BYTES: u64 = 512 * 1024;
+const MAX_LOG_LINE_BYTES: usize = 16 * 1024;
 
-/// Postavi putanju log datoteke (zove se jednom, iz `setup`).
-pub fn init(app_data_dir: &std::path::Path) {
+pub fn init(app_data_dir: &Path) {
     let dir = app_data_dir.join("logs");
     let path = fs::create_dir_all(&dir)
         .ok()
         .map(|_| dir.join("snapvere.log"));
 
-    // Rotacija — log ne smije rasti bez granice.
-    if let Some(p) = &path {
-        if fs::metadata(p)
-            .map(|m| m.len() > MAX_LOG_BYTES)
-            .unwrap_or(false)
-        {
-            let _ = fs::rename(p, p.with_extension("log.1"));
-        }
-    }
-
     let _ = LOG_PATH.set(path);
     log(&format!(
-        "──────── Snapvere {} start ────────",
+        "Snapvere by Brendigo {} started",
         env!("CARGO_PKG_VERSION")
     ));
 }
 
-/// Zapiši redak u log (i na stdout u debug buildu). Nikad ne paničari.
+fn normalize_log_message(msg: &str) -> String {
+    let mut sanitized = String::with_capacity(msg.len().min(MAX_LOG_LINE_BYTES));
+    for ch in msg.chars() {
+        if sanitized.len() + ch.len_utf8() > MAX_LOG_LINE_BYTES {
+            sanitized.push_str(" [truncated]");
+            break;
+        }
+        if ch == '\n' || ch == '\r' || (ch.is_control() && ch != '\t') {
+            sanitized.push(' ');
+        } else {
+            sanitized.push(ch);
+        }
+    }
+    sanitized
+}
+
+fn rotate_if_oversize(path: &Path) {
+    if !fs::metadata(path)
+        .map(|meta| meta.len() >= MAX_LOG_BYTES)
+        .unwrap_or(false)
+    {
+        return;
+    }
+
+    let archive = path.with_extension("log.1");
+    if let Err(error) = fs::remove_file(&archive) {
+        if error.kind() != std::io::ErrorKind::NotFound {
+            return;
+        }
+    }
+    let _ = fs::rename(path, archive);
+}
+
 pub fn log(msg: &str) {
+    let message = normalize_log_message(msg);
+
     #[cfg(debug_assertions)]
-    println!("[snapvere] {msg}");
+    println!("[snapvere] {message}");
 
     let Some(Some(path)) = LOG_PATH.get() else {
         return;
     };
+
+    let _guard = LOG_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    rotate_if_oversize(path);
+
     let stamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
-    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(path) {
-        let _ = writeln!(f, "{stamp}  {msg}");
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{stamp}  {message}");
     }
 }
 
-/// Putanja log datoteke (za "Open log" u Settings → About).
 pub fn log_path() -> Option<PathBuf> {
-    LOG_PATH.get().and_then(|p| p.clone())
+    LOG_PATH.get().and_then(|path| path.clone())
 }
 
-/// Instaliraj panic hook. Panic u radnoj dretvi (capture, snimanje) se sada
-/// zapiše i — jer je `panic = "unwind"` — ne ruši cijeli proces.
 pub fn install_panic_hook() {
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let location = info
             .location()
             .map(|l| format!("{}:{}", l.file(), l.line()))
-            .unwrap_or_else(|| "<nepoznato>".into());
+            .unwrap_or_else(|| "<unknown>".into());
         let payload = info
             .payload()
             .downcast_ref::<&str>()
-            .map(|s| (*s).to_string())
+            .map(|text| (*text).to_string())
             .or_else(|| info.payload().downcast_ref::<String>().cloned())
-            .unwrap_or_else(|| "<bez poruke>".into());
+            .unwrap_or_else(|| "<no message>".into());
         let thread = std::thread::current()
             .name()
             .unwrap_or("<unnamed>")
@@ -84,21 +105,40 @@ pub fn install_panic_hook() {
     }));
 }
 
-/// Pokreni zatvaranje koje smije paničariti; panic postaje `Err` umjesto pada procesa.
-/// Koristi se oko svakog poziva prema `xcap`/DXGI/`image` — to su C/FFI rubovi
-/// gdje panic dolazi iz tuđeg koda i ne smije ubiti aplikaciju.
-pub fn guard<T>(what: &str, f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
-        Ok(r) => {
-            if let Err(e) = &r {
-                log(&format!("{what}: greška — {e}"));
+pub fn guard<T>(what: &str, callback: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(callback)) {
+        Ok(result) => {
+            if let Err(error) = &result {
+                log(&format!("{what}: {error}"));
             }
-            r
+            result
         }
         Err(_) => {
-            let msg = format!("{what}: interna greška (panic uhvaćen, aplikacija nastavlja)");
-            log(&msg);
-            Err(msg)
+            let message = format!("{what}: internal error (panic caught)");
+            log(&message);
+            Err(message)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_log_message, MAX_LOG_LINE_BYTES};
+
+    #[test]
+    fn log_lines_cannot_forge_extra_entries() {
+        assert_eq!(
+            normalize_log_message("file.csv\n2026-01-01 fake warning\rsecret"),
+            "file.csv 2026-01-01 fake warning secret"
+        );
+        assert_eq!(normalize_log_message("hello\0world"), "hello world");
+    }
+
+    #[test]
+    fn logs_bound_untrusted_error_size_without_breaking_utf8() {
+        let line = normalize_log_message(&"🛡️".repeat(10000));
+        assert!(line.len() <= MAX_LOG_LINE_BYTES + " [truncated]".len());
+        assert!(line.ends_with(" [truncated]"));
+        assert!(!line.contains('\n'));
     }
 }

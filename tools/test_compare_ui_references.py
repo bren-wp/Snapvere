@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Offline deterministic tests for the Snapvere UI comparison gate."""
 from pathlib import Path
 from tempfile import TemporaryDirectory

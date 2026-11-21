@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Source-level defense-in-depth against common outbound/backdoor primitives.
 
 This is an allowlist guard for first-party app code, not a proof that a binary

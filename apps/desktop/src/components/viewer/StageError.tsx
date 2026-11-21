@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import { AlertTriangle } from "lucide-react";
 import { useLanguage } from "../../lib/LanguageProvider";
 

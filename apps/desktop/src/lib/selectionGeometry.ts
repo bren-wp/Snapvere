@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 /** Pixel-precise selection geometry, shared by pointer drag and keyboard nudging. */
 export interface Rect { x: number; y: number; w: number; h: number }
 export type ResizeDirection = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";

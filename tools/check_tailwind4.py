@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Guard Tailwind 4 CSS-first tokens and its locked install contract."""
 from pathlib import Path
 import json
@@ -11,7 +12,8 @@ postcss = (app / "postcss.config.js").read_text(encoding="utf-8")
 pkg = json.loads((app / "package.json").read_text(encoding="utf-8"))
 lock = json.loads((app / "package-lock.json").read_text(encoding="utf-8"))
 assert (app / "tailwind.config.ts").exists() is False, "Legacy Tailwind config should be removed"
-assert css.startswith('@import "tailwindcss" source(none);')
+assert css.startswith("/* Snapvere by Brendigo */\n"), "Missing CSS branding header"
+assert css.removeprefix("/* Snapvere by Brendigo */\n").startswith('@import "tailwindcss" source(none);')
 assert '@source "../index.html";' in css and '@source "./";' in css
 assert '@custom-variant dark ' in css
 assert not re.search(r"@tailwind\s+(?:base|components|utilities)\s*;", css)

@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import type { ImageFormat } from "./types";
 
 /** Shared screenshot export settings; kept pure for direct unit testing. */

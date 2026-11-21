@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Verify release ZIPs contain exactly the intended audited browser files."""
 import argparse
 from pathlib import Path

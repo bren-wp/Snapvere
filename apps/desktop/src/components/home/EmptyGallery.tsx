@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import { ImageOff } from "lucide-react";
 import { useLanguage } from "../../lib/LanguageProvider";
 

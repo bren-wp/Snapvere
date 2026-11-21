@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import React from "react";
 import { translate, normalizeLanguage } from "../lib/i18n";
 

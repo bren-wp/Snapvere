@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Security gate for seven bundled SNAPVERE WebExtensions.
 
 The scripting capability is limited to activeTab temporary grants, with no

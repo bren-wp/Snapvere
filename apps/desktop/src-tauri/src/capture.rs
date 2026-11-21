@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! Hvatanje ekrana i obrada slike.
 //!
 //! ⚠️ NAPOMENA o `xcap`: API se mijenja između verzija. Ako u tvojoj pinanoj verziji

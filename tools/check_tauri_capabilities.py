@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Enforce the explicit per-window Tauri plugin permission boundary."""
 import json
 import re

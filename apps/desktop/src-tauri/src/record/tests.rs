@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! Testovi za lanac snimanja.
 //!
 //! Čisti testovi (pretvorbe boja, geometrija) rade svugdje. Testovi koji traže

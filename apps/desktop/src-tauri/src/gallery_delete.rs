@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! Crash-recoverable gallery deletion. Never unlink a registered capture first.
 //!
 //! A durable SQLite intent is written before moving media within its own volume.

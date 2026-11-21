@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {

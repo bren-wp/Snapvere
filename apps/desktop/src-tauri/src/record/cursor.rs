@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! Ucrtavanje pokazivača miša u snimku (Windows).
 //!
 //! DXGI Desktop Duplication ne uključuje kursor u frame — isporučuje ga odvojeno kao

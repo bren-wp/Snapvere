@@ -1,8 +1,8 @@
-//! Localized native tray labels. The English edition remains the fallback.
+//! Snapvere by Brendigo — localized notification-area controls.
 
 /// Order: capture region, full screen, record region, record screen,
-/// stop recording, gallery, settings, quit, active recording tooltip.
-pub fn labels(language: &str) -> [&'static str; 9] {
+/// stop recording, gallery, settings, quit, active, pause, resume, paused.
+pub fn labels(language: &str) -> [&'static str; 12] {
     match language {
         "en" => [
             "Capture Region",
@@ -14,6 +14,9 @@ pub fn labels(language: &str) -> [&'static str; 9] {
             "Settings",
             "Quit",
             "Snapvere — recording in progress",
+            "Pause Recording",
+            "Resume Recording",
+            "Snapvere — recording paused",
         ],
         "hr" => [
             "Snimi područje",
@@ -25,6 +28,9 @@ pub fn labels(language: &str) -> [&'static str; 9] {
             "Postavke",
             "Izlaz",
             "Snapvere — snimanje u tijeku",
+            "Pauziraj snimanje",
+            "Nastavi snimanje",
+            "Snapvere — snimanje pauzirano",
         ],
         "de" => [
             "Bereich aufnehmen",
@@ -36,6 +42,9 @@ pub fn labels(language: &str) -> [&'static str; 9] {
             "Einstellungen",
             "Beenden",
             "Snapvere — Aufnahme läuft",
+            "Aufnahme pausieren",
+            "Aufnahme fortsetzen",
+            "Snapvere — Aufnahme pausiert",
         ],
         "es" => [
             "Capturar región",
@@ -47,6 +56,9 @@ pub fn labels(language: &str) -> [&'static str; 9] {
             "Configuración",
             "Salir",
             "Snapvere — grabando",
+            "Pausar grabación",
+            "Reanudar grabación",
+            "Snapvere — grabación pausada",
         ],
         "fr" => [
             "Capturer une zone",
@@ -58,6 +70,9 @@ pub fn labels(language: &str) -> [&'static str; 9] {
             "Paramètres",
             "Quitter",
             "Snapvere — enregistrement en cours",
+            "Mettre en pause",
+            "Reprendre l’enregistrement",
+            "Snapvere — enregistrement en pause",
         ],
         "it" => [
             "Cattura area",
@@ -69,6 +84,9 @@ pub fn labels(language: &str) -> [&'static str; 9] {
             "Impostazioni",
             "Esci",
             "Snapvere — registrazione in corso",
+            "Metti in pausa",
+            "Riprendi registrazione",
+            "Snapvere — registrazione in pausa",
         ],
         "pt" => [
             "Capturar região",
@@ -80,6 +98,9 @@ pub fn labels(language: &str) -> [&'static str; 9] {
             "Definições",
             "Sair",
             "Snapvere — gravação em curso",
+            "Pausar gravação",
+            "Retomar gravação",
+            "Snapvere — gravação em pausa",
         ],
         "nl" => [
             "Gebied vastleggen",
@@ -91,6 +112,9 @@ pub fn labels(language: &str) -> [&'static str; 9] {
             "Instellingen",
             "Afsluiten",
             "Snapvere — opname actief",
+            "Opname pauzeren",
+            "Opname hervatten",
+            "Snapvere — opname gepauzeerd",
         ],
         "pl" => [
             "Przechwyć obszar",
@@ -102,6 +126,9 @@ pub fn labels(language: &str) -> [&'static str; 9] {
             "Ustawienia",
             "Zakończ",
             "Snapvere — trwa nagrywanie",
+            "Wstrzymaj nagrywanie",
+            "Wznów nagrywanie",
+            "Snapvere — nagrywanie wstrzymane",
         ],
         "cs" => [
             "Zachytit oblast",
@@ -113,6 +140,9 @@ pub fn labels(language: &str) -> [&'static str; 9] {
             "Nastavení",
             "Ukončit",
             "Snapvere — probíhá nahrávání",
+            "Pozastavit nahrávání",
+            "Pokračovat v nahrávání",
+            "Snapvere — nahrávání pozastaveno",
         ],
         "sk" => [
             "Zachytiť oblasť",
@@ -124,6 +154,9 @@ pub fn labels(language: &str) -> [&'static str; 9] {
             "Nastavenia",
             "Ukončiť",
             "Snapvere — prebieha nahrávanie",
+            "Pozastaviť nahrávanie",
+            "Pokračovať v nahrávaní",
+            "Snapvere — nahrávanie pozastavené",
         ],
         "sl" => [
             "Zajemi območje",
@@ -135,6 +168,9 @@ pub fn labels(language: &str) -> [&'static str; 9] {
             "Nastavitve",
             "Izhod",
             "Snapvere — snemanje poteka",
+            "Začasno ustavi snemanje",
+            "Nadaljuj snemanje",
+            "Snapvere — snemanje začasno ustavljeno",
         ],
         _ => labels("en"),
     }
@@ -150,7 +186,7 @@ mod tests {
             "en", "hr", "de", "es", "fr", "it", "pt", "nl", "pl", "cs", "sk", "sl",
         ] {
             let words = labels(language);
-            assert_eq!(words.len(), 9);
+            assert_eq!(words.len(), 12);
             assert!(words.iter().all(|label| !label.trim().is_empty()));
         }
         assert_eq!(labels("en-US"), labels("en"));

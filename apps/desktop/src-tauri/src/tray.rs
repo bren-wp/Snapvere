@@ -1,4 +1,4 @@
-//! System tray ikona i quick menu.
+//! Snapvere by Brendigo — resident notification icon and recording menu.
 //!
 //! VAŽNO: tray se kreira ISKLJUČIVO ovdje (`TrayIconBuilder`). NE definiraj
 //! `app.trayIcon` u `tauri.conf.json` — Tauri v2 ne spaja dvije registracije po
@@ -17,6 +17,7 @@ use tauri::{
 };
 
 use crate::commands::{self, CaptureMode};
+use crate::models::RecordPhase;
 use crate::record;
 
 /// Stavke kojima mijenjamo stanje dok snimanje traje.
@@ -26,6 +27,8 @@ struct RecordItems {
     start: MenuItem<Wry>,
     start_screen: MenuItem<Wry>,
     stop: MenuItem<Wry>,
+    pause: MenuItem<Wry>,
+    resume: MenuItem<Wry>,
     open_gallery: MenuItem<Wry>,
     open_settings: MenuItem<Wry>,
     quit: MenuItem<Wry>,
@@ -50,6 +53,8 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     )?;
     let record_screen = MenuItem::with_id(app, "record_screen", labels[3], true, None::<&str>)?;
     let record_stop = MenuItem::with_id(app, "record_stop", labels[4], false, None::<&str>)?;
+    let record_pause = MenuItem::with_id(app, "record_pause", labels[9], false, None::<&str>)?;
+    let record_resume = MenuItem::with_id(app, "record_resume", labels[10], false, None::<&str>)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
 
     let open_gallery = MenuItem::with_id(app, "open_gallery", labels[5], true, None::<&str>)?;
@@ -66,6 +71,8 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             &record_region,
             &record_screen,
             &record_stop,
+            &record_pause,
+            &record_resume,
             &sep2,
             &open_gallery,
             &open_settings,
@@ -80,6 +87,8 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         start: record_region,
         start_screen: record_screen,
         stop: record_stop,
+        pause: record_pause,
+        resume: record_resume,
         open_gallery,
         open_settings,
         quit,
@@ -100,14 +109,37 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Prebaci tray u "snima se" stanje (poziva se iz recordera).
+/// Synchronize recording controls with the actual native recorder phase.
 pub fn set_recording(app: &AppHandle, active: bool) {
-    if let Some(items) = RECORD_ITEMS.get() {
-        let _ = items.start.set_enabled(!active);
-        let _ = items.start_screen.set_enabled(!active);
-        let _ = items.stop.set_enabled(active);
+    set_phase(
+        app,
+        if active {
+            RecordPhase::Recording
+        } else {
+            RecordPhase::Idle
+        },
+    );
+}
+
+fn enabled_actions(phase: RecordPhase) -> (bool, bool, bool, bool) {
+    match phase {
+        RecordPhase::Idle => (true, false, false, false),
+        RecordPhase::Recording => (false, true, true, false),
+        RecordPhase::Paused => (false, true, false, true),
+        RecordPhase::Finishing => (false, false, false, false),
     }
-    update_tray_tooltip(app, &current_language(app), active);
+}
+
+pub fn set_phase(app: &AppHandle, phase: RecordPhase) {
+    let (can_start, can_stop, can_pause, can_resume) = enabled_actions(phase);
+    if let Some(items) = RECORD_ITEMS.get() {
+        let _ = items.start.set_enabled(can_start);
+        let _ = items.start_screen.set_enabled(can_start);
+        let _ = items.stop.set_enabled(can_stop);
+        let _ = items.pause.set_enabled(can_pause);
+        let _ = items.resume.set_enabled(can_resume);
+    }
+    update_tray_tooltip(app, &current_language(app), phase);
 }
 
 fn current_language(app: &AppHandle) -> String {
@@ -118,12 +150,12 @@ fn current_language(app: &AppHandle) -> String {
         .unwrap_or_else(|| "en".to_owned())
 }
 
-fn update_tray_tooltip(app: &AppHandle, language: &str, active: bool) {
+fn update_tray_tooltip(app: &AppHandle, language: &str, phase: RecordPhase) {
     if let Some(tray) = app.tray_by_id("snapvere-tray") {
-        let tooltip = if active {
-            tray_locale::labels(language)[8]
-        } else {
-            "Snapvere"
+        let tooltip = match phase {
+            RecordPhase::Recording => tray_locale::labels(language)[8],
+            RecordPhase::Paused => tray_locale::labels(language)[11],
+            _ => "Snapvere",
         };
         let _ = tray.set_tooltip(Some(tooltip));
     }
@@ -140,6 +172,8 @@ pub fn set_language(app: &AppHandle, language: &str) {
             (&items.start, labels[2]),
             (&items.start_screen, labels[3]),
             (&items.stop, labels[4]),
+            (&items.pause, labels[9]),
+            (&items.resume, labels[10]),
             (&items.open_gallery, labels[5]),
             (&items.open_settings, labels[6]),
             (&items.quit, labels[7]),
@@ -150,7 +184,7 @@ pub fn set_language(app: &AppHandle, language: &str) {
             }
         }
     }
-    update_tray_tooltip(app, language, record::is_active(app));
+    update_tray_tooltip(app, language, record::status(app).phase);
 }
 
 fn on_menu_event(app: &AppHandle, event: MenuEvent) {
@@ -160,7 +194,19 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
         "record_region" => commands::dispatch_region_capture(app, CaptureMode::Record),
         "record_screen" => commands::dispatch_record_fullscreen(app),
         "record_stop" => {
-            let _ = record::stop(app);
+            if let Err(error) = record::stop(app) {
+                log(&format!("tray stop: {error}"));
+            }
+        }
+        "record_pause" => {
+            if let Err(error) = record::set_paused(app, true) {
+                log(&format!("tray pause: {error}"));
+            }
+        }
+        "record_resume" => {
+            if let Err(error) = record::set_paused(app, false) {
+                log(&format!("tray resume: {error}"));
+            }
         }
         "open_gallery" => {
             let _ = commands::show_home(app.clone());
@@ -189,5 +235,31 @@ fn on_tray_event(tray: &TrayIcon, event: TrayIconEvent) {
     } = event
     {
         let _ = commands::show_home(tray.app_handle().clone());
+    }
+}
+
+#[cfg(test)]
+mod menu_state_tests {
+    use super::enabled_actions;
+    use crate::models::RecordPhase;
+
+    #[test]
+    fn recording_menu_actions_follow_recorder_state() {
+        assert_eq!(
+            enabled_actions(RecordPhase::Idle),
+            (true, false, false, false)
+        );
+        assert_eq!(
+            enabled_actions(RecordPhase::Recording),
+            (false, true, true, false)
+        );
+        assert_eq!(
+            enabled_actions(RecordPhase::Paused),
+            (false, true, false, true)
+        );
+        assert_eq!(
+            enabled_actions(RecordPhase::Finishing),
+            (false, false, false, false)
+        );
     }
 }

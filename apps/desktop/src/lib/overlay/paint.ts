@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! Wait for the compositor before revealing protected screen overlays.
 /** Koliko cloakan overlay čeka nakon iscrtanog framea da ga DWM preuzme (ms). */
 export const REVEAL_DELAY_MS = 34;

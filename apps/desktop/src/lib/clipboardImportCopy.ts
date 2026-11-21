@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import type { Language } from "./i18n";
 
 type ClipboardCopy = Readonly<{ action: string; saved: string; failed: string }>;

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Fail on unreferenced native Rust source modules and dead-code suppressions.
 
 Clippy -D warnings checks unused Rust symbols; this independent check catches

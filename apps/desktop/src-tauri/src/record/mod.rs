@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! Snimanje ekrana — hvatanje frameova, enkodiranje i spremanje u galeriju.
 //!
 //! Sve se odvija na JEDNOJ radnoj dretvi ("snapvere-recorder"): D3D uređaj i Media
@@ -327,7 +328,9 @@ pub fn stop(app: &AppHandle) -> Result<(), String> {
     with_ctl(app, |ctl| {
         ctl.stop.store(true, Ordering::SeqCst);
         ctl.phase.store(PHASE_FINISHING, Ordering::SeqCst);
-    })
+    })?;
+    publish_phase(app);
+    Ok(())
 }
 
 /// Prekini snimanje i baci datoteku.
@@ -336,7 +339,9 @@ pub fn cancel(app: &AppHandle) -> Result<(), String> {
         ctl.cancel.store(true, Ordering::SeqCst);
         ctl.stop.store(true, Ordering::SeqCst);
         ctl.phase.store(PHASE_FINISHING, Ordering::SeqCst);
-    })
+    })?;
+    publish_phase(app);
+    Ok(())
 }
 
 /// Zamijeni skup redact pravokutnika. Prazan popis = ništa se ne pikselizira.
@@ -402,9 +407,14 @@ pub fn set_paused(app: &AppHandle, paused: bool) -> Result<RecordStatus, String>
             ));
         }
     })?;
+    Ok(publish_phase(app))
+}
+
+fn publish_phase(app: &AppHandle) -> RecordStatus {
     let st = status(app);
+    crate::tray::set_phase(app, st.phase);
     let _ = app.emit("snapvere:rec-state", &st);
-    Ok(st)
+    st
 }
 
 fn with_ctl(app: &AppHandle, f: impl FnOnce(&Ctl)) -> Result<(), String> {

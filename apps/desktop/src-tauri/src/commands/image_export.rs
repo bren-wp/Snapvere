@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! Native validation for editor images and Save As destinations.
 use super::*;
 

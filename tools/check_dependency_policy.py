@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Fail closed if SNAPVERE reintroduces unsafe dependency update practices."""
 from pathlib import Path
 import json

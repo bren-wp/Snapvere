@@ -1,5 +1,5 @@
-//! Snapvere — desktop jezgra (Tauri v2).
-//! Postavlja plugine, lokalnu bazu, tray i globalne hotkeye, te izlaže komande frontendu.
+//! Snapvere by Brendigo — Tauri 2 desktop core.
+//! Initializes the native capture services, notification-area icon and command boundary.
 
 mod capture;
 mod commands;
@@ -9,6 +9,7 @@ mod logging;
 mod models;
 mod record;
 mod shortcuts;
+mod startup;
 mod state;
 mod tray;
 mod tray_locale;
@@ -18,15 +19,6 @@ use tauri::Manager;
 use db::Db;
 use logging::log;
 use state::AppState;
-
-/// Windows autostart launches a resident tray instance without a visible
-/// gallery, so PrintScreen remains registered after sign-in. A manual launch
-/// must show the main window rather than seeming to do nothing.
-const BACKGROUND_START_ARG: &str = "--snapvere-startup-hidden";
-
-fn is_background_start(args: impl IntoIterator<Item = String>) -> bool {
-    args.into_iter().any(|arg| arg == BACKGROUND_START_ARG)
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -48,10 +40,11 @@ pub fn run() {
     std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", webview_args);
 
     let app = tauri::Builder::default()
-        // ── single-instance MORA biti prvi: druga instanca se ugasi (samo jedna tray ikona) ──
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            // pokušaj pokretanja druge instance → pokaži galeriju prve, druga se gasi
-            let _ = commands::show_home(app.clone());
+        // Keep login startup silent even if an instance is already running.
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            if !startup::is_background_start(args) {
+                let _ = commands::show_home(app.clone());
+            }
         }))
         // ── ostali plugini ───────────────────────────────────────
         .plugin(tauri_plugin_opener::init())
@@ -61,7 +54,7 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            Some(vec![BACKGROUND_START_ARG]),
+            Some(vec![startup::BACKGROUND_START_ARG]),
         ))
         // ── setup: log, baza, tray, hotkeyi ──────────────────────
         .setup(|app| {
@@ -87,13 +80,13 @@ pub fn run() {
             };
             app.manage(AppState::new(db));
 
-            // Privacy-friendly default: do not register Windows startup automatically.
-            // Users can opt in from Settings, and the saved preference is respected.
-            sync_autostart(app.handle());
-
-            if let Err(e) = tray::build_tray(app.handle()) {
-                log(&format!("tray: {e}"));
-            }
+            // A resident process must have a working tray icon before startup is enabled.
+            tray::build_tray(app.handle()).map_err(|error| {
+                log(&format!("tray initialization failed: {error}"));
+                error
+            })?;
+            // Existing explicit startup opt-outs remain authoritative.
+            startup::sync_autostart(app.handle());
 
             let (capture_hk, record_hk) = shortcuts::register_defaults(app.handle());
             log(&format!(
@@ -115,7 +108,7 @@ pub fn run() {
             // Manual .exe launch opens Snapvere. When Windows starts Snapvere
             // at login it remains in the tray; its registered global
             // PrintScreen shortcut opens the native capture overlay on demand.
-            if !is_background_start(std::env::args().skip(1)) {
+            if !startup::is_background_start(std::env::args().skip(1)) {
                 if let Err(error) = commands::show_home(app.handle().clone()) {
                     log(&format!("cannot show Snapvere on launch: {error}"));
                     return Err(error.into());
@@ -223,40 +216,6 @@ pub fn run() {
     }
 }
 
-/// Uskladi Run unos (HKCU Run / LaunchAgent) sa željom korisnika. Zove se pri svakom
-/// pokretanju: `enable()` upisuje putanju TRENUTNOG exe-a, pa unos prati aplikaciju i
-/// nakon updatea/preseljenja. Dev build se preskače da ne upiše target/debug u registar.
-fn sync_autostart(app: &tauri::AppHandle) {
-    use tauri_plugin_autostart::ManagerExt;
-    use tauri_plugin_store::StoreExt;
-
-    if cfg!(debug_assertions) {
-        return;
-    }
-    let wants = app
-        .store("settings.json")
-        .ok()
-        .and_then(|s| s.get("autostart"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
-    let al = app.autolaunch();
-    let result = if wants {
-        al.enable()
-    } else if al.is_enabled().unwrap_or(false) {
-        al.disable()
-    } else {
-        Ok(())
-    };
-    match result {
-        Ok(()) => log(&format!(
-            "autostart: {}",
-            if wants { "uključen" } else { "isključen" }
-        )),
-        Err(e) => log(&format!("autostart: {e}")),
-    }
-}
-
 // Show the failure before the primary Tauri window is available.
 #[cfg(windows)]
 fn show_database_error(message: &str) {
@@ -277,35 +236,5 @@ fn show_database_error(message: &str) {
             PCWSTR(title.as_ptr()),
             MB_OK | MB_ICONERROR,
         );
-    }
-}
-
-#[cfg(test)]
-mod startup_arg_tests {
-    use super::is_background_start;
-
-    #[test]
-    fn normal_exe_launch_shows_the_main_window() {
-        assert!(!is_background_start(std::iter::empty()));
-        assert!(!is_background_start(["--help".to_owned()]));
-    }
-
-    #[test]
-    fn autostart_with_hidden_flag_keeps_hotkeys_in_tray() {
-        assert!(is_background_start(
-            ["--snapvere-startup-hidden".to_owned()]
-        ));
-        assert!(is_background_start([
-            "--unrelated".to_owned(),
-            "--snapvere-startup-hidden".to_owned(),
-        ]));
-    }
-
-    #[test]
-    fn cannot_hide_by_prefix_or_partial_argument() {
-        assert!(!is_background_start([
-            "--snapvere-startup-hidden=1".to_owned()
-        ]));
-        assert!(!is_background_start(["--hidden".to_owned()]));
     }
 }

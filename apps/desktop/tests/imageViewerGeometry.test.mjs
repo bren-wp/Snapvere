@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fitImageScale } from '../src/lib/imageViewerGeometry.ts';

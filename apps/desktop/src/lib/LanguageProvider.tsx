@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { ipc } from "./ipc";

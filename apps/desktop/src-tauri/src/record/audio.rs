@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! Hvatanje zvuka preko WASAPI-ja: mikrofon (capture endpoint) i sistemski zvuk
 //! (render endpoint u loopback modu). Svaki izvor ima svoju dretvu koja puni red
 //! u zajedničkom formatu (48 kHz, stereo, f32); `Mixer::pull` ih zbraja u PCM16

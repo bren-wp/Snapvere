@@ -1,3 +1,4 @@
+/* Snapvere by Brendigo */
 @import "tailwindcss" source(none);
 @source "../index.html";
 @source "./";
@@ -493,7 +494,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .snapvere-gallery-title {
   color: rgb(var(--snapvere-text)); font-size: clamp(20px,2vw,26px);
-  font-weight: 780; letter-spacing: -.035em;
+  font-weight: 750; letter-spacing: -.015em;
 }
 .snapvere-gallery-card {
   border: 1px solid var(--brand-border);
@@ -592,8 +593,8 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   color: rgb(var(--snapvere-text));
   font-size: clamp(23px, 2.6vw, 32px);
   line-height: 1.13;
-  font-weight: 800;
-  letter-spacing: -.046em;
+  font-weight: 750;
+  letter-spacing: -.018em;
 }
 .snapvere-workspace-subtitle {
   margin-top: 7px;

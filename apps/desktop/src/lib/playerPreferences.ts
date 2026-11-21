@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 /** Lightweight, validated local player preferences. No native permissions required. */
 export type VolumePreference = { volume: number; muted: boolean };
 export const PLAYBACK_SPEEDS: readonly number[] = [1, 1.25, 1.5, 2, 0.5, 0.75];

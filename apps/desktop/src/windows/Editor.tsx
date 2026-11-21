@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import {

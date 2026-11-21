@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import type { Language } from "./i18n";
 
 /** Never let corrupt persisted metadata crash gallery rendering. */

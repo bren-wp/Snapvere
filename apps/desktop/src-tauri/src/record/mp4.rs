@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! MP4 / H.264 enkoder preko Windows Media Foundation Sink Writera.
 //!
 //! Media Foundation je već u sustavu, koristi hardverski enkoder (Quick Sync / NVENC /

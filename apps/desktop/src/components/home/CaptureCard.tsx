@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { FolderOpen, Trash2, Video, Play } from "lucide-react";
 import type { Screenshot } from "../../lib/types";

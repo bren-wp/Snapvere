@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! Scope gallery files strictly by registered id, with bounded image decode.
 use super::*;
 

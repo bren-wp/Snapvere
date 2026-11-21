@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Fail closed on DOM injection patterns in application and first-party website JS.
 
 Cheap source guard, not a replacement for full dependency review or a penetration test.

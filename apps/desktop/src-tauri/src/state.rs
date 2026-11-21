@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! Globalno stanje aplikacije, dijeljeno preko Tauri `State`.
 
 use std::collections::HashMap;
