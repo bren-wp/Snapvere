@@ -11,10 +11,9 @@ pub fn is_background_start(args: impl IntoIterator<Item = String>) -> bool {
     args.into_iter().any(|arg| arg == BACKGROUND_START_ARG)
 }
 
-// An absent value means this installation has never explicitly opted out.
-// Stored false takes priority over the new-installation default.
-fn should_autostart(preference: Option<bool>) -> bool {
-    preference.unwrap_or(true)
+// Unset means fresh installation. Invalid stored values must not change Windows startup.
+fn should_autostart(preference: Option<Option<bool>>) -> Option<bool> {
+    preference.unwrap_or(Some(true))
 }
 
 pub fn sync_autostart(app: &tauri::AppHandle) {
@@ -31,13 +30,13 @@ pub fn sync_autostart(app: &tauri::AppHandle) {
         }
     };
     let stored = store.get("autostart");
-    if stored
-        .as_ref()
-        .is_some_and(|value| value.as_bool().is_none())
-    {
-        log("autostart: invalid stored preference; using default");
-    }
-    let enabled = should_autostart(stored.as_ref().and_then(|value| value.as_bool()));
+    let enabled = match should_autostart(stored.as_ref().map(|value| value.as_bool())) {
+        Some(enabled) => enabled,
+        None => {
+            log("autostart: invalid stored preference; Windows startup unchanged");
+            return;
+        }
+    };
     let launcher = app.autolaunch();
 
     // Refresh the current executable path after an update or relocation.
@@ -74,9 +73,10 @@ mod tests {
 
     #[test]
     fn default_is_enabled_but_explicit_user_opt_out_is_respected() {
-        assert!(should_autostart(None));
-        assert!(should_autostart(Some(true)));
-        assert!(!should_autostart(Some(false)));
+        assert_eq!(should_autostart(None), Some(true));
+        assert_eq!(should_autostart(Some(Some(true))), Some(true));
+        assert_eq!(should_autostart(Some(Some(false))), Some(false));
+        assert_eq!(should_autostart(Some(None)), None);
     }
 
     #[test]
