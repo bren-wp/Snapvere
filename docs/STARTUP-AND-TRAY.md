@@ -25,9 +25,11 @@ window is not the same as turning off login startup.
 4. If Windows or administrator policy blocks the change, the application reports
    an error instead of claiming that the preference was saved.
 
-Disabling startup does not stop the currently running instance. Use **Quit**
-to close it. An explicit saved off preference is never automatically reset by
-a later application launch or update. Debug binaries never modify the
+Disabling startup in Snapvere does not stop the currently running instance.
+Use **Quit** to close it. An explicit saved off preference is never
+automatically reset by a later application launch or update. If you disable
+only the Windows startup entry while keeping the Snapvere preference enabled,
+the application may restore that entry on the next manual launch. Debug binaries never modify the
 installed application's OS startup entry.
 
 ## Keep the icon beside the date and clock

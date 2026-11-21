@@ -14,6 +14,7 @@ re-certified by this focused change.
 | Tray reliability | A failed tray creation left a process that was hard to control | Stop setup on tray initialization failure with diagnostic logging | Rust compiler/CI, Windows runtime required |
 | Settings persistence | Startup toggle could be used before OS state was read, and relied only on deferred auto-save | Block toggle while loading/applying; explicitly save; attempt rollback on errors | TypeScript and Windows integration tests pending |
 | Code structure | Login policy lived in large `lib.rs` and duplicated the command-line flag tests | Move into `startup.rs`; register the module once | Static reachability/Clippy CI pending |
+| Recording windows | Native HUD placement and overlay display lived in the 1,876-line IPC module | Extract the four recording-window helpers into `commands/record_windows.rs` without changing IPC handlers | Rust formatting, Clippy and native CI pending |
 | Localization | General settings incorrectly described startup as off | Update source and all 11 translated variants | Existing localization tests pending |
 | License | Installer agreement omitted background startup and separate distribution channels | Update bundled text EULA and matching RTF while preserving source MIT rights | Text consistency check; qualified legal review outstanding |
 | Presentation | README still described v0.2.21 as not released | Correct published-version statement, add user-facing startup guidance | Documentation review |
