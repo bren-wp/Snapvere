@@ -44,7 +44,7 @@ use crate::models::{
     CaptureAction, CaptureSource, ImageFormat, MonitorInfo, PixelRect, RecFrameRect, RecordFormat,
     RecordOptions, RecordStatus, Region, Screenshot,
 };
-use crate::record::{self, RecordTarget};
+use crate::record;
 use crate::state::{lock, AppState};
 
 fn estr<E: std::fmt::Display>(e: E) -> String {
