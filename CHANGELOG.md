@@ -10,6 +10,8 @@ SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO
 - Move login/startup logic from the main Rust entry module into a tested startup module with pure policy and argument checks.
 - Extract recording HUD, overlay and frame positioning from the large IPC command file into a dedicated Rust module without modifying the public commands.
 - Add Pause and Resume recording to the notification-area menu in all 12 languages, with phase-aware disabled states and a paused tooltip.
+- Bound and rotate diagnostic logs during long-running sessions, with regression tests for line-size and newline injection.
+- Preserve existing system startup configuration when an invalid persisted autostart setting is detected.
 - Disable the General startup toggle while its state is loading or changing. Persist choices immediately, and restore the previous preference and system entry if a change fails.
 - Keep commercial installer text synchronized with the product's startup and privacy behavior while preserving independent MIT and third-party grants.
 - Native Windows 10/11, login behavior under managed profiles and exact 1:1 reference matching still require device acceptance; no new binaries are represented as published.

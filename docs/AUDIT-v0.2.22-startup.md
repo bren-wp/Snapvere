@@ -51,3 +51,28 @@ rights. Binary installer terms and source licenses have distinct purposes.
 
 **Status:** Source changes committed to a review branch. Test results and
 native-screen 1:1 acceptance must not be inferred from code review alone.
+
+
+## Continuation: CI fix, tray controls and local logging
+
+- The Windows Clippy error after modularizing recording windows was an unused
+  `RecordTarget` import in `commands.rs`. The import was removed; the next
+  CI run must confirm that the job progresses beyond Clippy.
+- The notification-area menu now exposes Pause Recording and Resume Recording.
+  The actions follow the actual recorder phase and are disabled when idle or
+  finalizing. All 12 localized tray menus include the new actions.
+- Long-running tray sessions now rotate local diagnostic logs while active,
+  not just at startup; serialized writes and bounded single-line messages
+  limit oversized log growth and forged multiline entries.
+- Invalid persisted autostart values no longer silently enable Windows login
+  startup. The operating-system entry remains unchanged pending explicit
+  repair of the settings file; unset preferences still default to enabled.
+
+### Additional native checks
+
+- [ ] Pause through tray; resume through HUD and confirm tray state updates
+- [ ] Pause through HUD; resume through tray and confirm elapsed time excludes pause
+- [ ] Stop or quit during paused capture without an incomplete file
+- [ ] Rotate a large diagnostic log during hours of continuous tray residency
+- [ ] Test invalid persisted `autostart` value leaves startup entry unchanged
+

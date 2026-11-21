@@ -1,363 +1,165 @@
+<!-- Snapvere by Brendigo -->
 <div align="center">
-
-<img src="site/icon.png" alt="SNAPVERE application icon" width="104" />
+  <img src="site/icon.png" alt="Snapvere application icon" width="112" />
 
 # SNAPVERE
+### Capture. Edit. Share your work — on your terms.
 
-### Capture what matters. Make it clear. Keep it yours.
+**Screenshots, screen recordings and clear visual explanations in one Windows application.**
 
-**Screenshot, annotate and record — without letting your tools get in the way.**
+A product by **[Brendigo](https://brendigo.com)**.
 
-A focused Windows capture workspace from **[BRENDIGO](https://brendigo.com)**.
+[![Windows 10 & 11](https://img.shields.io/badge/Windows-10%20%2F%2011-17223b?style=flat-square)](https://github.com/bren-wp/Snapvere/releases/latest)
+[![Local-first](https://img.shields.io/badge/Storage-Local--first-7255ea?style=flat-square)](https://snapvere.com/privacy/)
+[![12 languages](https://img.shields.io/badge/Languages-12-17223b?style=flat-square)](#made-for-your-workflow)
+[![License: MIT](https://img.shields.io/badge/Source-MIT-7255ea?style=flat-square)](LICENSE)
 
-[![Product](https://img.shields.io/badge/Product-SNAPVERE-7648eb?style=flat-square)](https://snapvere.com)
-[![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-141416?style=flat-square)](https://snapvere.com/download/)
-[![Privacy](https://img.shields.io/badge/Storage-Local--first-141416?style=flat-square)](https://snapvere.com/privacy/)
-[![Updates](https://img.shields.io/badge/Updates-SNAPVERE-7648eb?style=flat-square)](https://snapvere.com/download/)
+[**Website**](https://snapvere.com/) · [**Windows releases**](https://github.com/bren-wp/Snapvere/releases/latest) · [**Privacy**](https://snapvere.com/privacy/) · [**License**](legal/SNAPVERE-COMMERCIAL-EULA.txt)
 
-[**🌐 Official SNAPVERE website**](https://snapvere.com/) · [**⬇️ Official downloads**](https://snapvere.com/download/) · [**🔐 Website privacy**](https://snapvere.com/privacy/)
-
-<img src="site/og.png" alt="Original SNAPVERE branded product artwork" width="860" />
-
+<img src="site/og.png" alt="Original Snapvere brand artwork" width="860" />
 </div>
 
 ---
 
-> **Edition:** This repository contains the **Tauri 2 / Rust** Windows
-> edition of Snapvere. The latest published GitHub release is **v0.2.21**.
-> The v0.2.22 changes below are available for review, not yet a published release.
-> Windows security, native capture and extension checks must pass before release.
-> Physical Windows 10/11 acceptance remains undocumented for the existing
-> public packages, regardless of their GitHub release labels.
-> The publicly deployed snapvere.com product distributes a separate .NET / WinUI 3
-> edition. Their installers, versions, licenses and update paths are not interchangeable.
-> The production website, email download flow, and its binaries are not modified
-> by this GitHub release.
->
-> **Installer terms:** Windows NSIS/MSI setup packages include the
-> [bundled Snapvere commercial EULA](legal/SNAPVERE-COMMERCIAL-EULA.txt), presented
-> before installation. Personal and business use needs no activation key.
-> Existing MIT-licensed source and third-party license grants remain valid.
-> The separate public WinUI edition has its own release and licensing process.
+## Your screen, clearly explained
 
-## Languages · 12 available
+Whether you are documenting a bug, reviewing a design or preparing a tutorial,
+Snapvere gives you a simple sequence: **capture → annotate → save or copy**.
 
-Snapvere starts in **English**. Select a language in **Settings → General → Language**:
-English, Hrvatski, Deutsch, Español, Français, Italiano, Português,
-Nederlands, Polski, Čeština, Slovenčina or Slovenščina.
+| | Feature | What you can do |
+|---|---|---|
+| 📸 | **Instant screenshots** | Capture a region or the full display with a shortcut or one click |
+| ✏️ | **Clear annotations** | Add arrows, text, shapes and pixelation to explain a detail |
+| 🎬 | **Screen recording** | Record an area or display to MP4 or silent GIF; choose cursor and audio preferences |
+| ⏸️ | **Pause and resume** | Control an active recording from its toolbar or the Windows notification-area menu |
+| 📋 | **Clipboard and export** | Copy a captured image or save a result in PNG, JPEG or WebP |
+| 🗂️ | **Local library** | Find captures by name and tags without a required online account |
+| 🖥️ | **Ready when you are** | Launch quietly at Windows sign-in; capture from the icon beside the clock |
+| 🔒 | **Privacy by design** | No automatic capture upload; locally stored captures and gallery data |
 
-The selection is stored in the on-device Settings file through a strict,
-window-scoped Rust command and broadcast to all open desktop windows. The
-**225-key application interface catalog** covers capture, settings, editor,
-recording HUD, media viewer, privacy, licensing, errors and accessibility
-labels in all 12 languages. The **native Windows tray menu** also follows the
-selected language, including live updates without restarting. English remains
-the source language and fallback for any future untranslated key.
+## See Snapvere
 
-Automated tests reject missing or duplicated keys, missing translations,
-hard-coded visible labels and unexpected English strings in scanned React
-components. Real Windows 10/11 layout, spoken accessibility, native driver
-error messaging, third-party system dialogs and installer localization remain
-subject to device-specific QA; automated checks alone are not a guarantee of
-perfect translation or pixel-level visual equivalence.
-
-See [localization and QA guidance](docs/LOCALIZATION.md) for the catalog
-structure, supported language codes, native tray mapping and test commands.
-
-## v0.2.22 — always-ready capture from the Windows notification area
-
-Snapvere by Brendigo starts with Windows **by default** on a fresh installation. It
-loads quietly in the notification area beside the clock, keeping PrintScreen and
-screen-recording shortcuts ready without opening the gallery. Closing the main window
-hides it; **Quit** in the tray menu exits completely. A second login-startup invocation
-never interrupts an already-running instance by opening a window.
-
-The tray menu now also provides **Pause Recording** and **Resume Recording** actions,
-localized in all 12 languages. These controls follow the actual recording phase
-and stay disabled when they are not applicable. The tray tooltip distinguishes
-actively recording from paused.
-
-Change this at any time in **Settings → General → Launch on startup**; an explicit
-off setting remains off across relaunches. Windows may place the icon in the hidden
-notification-area overflow: use **Taskbar settings → Other system tray icons** to
-show it permanently beside the clock. The app cannot override Windows taskbar pinning.
-
-See [Windows startup and tray guide](docs/STARTUP-AND-TRAY.md) and
-[focused change audit](docs/AUDIT-v0.2.22-startup.md). Existing screenshot assets below
-are genuine automated renders of this repository's React UI; new Windows-native
-screenshots and exact reference comparisons have not yet been verified.
-
-## v0.2.21 — screenshot reliability and truthful update status
-
-- Windows About → Updates distinguishes **not checked** from **confirmed current**, with translations for all 12 languages; a failed update fetch removes outdated banners and leaves the manual retry action available.
-- Browser extension **v0.2.1** exports finished screenshots without accidentally including the temporary crop-selection border, even while a region is selected. Both PNG download and OS clipboard use the same clean image.
-- Area and editor capture reject a browser tab change before or after the screenshot. All seven independently packaged browser editions include the correction and automated regression tests.
-- Native Windows/WinUI hardware QA and independent approved-reference comparisons remain a separate release gate, not implied by successful CI.
-
-## v0.2.19 — stability, manual dependencies and self-hosted updates
-
-- New privacy-respecting, official-only update notification feed at
-  `https://update.snapvere.com/stable.json`, in Home and Settings → About.
-  Users can check manually or turn off automatic startup checks. Updated
-  versions open only the [official SNAPVERE download page](https://snapvere.com/download/);
-  untrusted manifest URLs are rejected and no executable is auto-installed.
-- Remove Dependabot and scheduled dependency updater bots. Refresh npm and
-  Rust dependencies manually, backed by strict TypeScript/Rust, Windows and
-  security CI, and keep lockfiles/SBOM consistent.
-- Update Windows API, bundled SQLite and base64 to their tested current
-  supported major versions. Keep the audited pinned build-tool override
-  until its provenance and an upstream replacement are validated.
-- Resolve Settings window creation/focus errors and recover safely if opening
-  the diagnostics log fails.
-- **Print Screen starts screen selection:** normal EXE launches show the
-  Snapvere window, while the optional Windows login autostart runs it quietly
-  in the system tray with a registered PrintScreen global shortcut.
-  Settings → Hotkeys shows the *actual* OS registration, provides a one-click
-  PrintScreen binding action and explains Windows Snipping Tool conflicts.
-  Without a running tray process, Windows cannot deliver the shortcut.
-- Remove third-party and GitHub links from public app controls: only
-  `snapvere.com` is linked from the UI; the developer name remains plain text.
-- Update server setup and security requirements:
-  [docs/UPDATE-SERVER.md](docs/UPDATE-SERVER.md).
-- Native Windows 10/11 hardware capture, audio, scaling, installer upgrade and
-  per-screen 1:1 reference matching still require physical acceptance.
-
-## v0.2.18 — COM lifecycle and release QA (development candidate)
-
-- Correct COM initialization reference handling for MP4 startup and cleanup after
-  a Media Foundation startup failure. Reject unexpected COM HRESULT errors.
-- Test S_OK, S_FALSE, RPC_E_CHANGED_MODE and E_FAIL in Windows CI.
-- Correct light-mode borders, header/toolbar backgrounds, primary-action text contrast
-  and RGB alpha effects; propagate theme changes to already-open application windows.
-- Capture React dark/light, hover, focus, disabled, palette and error states in CI,
-  with strict reference comparison and no invented native 1:1 acceptance.
-- Fix clipped recording HUD palette/error popovers by expanding its native WebView2
-  window only while needed, while retaining its 58px control bar and mixed-DPI centering.
-- Enforce the GitHub prerelease flag until real Windows 10/11 acceptance is complete.
-- GitHub withdrew the picomatch advisory on 18 November 2026, but no patched
-  upstream release exists; retain the reviewed pinned build-only fork and tests.
-- Update Tauri API/CLI and Lucide to tested compatible npm patches and keep
-  the actual lockfile synchronized; update compatible Cargo crates only after
-  real Windows Rust/Clippy/RustSec checks pass.
-- Add reviewed weekly Dependabot update PRs and read-only dependency freshness reports;
-  publish lockfile-derived CycloneDX SBOM and its SHA-256 alongside installers.
-- Fix giant screenshot cropping in the viewer's `Fit to window` operation, with
-  image-scale regression tests for images bigger than 10,000 pixels.
-- Extend automated browser previews to 100/125/150/200% simulated DPI (dark/light);
-  add `tools/windows-native-capture.ps1` for locally collected genuine WebView2
-  evidence on physical Windows 10/11.
-- See [security and dependency audit](docs/SECURITY-STABILITY-v0.2.18.md),
-  [native acceptance guide](docs/NATIVE-WINDOWS-QA-v0.2.18.md) and
-  [technical COM audit](docs/AUDIT-v0.2.18-P1-com-release.md).
-
-## v0.2.17 — bounded audio and multichannel support (published 17 November 2026)
-
-- Bound WASAPI packets and MP4 audio backlog; safely decode misaligned PCM samples.
-- Preserve 5.1/7.1 center dialogue and surround channels in stereo downmix.
-- CI passed; physical Windows and 1:1 visual verification remain pending.
-- See [technical audit](docs/AUDIT-v0.2.17-P1-audio-memory.md).
-
-## In v0.2.16 — recording and audio-device integrity
-
-- Microphone and system-loopback capture now surface device/API errors that occur
-  *after* initial readiness instead of silently producing audio-less recordings.
-- A failed selected audio source stops the recording through the existing
-  error-handling and MP4 cleanup path.
-- Published as [v0.2.16](https://github.com/bren-wp/Snapvere/releases/tag/v0.2.16);
-  physical Windows testing and pixel-perfect reference acceptance remain pending.
-
-## v0.2.14 — P1 deletion recovery (implemented)
-
-- Deletes now use a durable SQLite intent and same-volume media staging. Interrupted
-  operations restore original captures or finish cleanup safely on the next start.
-- Frozen-frame PNG/RGBA transport and overlay lifecycle IPC verify the calling
-  WebView window before accessing private screen content.
-- Regression scenarios cover transaction failure, interruption before/after commit
-  and unsafe filesystem entries; CI and real Windows device tests must still pass.
-- This GitHub edition remains separate from the .NET/WinUI installers on
-  snapvere.com. See [P1 audit report](docs/AUDIT-v0.2.14-P1-integrity-ipc.md).
-
-## v0.2.13 development quality improvements
-
-- Recording toolbar **Stop** and **Discard** are retryable if a native command fails;
-  the toolbar remains visible and offers a clear message instead of silently hiding.
-- The media gallery and recording toolbar now use localized accessible action names
-  in all 12 supported languages. File sizes and gallery dates use the chosen
-  language's number and date conventions.
-- Pure unit tests cover retry locks, corrupt metadata and translation completeness.
-  Automated browser preview tests inject a failed Stop command to ensure the
-  controls remain usable. Real Windows capture, audio and 1:1 visual QA are still
-  pending before a stable release.
-
-## Your screen. Your story. One streamlined workflow.
-
-Capture the exact moment that matters. Add an arrow, label a detail, redact a private field, and save a result you can find again. Whether you are reporting a bug, showing a client a design, building a tutorial or documenting a process, SNAPVERE keeps the work simple.
-
-<table>
-<tr><td align="center" width="25%">📸<br/><b>Capture precisely</b><br/><sub>Choose a region or your full display</sub></td><td align="center" width="25%">✏️<br/><b>Explain visually</b><br/><sub>Draw, annotate, highlight or blur</sub></td><td align="center" width="25%">🎬<br/><b>Record the flow</b><br/><sub>MP4/GIF, cursor and optional audio</sub></td><td align="center" width="25%">🗂️<br/><b>Find it later</b><br/><sub>Search your local capture library</sub></td></tr>
-</table>
-
-### A genuine look inside SNAPVERE
-
-The screenshots below come from **actual rendered React application screens in this repository**, captured automatically by Playwright. They are not AI mockups, and no fictitious user data, videos or recorded outcomes have been added.
+These images are **genuine screenshots of the repository's rendered React
+application interface**, not AI illustrations. They show the application layout;
+hardware capture, physical Windows integration and exact native pixel matching
+must be checked separately.
 
 <table>
 <tr>
-  <td width="50%"><img src="docs/screenshots/home.png" alt="Actual SNAPVERE gallery showing screenshot and recording controls" /></td>
-  <td width="50%"><img src="docs/screenshots/editor.png" alt="Actual SNAPVERE annotation editor interface" /></td>
+<td width="50%"><img src="docs/screenshots/home.png" alt="Snapvere gallery with screenshot and recording actions" /></td>
+<td width="50%"><img src="docs/screenshots/editor.png" alt="Snapvere screenshot annotation editor" /></td>
 </tr>
+<tr><td align="center"><b>Gallery</b> — recent captures, recording and quick actions</td><td align="center"><b>Editor</b> — annotate, highlight, crop and export</td></tr>
 <tr>
-  <td align="center"><b>01 · Capture & organize</b><br/><sub>One home for your screenshots, recordings and quick actions</sub></td>
-  <td align="center"><b>02 · Refine & explain</b><br/><sub>Annotations and copy/save commands when you need them</sub></td>
+<td><img src="docs/screenshots/settings.png" alt="Snapvere Settings window" /></td>
+<td><img src="docs/screenshots/capture-overlay.png" alt="Snapvere region selection and editing preview" /></td>
 </tr>
-<tr>
-  <td width="50%"><img src="docs/screenshots/settings.png" alt="Actual SNAPVERE application settings interface" /></td>
-  <td width="50%"><img src="docs/screenshots/capture-overlay.png" alt="Actual React overlay render showing a real website screenshot instead of a black surface" /></td>
-</tr>
-<tr>
-  <td align="center"><b>03 · Make it yours</b><br/><sub>Shortcuts, capture formats, audio and privacy controls</sub></td>
-  <td align="center"><b>04 · See what you select</b><br/><sub>Verified on-screen frozen-frame presentation</sub></td>
-</tr>
+<tr><td align="center"><b>Settings</b> — simple controls for your workflow</td><td align="center"><b>Capture</b> — select what belongs in your screenshot</td></tr>
 </table>
-
-<sub>**Preview accuracy:** App UI screenshots use a simulated native Tauri bridge. The region-selection screenshot is driven by a real website-rendered image sent through the same in-memory RGBA interface as the application. These images prove which frontend UI was rendered, **not** real Windows hardware capture, recording quality, or exact pixel equivalence with the separately deployed public site.</sub>
 
 <details>
-<summary><b>🖼️ See the full interface gallery — preferences, compact layout and responsive website</b></summary>
+<summary><b>🖼️ Explore more real interface previews</b></summary>
 
-### Workspaces
-
-<img src="docs/screenshots/home-compact.png" alt="Real SNAPVERE compact gallery layout" width="750" />
-
-### More settings, fewer interruptions
+<img src="docs/screenshots/home-compact.png" alt="Snapvere compact gallery layout" width="760" />
 
 <table>
-<tr><td width="50%"><img src="docs/screenshots/settings-hotkeys.png" alt="Real hotkeys preferences screen"/></td><td width="50%"><img src="docs/screenshots/settings-capture.png" alt="Real capture preferences screen"/></td></tr>
-<tr><td><img src="docs/screenshots/settings-recording.png" alt="Real recording preferences screen"/></td><td><img src="docs/screenshots/settings-save.png" alt="Real local save preferences screen"/></td></tr>
-<tr><td><img src="docs/screenshots/settings-privacy.png" alt="Real privacy preferences screen"/></td><td><img src="docs/screenshots/settings-about.png" alt="Real about screen"/></td></tr>
+<tr><td width="50%"><img src="docs/screenshots/settings-hotkeys.png" alt="Keyboard shortcuts"/></td><td width="50%"><img src="docs/screenshots/settings-capture.png" alt="Screenshot preferences"/></td></tr>
+<tr><td><img src="docs/screenshots/settings-recording.png" alt="Video recording preferences"/></td><td><img src="docs/screenshots/settings-save.png" alt="Local saving preferences"/></td></tr>
+<tr><td><img src="docs/screenshots/settings-privacy.png" alt="Privacy settings"/></td><td><img src="docs/screenshots/settings-about.png" alt="About and version information"/></td></tr>
 </table>
-
-### Website — desktop and mobile
-
-<table>
-<tr><td width="60%"><img src="docs/screenshots/website.png" alt="Rendered SNAPVERE repository website on desktop"/></td><td width="40%"><img src="docs/screenshots/website-mobile.png" alt="Rendered responsive SNAPVERE repository website on mobile"/></td></tr>
-<tr><td><img src="docs/screenshots/download.png" alt="Rendered download center desktop page"/></td><td><img src="docs/screenshots/download-mobile.png" alt="Rendered mobile download center"/></td></tr>
-<tr><td><img src="docs/screenshots/privacy.png" alt="Rendered desktop privacy page"/></td><td><img src="docs/screenshots/privacy-mobile.png" alt="Rendered mobile privacy page"/></td></tr>
-</table>
-
 </details>
 
-## SNAPVERE v0.2.12 — screenshot and recording workspace
+## Made for your workflow
 
-The desktop interface now follows the repository website's navy/violet palette and interaction hierarchy more closely. The Home window presents three dedicated quick actions in order: **Capture region**, **Record screen**, **Full screen**, followed by gallery search and filters. Settings now groups the four capture-related sections first, then application-wide preferences, with keyboard navigation and responsive horizontal tabs in narrow windows.
+**Always available.** Snapvere starts minimized in the Windows notification
+area after sign-in by default. The icon remains while the application runs;
+closing the gallery simply hides the window. Open the icon menu to take a
+screenshot, record an area, pause or resume a recording, change settings or
+quit. Windows manages whether the icon appears directly beside the clock or
+in the hidden-icons menu. You can disable automatic startup in
+**Settings → General → Launch on startup**.
 
-The underlying screenshot, recording, gallery and export Rust commands are unchanged. Release v0.2.11 is a **candidate** until the PR has passed Windows CI and the UI previews have been inspected. Renderer screenshots validate composition, not exact pixel-parity with the separately deployed live WinUI website or real Windows hardware.
+**Fast shortcuts.** Use `PrintScreen` for region capture when the shortcut is
+available. Recording shortcuts can be customized. Windows Snipping Tool and
+other screenshot applications may reserve certain keys; Snapvere displays
+which shortcut was actually registered.
 
-## What's improved in v0.2.10
+**Local-first organization.** Images, recordings and gallery metadata stay
+on your computer unless you deliberately export or share them. Snapvere
+needs neither an account nor a cloud subscription for basic captures.
+An optional update check retrieves version information only.
 
-- **Native, safer Save As:** the editor and capture overlay use the operating-system destination picker; the renderer no longer supplies an arbitrary path to native file-write IPC.
-- **Scoped Tauri permissions:** the Home window alone can create Settings and confirm deletes; Settings alone owns its folder picker, autostart and opener rights. Capture and recording windows do not inherit those grants.
-- **Stronger CI gates:** static per-window capability validation and a pre-merge check for duplicate Windows release tags reduce regressions and post-merge publishing failures.
+**12 interface languages.** English, Hrvatski, Deutsch, Español, Français,
+Italiano, Português, Nederlands, Polski, Čeština, Slovenčina and Slovenščina.
+The Windows notification-area menu follows the selected language.
 
-**v0.2.10 was published on 14 November 2026** with the native Save As, scoped Tauri permissions and Windows installers. The separately deployed WinUI website binaries are unchanged. Physical Windows and 1:1 reference-image QA remain open.
+## Download for Windows
 
-## What's improved in v0.2.9
+Get the **Tauri/Rust Windows edition** from
+[**GitHub Releases**](https://github.com/bren-wp/Snapvere/releases/latest).
+The release assets contain:
 
-The [v0.2.9 GitHub release](https://github.com/bren-wp/Snapvere/releases/tag/v0.2.9) includes precision keyboard capture controls, smoother video playback, more resilient settings, recorder startup and buffer safeguards, and more maintainable native modules. Hardware-specific capture and recording scenarios still need verification on real Windows 10/11 systems.
+| Package | Purpose |
+|---|---|
+| **Snapvere-Portable.exe** | Launch without an application installer |
+| **Snapvere-Setup.exe** | Guided Windows setup |
+| **Snapvere-Setup.msi** | Windows Installer package |
+| **SHA256SUMS.txt** | Checksum list for package verification |
 
-## What's improved in v0.2.7
+Snapvere is intended for 64-bit Windows 10 and Windows 11 with Microsoft
+WebView2 Runtime available. The repository's GitHub packages and the
+separately maintained WinUI/.NET downloads at snapvere.com are **different
+editions**; do not interchange their installation and update channels.
 
-- **More reliable shortcuts:** Rebinding capture or recording shortcuts now preserves the previous keys if Windows rejects the new combination.
-- **Cleaner full-screen captures:** The application window hides before Windows samples the display and returns afterward, reducing screenshots that accidentally contain the gallery.
-- **A reliable editor:** Newly saved screenshots are explicitly authorized for the editor's image view. The preview test rejects unloaded or black editor frames.
-- **Unified product identity:** The redesigned navy/violet website, app shell, feather icon, favicon, Windows executable icons, macOS icon and social preview share the same local source.
-- **Clearer controls:** Accessible gallery card actions, narrower Settings layouts and status feedback for saving and changing hotkeys.
-
-The source and interface images are built directly from the SNAPVERE project. Preview images verify rendered UI; hardware capture and recording still require device-specific validation.
-
-## Built to stay out of your way
-
-| | Everyday task | SNAPVERE workflow |
-|---|---|---|
-| 🧩 | **Report a bug clearly** | Select an area, mark the issue, copy or save the screenshot |
-| 🎨 | **Review visual details** | Highlight, label and redact before handing off a screen |
-| 📚 | **Create documentation** | Record an MP4/GIF walkthrough or annotate a still |
-| 🔍 | **Locate past work** | Search filenames and tags in the local gallery |
-| ⌨️ | **Stay in flow** | Trigger capture from the tray or a configured keyboard shortcut |
-| 🛡️ | **Keep control of sensitive images** | Save captures locally, without a required cloud account |
-
-**Local-first, by design.** Captures and gallery metadata are local. Sharing or exporting is a deliberate action. There are no in-app ads, donation prompts or mandatory user accounts for basic capture.
-
-## Get SNAPVERE for Windows
-
-**Latest confirmed repository release: v0.2.16 (16 November 2026).** SNAPVERE provides three Windows package formats with a SHA-256 manifest. Obtain the Tauri/Rust edition from [GitHub Releases](https://github.com/bren-wp/Snapvere/releases/tag/v0.2.16). The downloads on snapvere.com are maintained separately for the .NET/WinUI edition and are **not** interchangeable. GitHub labels v0.2.16 as a stable release, but physical Windows device QA is not documented; do not treat the stable badge as a hardware-validation claim.
-
-| Package | Ideal for | Official download |
-|---|---|---|
-| 💻 **Portable EXE** | Run without installing SNAPVERE | [Snapvere-Portable.exe](https://github.com/bren-wp/Snapvere/releases/download/v0.2.16/Snapvere-Portable.exe) |
-| 📦 **EXE Setup** | Guided installation | [Snapvere-Setup.exe](https://github.com/bren-wp/Snapvere/releases/download/v0.2.16/Snapvere-Setup.exe) |
-| 🏢 **MSI Setup** | Windows managed installation | [Snapvere-Setup.msi](https://github.com/bren-wp/Snapvere/releases/download/v0.2.16/Snapvere-Setup.msi) |
-
-**Requires:** 64-bit Windows 10/11 and Microsoft WebView2 Runtime. Portable means the SNAPVERE installer is not needed; some systems may still need WebView2 installed. These are **unsigned preview builds** and Windows SmartScreen may display a warning.
-
-### Verify what you install
-
-Download [SHA256SUMS.txt](https://github.com/bren-wp/Snapvere/releases/download/v0.2.16/SHA256SUMS.txt) **from the same package version**, then run:
+Verify the file you downloaded:
 
 ```powershell
 Get-FileHash .\Snapvere-Portable.exe -Algorithm SHA256
 ```
 
-Compare the digest against the manifest. **Do not install files with mismatched hashes.** The website's live deployment is separate from this repository; verify that its displayed version and files match before downloading.
+Compare that SHA-256 with the manifest from the **same release**.
+The available installer packages are not presented as publisher-code-signed;
+a matching checksum does not independently establish publisher identity.
 
-## Capture confidence — and current engineering work
+## Browser screenshot extensions
 
-An application should not show a black selection screen when a captured website is expected. The current code uses memory-based RGBA transfer, a PNG fallback and explicit error handling. The native packet format and visible frontend rendering have automated tests. Physical Windows verification remains required for protected content, mixed-DPI multi-monitor desktops, WebView2 variants and real recording workflows.
+The repository also contains extension builds for **Chrome, Edge, Firefox,
+Brave, Opera, Vivaldi and Safari**. They capture a selected browser tab locally
+and can save or copy the result. Extension availability in this repository
+does not imply publication in browser stores; Safari distribution depends
+on Apple's packaging and signing requirements.
 
-**Supported in this implementation:** Region screenshot capture, full-display capture, annotation tools, local gallery and screen recording.
+[Browser extension guide](extensions/README.md)
 
-**Not advertised as available:** Unimplemented active-window screenshot actions, private cloud upload or password-protected share links.
+## Privacy, licenses and documentation
 
-## For developers and reviewers
+Snapvere is built around local capture and local storage. Screen content is
+not automatically sent to a server. Microphone and system audio are options
+for user-initiated recordings. Users remain responsible for obtaining any
+required recording permissions and protecting saved sensitive content.
 
-<details>
-<summary><b>⚙️ Source architecture, verification and build instructions</b></summary>
+The source code distributed under [MIT](LICENSE) retains its open-source
+rights. The Windows installer also includes a
+[commercial end-user agreement](legal/SNAPVERE-COMMERCIAL-EULA.txt) for that
+distribution; it does not withdraw rights already granted by MIT or the
+licenses of third-party components. Brendigo's trademarks and artwork retain
+their applicable protections.
 
-**Stack:** Tauri 2, Rust, React, TypeScript, Vite, SQLite, Windows-native capture/recording integrations.
-
-```bash
-cd apps/desktop
-npm ci
-npm run build
-npm run tauri -- build --bundles nsis,msi
-```
-
-The Windows build requires Rust/MSVC, WebView2-related build prerequisites, and Tauri packaging requirements. CI runs frontend typechecks, build and dependency audits; native Rust tests; installer builds; static website checks; branding parity; and real Chromium-generated UI previews.
-
-```text
-apps/desktop/src/               React UI: Home, Editor, Settings, capture overlay, recorder HUD
-apps/desktop/src-tauri/         Rust app lifecycle, in-memory capture, recording and SQLite
-site/                           SNAPVERE product, download and privacy website
-docs/screenshots/               Automated real interface and responsive-site renders
-tools/                          Screenshot, brand, capture-pipeline and site checks
-.github/workflows/              CI, preview, dependency refresh and release workflows
-```
-
-**Dependency policy:** Use lockfiles for reproducible installs and test compatible updates before merging. Major framework upgrades that change generated CSS, runtime behavior or APIs must pass visual and native regression testing — never update versions just to make numbers look newer.
-
-**License and attribution:** SNAPVERE/BRENDIGO is the product/publisher identity. Third-party dependencies and derived source remain subject to their legal notices; a brand refresh does not erase those obligations.
-
-</details>
+For setup tips and product information:
+[Windows startup and tray](docs/STARTUP-AND-TRAY.md) ·
+[Changelog](CHANGELOG.md) ·
+[Language guide](docs/LOCALIZATION.md) ·
+[Technical specifications](docs/SPECIFICATION.md) ·
+[Security and quality review](docs/AUDIT-v0.2.22-startup.md)
 
 ---
 
 <div align="center">
 
-### Make every capture count.
+**SNAPVERE by BRENDIGO**
 
-[**Discover SNAPVERE**](https://snapvere.com/) · [**Download for Windows**](https://snapvere.com/download/)
+*Capture what matters. Keep it yours.*
 
-**SNAPVERE** · A product of **BRENDIGO**  
-[🌐 snapvere.com](https://snapvere.com/) · [🏢 brendigo.com](https://brendigo.com/)
+[Website](https://snapvere.com/) · [Releases](https://github.com/bren-wp/Snapvere/releases/latest) · [Privacy](https://snapvere.com/privacy/)
 
 </div>
