@@ -81,8 +81,8 @@ download is available through [GitHub Releases](https://github.com/bren-wp/Snapv
 **Always available.** Snapvere starts minimized in the Windows notification
 area after sign-in by default. The icon remains while the application runs;
 closing the gallery simply hides the window. Open the icon menu to take a
-screenshot, record an area, pause or resume a recording, change settings or
-quit. Windows manages whether the icon appears directly beside the clock or
+screenshot, record an area, pause or resume a recording, **open the captures
+folder directly**, change settings or quit. Windows manages whether the icon appears directly beside the clock or
 in the hidden-icons menu. You can disable automatic startup in
 **Settings → General → Launch on startup**.
 

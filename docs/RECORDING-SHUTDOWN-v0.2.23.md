@@ -42,3 +42,10 @@ Closing Home with its X button still just hides the window. An explicit
 - [ ] Simulate delayed encoder beyond 60 seconds; application stays available
 - [ ] Confirm native 100%, 125%, 150% and 200% scaling and tray responsiveness
 - [ ] Run cargo tests, Clippy, RustSec, npm audit, frontend and installer CI
+
+## Local capture folder access
+
+The notification-area menu includes **Open Captures Folder**. This calls the
+same validated native folder opener used by Settings, with no arbitrary path
+argument accepted from a webpage or untrusted renderer. It is localized in all
+12 supported menu languages.

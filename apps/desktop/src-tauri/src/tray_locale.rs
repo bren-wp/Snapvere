@@ -1,8 +1,8 @@
 //! Snapvere by Brendigo — localized notification-area controls.
 
 /// Order: capture region, full screen, record region, record screen,
-/// stop recording, gallery, settings, quit, active, pause, resume, paused.
-pub fn labels(language: &str) -> [&'static str; 12] {
+/// stop recording, gallery, settings, quit, active, pause, resume, paused, folder.
+pub fn labels(language: &str) -> [&'static str; 13] {
     match language {
         "en" => [
             "Capture Region",
@@ -17,6 +17,7 @@ pub fn labels(language: &str) -> [&'static str; 12] {
             "Pause Recording",
             "Resume Recording",
             "Snapvere — recording paused",
+            "Open Captures Folder",
         ],
         "hr" => [
             "Snimi područje",
@@ -31,6 +32,7 @@ pub fn labels(language: &str) -> [&'static str; 12] {
             "Pauziraj snimanje",
             "Nastavi snimanje",
             "Snapvere — snimanje pauzirano",
+            "Otvori mapu snimki",
         ],
         "de" => [
             "Bereich aufnehmen",
@@ -45,6 +47,7 @@ pub fn labels(language: &str) -> [&'static str; 12] {
             "Aufnahme pausieren",
             "Aufnahme fortsetzen",
             "Snapvere — Aufnahme pausiert",
+            "Aufnahmenordner öffnen",
         ],
         "es" => [
             "Capturar región",
@@ -59,6 +62,7 @@ pub fn labels(language: &str) -> [&'static str; 12] {
             "Pausar grabación",
             "Reanudar grabación",
             "Snapvere — grabación pausada",
+            "Abrir carpeta de capturas",
         ],
         "fr" => [
             "Capturer une zone",
@@ -73,6 +77,7 @@ pub fn labels(language: &str) -> [&'static str; 12] {
             "Mettre en pause",
             "Reprendre l’enregistrement",
             "Snapvere — enregistrement en pause",
+            "Ouvrir le dossier des captures",
         ],
         "it" => [
             "Cattura area",
@@ -87,6 +92,7 @@ pub fn labels(language: &str) -> [&'static str; 12] {
             "Metti in pausa",
             "Riprendi registrazione",
             "Snapvere — registrazione in pausa",
+            "Apri cartella acquisizioni",
         ],
         "pt" => [
             "Capturar região",
@@ -101,6 +107,7 @@ pub fn labels(language: &str) -> [&'static str; 12] {
             "Pausar gravação",
             "Retomar gravação",
             "Snapvere — gravação em pausa",
+            "Abrir pasta das capturas",
         ],
         "nl" => [
             "Gebied vastleggen",
@@ -115,6 +122,7 @@ pub fn labels(language: &str) -> [&'static str; 12] {
             "Opname pauzeren",
             "Opname hervatten",
             "Snapvere — opname gepauzeerd",
+            "Opnamemap openen",
         ],
         "pl" => [
             "Przechwyć obszar",
@@ -129,6 +137,7 @@ pub fn labels(language: &str) -> [&'static str; 12] {
             "Wstrzymaj nagrywanie",
             "Wznów nagrywanie",
             "Snapvere — nagrywanie wstrzymane",
+            "Otwórz folder przechwyceń",
         ],
         "cs" => [
             "Zachytit oblast",
@@ -143,6 +152,7 @@ pub fn labels(language: &str) -> [&'static str; 12] {
             "Pozastavit nahrávání",
             "Pokračovat v nahrávání",
             "Snapvere — nahrávání pozastaveno",
+            "Otevřít složku snímků",
         ],
         "sk" => [
             "Zachytiť oblasť",
@@ -157,6 +167,7 @@ pub fn labels(language: &str) -> [&'static str; 12] {
             "Pozastaviť nahrávanie",
             "Pokračovať v nahrávaní",
             "Snapvere — nahrávanie pozastavené",
+            "Otvoriť priečinok snímok",
         ],
         "sl" => [
             "Zajemi območje",
@@ -171,6 +182,7 @@ pub fn labels(language: &str) -> [&'static str; 12] {
             "Začasno ustavi snemanje",
             "Nadaljuj snemanje",
             "Snapvere — snemanje začasno ustavljeno",
+            "Odpri mapo posnetkov",
         ],
         _ => labels("en"),
     }
@@ -186,9 +198,11 @@ mod tests {
             "en", "hr", "de", "es", "fr", "it", "pt", "nl", "pl", "cs", "sk", "sl",
         ] {
             let words = labels(language);
-            assert_eq!(words.len(), 12);
+            assert_eq!(words.len(), 13);
             assert!(words.iter().all(|label| !label.trim().is_empty()));
         }
         assert_eq!(labels("en-US"), labels("en"));
+        assert_eq!(labels("en")[12], "Open Captures Folder");
+        assert_eq!(labels("hr")[12], "Otvori mapu snimki");
     }
 }
