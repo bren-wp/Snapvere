@@ -26,6 +26,8 @@ Closing Home with its X button still just hides the window. An explicit
   no native window callbacks wait for the encoder.
 - The worker gate atomically rejects duplicate Quit requests and resets after
   finalization or timeout.
+- Quit during the native codec handshake waits until the recorder has either
+  started or failed before deciding whether to stop and finalize media.
 - The recording worker remains responsible for writing the file, closing the
   encoder and registering media with SQLite.
 - This change does not add cloud uploads, account requirements, administrative

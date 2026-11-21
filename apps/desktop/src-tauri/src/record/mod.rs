@@ -153,6 +153,11 @@ pub fn warm_up() {
         });
 }
 
+/// Recorder initialization is also a live operation until the native encoder starts.
+pub fn is_starting() -> bool {
+    RECORDER_STARTING.load(Ordering::Acquire)
+}
+
 /// Je li snimanje u tijeku (ili na pauzi).
 pub fn is_active(app: &AppHandle) -> bool {
     let state = app.state::<AppState>();
