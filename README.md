@@ -23,10 +23,10 @@ A focused Windows capture workspace from **[BRENDIGO](https://brendigo.com)**.
 
 ---
 
-> **Distribution notice:** This repository builds the **Tauri 2 / Rust** Windows
-> edition of SNAPVERE. The latest published source-code edition before
-> this change is **v0.2.20**. **v0.2.21** is the next quality-fix candidate
-> and must pass Windows, RustSec, frontend and extension CI before publication.
+> **Edition:** This repository contains the **Tauri 2 / Rust** Windows
+> edition of Snapvere. The latest published GitHub release is **v0.2.21**.
+> The v0.2.22 changes below are available for review, not yet a published release.
+> Windows security, native capture and extension checks must pass before release.
 > Physical Windows 10/11 acceptance remains undocumented for the existing
 > public packages, regardless of their GitHub release labels.
 > The publicly deployed snapvere.com product distributes a separate .NET / WinUI 3
@@ -63,6 +63,24 @@ perfect translation or pixel-level visual equivalence.
 
 See [localization and QA guidance](docs/LOCALIZATION.md) for the catalog
 structure, supported language codes, native tray mapping and test commands.
+
+## v0.2.22 — always-ready capture from the Windows notification area
+
+Snapvere by Brendigo starts with Windows **by default** on a fresh installation. It
+loads quietly in the notification area beside the clock, keeping PrintScreen and
+screen-recording shortcuts ready without opening the gallery. Closing the main window
+hides it; **Quit** in the tray menu exits completely. A second login-startup invocation
+never interrupts an already-running instance by opening a window.
+
+Change this at any time in **Settings → General → Launch on startup**; an explicit
+off setting remains off across relaunches. Windows may place the icon in the hidden
+notification-area overflow: use **Taskbar settings → Other system tray icons** to
+show it permanently beside the clock. The app cannot override Windows taskbar pinning.
+
+See [Windows startup and tray guide](docs/STARTUP-AND-TRAY.md) and
+[focused change audit](docs/AUDIT-v0.2.22-startup.md). Existing screenshot assets below
+are genuine automated renders of this repository's React UI; new Windows-native
+screenshots and exact reference comparisons have not yet been verified.
 
 ## v0.2.21 — screenshot reliability and truthful update status
 

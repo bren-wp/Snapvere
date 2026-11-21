@@ -1,6 +1,17 @@
-# SNAPVERE — Release history
+# Snapvere by Brendigo — Release history
 
 SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO**.
+
+## v0.2.22 — tray-first startup and preference reliability (proposed)
+
+- Default to quiet login startup for fresh installations and installations without an explicit startup preference. Explicit user opt-outs remain authoritative.
+- Prevent Windows startup from opening the gallery when a second instance is already running. Manual launches still bring the gallery forward.
+- Abort initialization if the notification-area icon cannot be created, rather than leaving a hard-to-exit invisible process.
+- Move login/startup logic from the main Rust entry module into a tested startup module with pure policy and argument checks.
+- Disable the General startup toggle while its state is loading or changing. Persist choices immediately, and restore the previous preference and system entry if a change fails.
+- Keep commercial installer text synchronized with the product's startup and privacy behavior while preserving independent MIT and third-party grants.
+- Native Windows 10/11, login behavior under managed profiles and exact 1:1 reference matching still require device acceptance; no new binaries are represented as published.
+
 
 ## v0.2.21 — safe browser PNG export and trustworthy update status (development candidate)
 

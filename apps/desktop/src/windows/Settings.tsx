@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import { Fragment, useEffect, useState, type KeyboardEvent } from "react";
 import { SlidersHorizontal, Keyboard, Crop, Video, FolderOpen, ShieldCheck, Info } from "lucide-react";
 import { load, type Store } from "@tauri-apps/plugin-store";
@@ -53,6 +54,7 @@ export default function Settings() {
   const [s, setS] = useState<AppSettings>(DEFAULTS);
   const [store, setStore] = useState<Store | null>(null);
   const [autostart, setAutostart] = useState(false);
+  const [autostartBusy, setAutostartBusy] = useState(true);
   const [captureHotkeyActive, setCaptureHotkeyActive] = useState<string | null>(null);
   const [hotkeyRegistrationChecked, setHotkeyRegistrationChecked] = useState(false);
   const printHelp = printScreenCopy(language);
@@ -81,8 +83,10 @@ export default function Settings() {
       setS(loaded);
       try {
         setAutostart(await isEnabled());
-      } catch {
-        /* noop */
+      } catch (error) {
+        setNotice(`${t("Could not load settings:")} ${String(error)}`);
+      } finally {
+        setAutostartBusy(false);
       }
     })().catch((error) => setNotice(`${t("Could not load settings:")} ${String(error)}`));
   }, []);
@@ -140,29 +144,33 @@ export default function Settings() {
   };
 
   const toggleAutostart = async (on: boolean) => {
-    if (!store) {
+    if (!store || autostartBusy) {
       setNotice(t("Settings are not ready yet. Try again."));
       return;
     }
     const previous = autostart;
+    setAutostartBusy(true);
     try {
       if (on) await enable();
       else await disable();
-      // Persist only after the OS has accepted the change.
+      // The explicit opt-out must survive a restart immediately.
       await store.set("autostart", on);
+      await store.save();
       setAutostart(on);
       setNotice(null);
     } catch (error) {
-      // Keep actual Windows startup and settings in sync on partial failure.
       try {
         if (previous) await enable();
         else await disable();
+        await store.set("autostart", previous);
+        await store.save();
+        setAutostart(previous);
+        setNotice(`${t("Could not change startup preference:")} ${String(error)}`);
       } catch (restoreError) {
         setNotice(`${t("Could not restore startup:")} ${String(restoreError)}`);
-        return;
       }
-      setAutostart(previous);
-      setNotice(`${t("Could not change startup preference:")} ${String(error)}`);
+    } finally {
+      setAutostartBusy(false);
     }
   };
 
@@ -262,9 +270,9 @@ export default function Settings() {
             </Row>
             <Row
               label={t("Launch on startup")}
-              hint={t("Start Snapvere when you sign in (off by default).")}
+              hint={t("Start Snapvere when you sign in (on by default).")}
             >
-              <Toggle label={t("Launch on startup")} checked={autostart} onChange={toggleAutostart} />
+              <Toggle label={t("Launch on startup")} checked={autostart} onChange={toggleAutostart} disabled={!store || autostartBusy} />
             </Row>
           </Section>
         )}
