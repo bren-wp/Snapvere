@@ -69,13 +69,6 @@ must be checked separately.
 </table>
 </details>
 
-## Current development
-
-The next Windows update is **v0.2.23 (under review)**. It focuses on safely
-finishing active recordings when quitting Snapvere without blocking its main
-window. No v0.2.23 installers are published yet. The latest verified
-download is available through [GitHub Releases](https://github.com/bren-wp/Snapvere/releases/latest).
-
 ## Made for your workflow
 
 **Always available.** Snapvere starts minimized in the Windows notification

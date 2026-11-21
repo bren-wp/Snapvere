@@ -60,3 +60,11 @@ adapter clears a shorter fallback frame rather than revealing stale pixels
 from the previous frame. Full 8K UHD (7680×4320) remains within the
 45-million-pixel bound. Driver-specific and hardware memory pressure require
 separate Windows validation.
+
+## Module boundaries
+
+`record/mod.rs` handles recorder session state and IPC-facing lifecycle,
+`record/worker.rs` runs the long-lived capture loop, and
+`record/transport.rs` adapts native frame sources and encoders.
+This separation keeps native device state on the appropriate worker thread;
+no new frontend or network permissions are introduced.
