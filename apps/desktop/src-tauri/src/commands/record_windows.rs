@@ -128,4 +128,3 @@ pub(super) fn show_rec_frame(
     let _ = win.show();
     Ok(())
 }
-
