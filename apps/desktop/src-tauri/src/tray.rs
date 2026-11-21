@@ -245,7 +245,10 @@ mod menu_state_tests {
 
     #[test]
     fn recording_menu_actions_follow_recorder_state() {
-        assert_eq!(enabled_actions(RecordPhase::Idle), (true, false, false, false));
+        assert_eq!(
+            enabled_actions(RecordPhase::Idle),
+            (true, false, false, false)
+        );
         assert_eq!(
             enabled_actions(RecordPhase::Recording),
             (false, true, true, false)
