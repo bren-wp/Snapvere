@@ -31,7 +31,10 @@ pub fn sync_autostart(app: &tauri::AppHandle) {
         }
     };
     let stored = store.get("autostart");
-    if stored.as_ref().is_some_and(|value| value.as_bool().is_none()) {
+    if stored
+        .as_ref()
+        .is_some_and(|value| value.as_bool().is_none())
+    {
         log("autostart: invalid stored preference; using default");
     }
     let enabled = should_autostart(stored.as_ref().and_then(|value| value.as_bool()));
@@ -45,7 +48,9 @@ pub fn sync_autostart(app: &tauri::AppHandle) {
             Ok(true) => launcher.disable(),
             Ok(false) => Ok(()),
             Err(error) => {
-                log(&format!("autostart: cannot query system startup entry: {error}"));
+                log(&format!(
+                    "autostart: cannot query system startup entry: {error}"
+                ));
                 return;
             }
         }
@@ -57,7 +62,9 @@ pub fn sync_autostart(app: &tauri::AppHandle) {
         } else {
             "autostart: disabled by user preference"
         }),
-        Err(error) => log(&format!("autostart: operating system rejected change: {error}")),
+        Err(error) => log(&format!(
+            "autostart: operating system rejected change: {error}"
+        )),
     }
 }
 
@@ -74,7 +81,9 @@ mod tests {
 
     #[test]
     fn login_background_flag_does_not_open_gallery() {
-        assert!(is_background_start(["--snapvere-startup-hidden".to_owned()]));
+        assert!(is_background_start(
+            ["--snapvere-startup-hidden".to_owned()]
+        ));
         assert!(is_background_start([
             "snapvere.exe".to_owned(),
             "--snapvere-startup-hidden".to_owned(),
@@ -85,7 +94,9 @@ mod tests {
     fn manual_launch_and_similar_flags_show_gallery() {
         assert!(!is_background_start(std::iter::empty()));
         assert!(!is_background_start(["--help".to_owned()]));
-        assert!(!is_background_start(["--snapvere-startup-hidden=1".to_owned()]));
+        assert!(!is_background_start([
+            "--snapvere-startup-hidden=1".to_owned()
+        ]));
         assert!(!is_background_start(["--hidden".to_owned()]));
     }
 }

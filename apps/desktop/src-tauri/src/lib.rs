@@ -9,8 +9,8 @@ mod logging;
 mod models;
 mod record;
 mod shortcuts;
-mod state;
 mod startup;
+mod state;
 mod tray;
 mod tray_locale;
 
@@ -239,4 +239,3 @@ fn show_database_error(message: &str) {
         );
     }
 }
-
