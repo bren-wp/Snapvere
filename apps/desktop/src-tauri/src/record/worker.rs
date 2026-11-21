@@ -1,9 +1,9 @@
 // Snapvere by Brendigo
 //! Recorder worker loop. The worker owns frame capture and encoder finalization.
 
-use super::*;
 use super::pixels::{allocate_bgra, bgra_to_rgba_image, crop_bgra, pixelate_bgra};
 use super::transport::Source;
+use super::*;
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn run(
