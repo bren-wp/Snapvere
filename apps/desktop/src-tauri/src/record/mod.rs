@@ -19,9 +19,11 @@ mod mp4;
 
 mod gifenc;
 mod pixels;
+mod transport;
 
 pub use pixels::crop_rect;
-use pixels::{bgra_to_rgba_image, crop_bgra, pixelate_bgra};
+use pixels::{allocate_bgra, bgra_to_rgba_image, crop_bgra, pixelate_bgra};
+use transport::{Encoder, Source};
 
 #[cfg(test)]
 mod tests;
@@ -434,123 +436,6 @@ fn with_ctl(app: &AppHandle, f: impl FnOnce(&Ctl)) -> Result<(), String> {
 
 // ───────────────────────────── radna dretva ─────────────────────────────
 
-/// Izvor frameova. BGRA, gusto pakiran, dimenzije cijelog monitora.
-enum Source {
-    #[cfg(windows)]
-    Dxgi(Box<dxgi::DxgiGrabber>),
-    /// Fallback: xcap BitBlt petlja (sporije, ali radi kad duplikacija nije dostupna —
-    /// npr. RDP sesija ili zaključan output).
-    Xcap {
-        monitor: xcap::Monitor,
-        buf: Vec<u8>,
-        w: u32,
-        h: u32,
-    },
-}
-
-impl Source {
-    fn open(target: &RecordTarget) -> Result<Self, String> {
-        #[cfg(windows)]
-        {
-            match dxgi::DxgiGrabber::new(target.monitor_x, target.monitor_y) {
-                Ok(g) => return Ok(Source::Dxgi(Box::new(g))),
-                Err(e) => log(&format!("DXGI nedostupan ({e}); prelazim na xcap fallback")),
-            }
-        }
-
-        let monitors = xcap::Monitor::all().map_err(|e| format!("xcap monitors: {e}"))?;
-        let monitor = monitors
-            .into_iter()
-            .find(|m| m.id().map(|id| id == target.monitor_id).unwrap_or(false))
-            .ok_or("monitor za snimanje nije pronađen")?;
-        Ok(Source::Xcap {
-            monitor,
-            buf: vec![0u8; (target.monitor_w as usize) * (target.monitor_h as usize) * 4],
-            w: target.monitor_w,
-            h: target.monitor_h,
-        })
-    }
-
-    fn grab(&mut self, timeout_ms: u32) -> Result<&[u8], String> {
-        match self {
-            #[cfg(windows)]
-            Source::Dxgi(g) => g.grab(timeout_ms),
-            Source::Xcap { monitor, buf, w, h } => {
-                let img = monitor
-                    .capture_image()
-                    .map_err(|e| format!("xcap capture: {e}"))?;
-                let iw = img.width().min(*w) as usize;
-                let ih = img.height().min(*h) as usize;
-                let src = img.as_raw();
-                let sw = img.width() as usize;
-                let dw = *w as usize;
-                // RGBA → BGRA
-                for y in 0..ih {
-                    for x in 0..iw {
-                        let s = (y * sw + x) * 4;
-                        let d = (y * dw + x) * 4;
-                        buf[d] = src[s + 2];
-                        buf[d + 1] = src[s + 1];
-                        buf[d + 2] = src[s];
-                        buf[d + 3] = 255;
-                    }
-                }
-                Ok(buf)
-            }
-        }
-    }
-
-    fn size(&self) -> (u32, u32) {
-        match self {
-            #[cfg(windows)]
-            Source::Dxgi(g) => (g.width, g.height),
-            Source::Xcap { w, h, .. } => (*w, *h),
-        }
-    }
-
-    /// Ima li izvor stvarnu sliku (DXGI na statičnom ekranu prvo neko vrijeme nema).
-    fn has_frame(&self) -> bool {
-        match self {
-            #[cfg(windows)]
-            Source::Dxgi(g) => g.has_frame(),
-            Source::Xcap { .. } => true,
-        }
-    }
-}
-
-/// Enkoder — MP4 na Windowsu, GIF svugdje.
-enum Encoder {
-    #[cfg(windows)]
-    Mp4(Box<mp4::Mp4Encoder>),
-    Gif(Box<gifenc::GifEncoder>),
-}
-
-impl Encoder {
-    fn write(&mut self, bgra: &[u8], time_100ns: i64, dur_100ns: i64) -> Result<(), String> {
-        match self {
-            #[cfg(windows)]
-            Encoder::Mp4(e) => e.write(bgra, time_100ns, dur_100ns),
-            Encoder::Gif(e) => e.write(bgra),
-        }
-    }
-
-    fn write_audio(&mut self, pcm: &[i16], time_100ns: i64, dur_100ns: i64) -> Result<(), String> {
-        match self {
-            #[cfg(windows)]
-            Encoder::Mp4(e) => e.write_audio(pcm, time_100ns, dur_100ns),
-            Encoder::Gif(_) => Ok(()),
-        }
-    }
-
-    fn finish(&mut self) -> Result<(), String> {
-        match self {
-            #[cfg(windows)]
-            Encoder::Mp4(e) => e.finish(),
-            Encoder::Gif(e) => e.finish(),
-        }
-    }
-}
-
 /// Report startup failures to the waiting caller; after READY the receiver is gone.
 fn report_start_failure<T>(
     ready: &std::sync::mpsc::Sender<Result<(), String>>,
@@ -689,7 +574,7 @@ fn run(
     let mut last_tick = Instant::now();
     let mut last_time_100ns = -1i64;
 
-    let mut frame_buf = vec![0u8; (ow as usize) * (oh as usize) * 4];
+    let mut frame_buf = allocate_bgra(ow, oh)?;
     // Do not report READY before DXGI, Media Foundation, mixer, encoder and
     // frame buffers exist. A timed-out caller must not leave a live session.
     if ctl.cancel.load(Ordering::Acquire) {

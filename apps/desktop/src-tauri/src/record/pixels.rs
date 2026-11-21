@@ -2,12 +2,38 @@
 //! Pure capture rectangle, BGRA crop and redact helpers.
 use super::*;
 
+const MAX_RECORD_PIXELS: u64 = 45_000_000;
+
+pub(super) fn checked_bgra_len(width: u32, height: u32) -> Result<usize, String> {
+    let pixels = u64::from(width) * u64::from(height);
+    if pixels == 0 || pixels > MAX_RECORD_PIXELS {
+        return Err("Recording dimensions exceed the safe frame size limit".into());
+    }
+    let bytes = pixels
+        .checked_mul(4)
+        .ok_or("Recording frame buffer size overflow")?;
+    usize::try_from(bytes).map_err(|_| "Recording frame buffer size overflow".into())
+}
+
+/// Reserve before allocating; invalid monitor metadata must not abort the process.
+pub(super) fn allocate_bgra(width: u32, height: u32) -> Result<Vec<u8>, String> {
+    let bytes = checked_bgra_len(width, height)?;
+    let mut result = Vec::new();
+    result
+        .try_reserve_exact(bytes)
+        .map_err(|_| "Not enough memory to allocate recording frame".to_string())?;
+    result.resize(bytes, 0);
+    Ok(result)
+}
+
 /// Izlazni pravokutnik unutar monitora, poravnat na parne dimenzije (zahtjev NV12/H.264).
 pub fn crop_rect(t: &RecordTarget) -> Result<(u32, u32, u32, u32), String> {
     let (mw, mh) = (t.monitor_w, t.monitor_h);
     if mw < 2 || mh < 2 {
         return Err("monitor prijavljuje nevaljanu veličinu".into());
     }
+    // The fallback captures the whole monitor even for a small selected region.
+    checked_bgra_len(mw, mh)?;
     let (x, y, w, h) = match t.region {
         Some(r) => {
             // Actual overlap: negative coordinates shrink the selected area
@@ -179,6 +205,29 @@ mod regression_tests {
             height: 20,
         });
         assert!(crop_rect(&t).is_err());
+    }
+
+    #[test]
+    fn frame_allocation_bounds_support_8k_but_reject_extreme_metadata() {
+        assert_eq!(checked_bgra_len(7680, 4320).unwrap(), 7680 * 4320 * 4);
+        assert!(checked_bgra_len(0, 1080).is_err());
+        assert!(checked_bgra_len(10_000, 10_000).is_err());
+        assert!(checked_bgra_len(u32::MAX, u32::MAX).is_err());
+        assert_eq!(allocate_bgra(16, 16).unwrap().len(), 1024);
+    }
+
+    #[test]
+    fn oversized_monitor_is_rejected_even_for_a_tiny_region() {
+        let mut target = target(Region {
+            monitor_id: 0,
+            x: 0,
+            y: 0,
+            width: 100,
+            height: 100,
+        });
+        target.monitor_w = 200_000;
+        target.monitor_h = 200_000;
+        assert!(crop_rect(&target).is_err());
     }
 
     #[test]

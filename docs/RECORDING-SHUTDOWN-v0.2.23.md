@@ -49,3 +49,14 @@ The notification-area menu includes **Open Captures Folder**. This calls the
 same validated native folder opener used by Settings, with no arbitrary path
 argument accepted from a webpage or untrusted renderer. It is localized in all
 12 supported menu languages.
+
+## Recorder frame buffers
+
+The recorder now rejects impossible or excessively large native monitor
+dimensions before allocating buffers, including small crops on a huge source
+monitor. Allocation uses checked byte counts and `try_reserve_exact` to
+return an error instead of overflowing allocation arithmetic. The source
+adapter clears a shorter fallback frame rather than revealing stale pixels
+from the previous frame. Full 8K UHD (7680×4320) remains within the
+45-million-pixel bound. Driver-specific and hardware memory pressure require
+separate Windows validation.
