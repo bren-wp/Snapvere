@@ -39,7 +39,6 @@ A focused Windows capture workspace from **[BRENDIGO](https://brendigo.com)**.
 > before installation. Personal and business use needs no activation key.
 > Existing MIT-licensed source and third-party license grants remain valid.
 > The separate public WinUI edition has its own release and licensing process.
-> The distribution agreement requires qualified legal review before publication.
 
 ## Languages · 12 available
 
