@@ -24,6 +24,7 @@ This file replaces the outdated initial-project scaffolding task list. It docume
 - Confirm rendered selection matches the desktop visually at 100%, 125%, 150% and 200% DPI, including negative virtual monitor coordinates.
 - Confirm no black rectangle is shown when selecting a browser page; test the in-memory fallback under older WebView2 versions.
 - Test full-screen capture, screen recording, pause/resume, microphone/system audio and short/long recording finalization.
+- Validate v0.2.23 asynchronous Quit behavior with MP4/GIF finalization, timeout, and repeated Quit requests; do not report hardware acceptance from unit tests alone.
 - Confirm overlay/HUD remain above the intended monitor but do not appear inside screenshots or recordings.
 - Check keyboard navigation, focus outlines, 200%-400% zoom and accessibility for every primary window.
 - Compare each shipping screen against the approved visual reference at matching viewport dimensions; measure and correct differences before describing the result as pixel-perfect.

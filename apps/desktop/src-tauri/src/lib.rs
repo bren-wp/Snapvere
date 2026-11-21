@@ -9,6 +9,7 @@ mod logging;
 mod models;
 mod record;
 mod shortcuts;
+mod shutdown;
 mod startup;
 mod state;
 mod tray;
@@ -198,15 +199,12 @@ pub fn run() {
                     api.prevent_exit();
                     return;
                 }
-                // Programski izlaz (tray → Quit): pusti snimatelja da zatvori datoteku.
-                if record::is_active(app_handle) {
-                    let _ = record::stop(app_handle);
-                    // H.264/GIF finalization and SQLite registration may exceed
-                    // 600 ms on slow disks: wait for the worker, not a fixed guess.
-                    let _ =
-                        record::wait_for_finalize(app_handle, std::time::Duration::from_secs(12));
+                // Finalization stays off the UI thread. Never discard an unfinished recording.
+                if !shutdown::allow_exit(app_handle) {
+                    api.prevent_exit();
+                    return;
                 }
-                log("izlaz iz aplikacije");
+                log("Snapvere exited");
             }
         }),
         Err(e) => {

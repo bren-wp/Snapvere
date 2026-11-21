@@ -214,15 +214,7 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
         "open_settings" => {
             let _ = commands::open_settings(app);
         }
-        "quit" => {
-            // Snimanje u tijeku mora uredno zatvoriti datoteku prije izlaza.
-            if record::is_active(app) {
-                let _ = record::stop(app);
-                // ExitRequested waits for encoding and gallery registration; do
-                // not exit based on an arbitrary 600 ms delay.
-            }
-            app.exit(0);
-        }
+        "quit" => app.exit(0),
         _ => {}
     }
 }
