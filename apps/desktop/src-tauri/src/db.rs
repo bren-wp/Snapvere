@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! Lokalna SQLite baza za povijest screenshotova, tagove i pretragu.
 //! Shema prati `docs/SPECIFICATION.md` §6.1.
 

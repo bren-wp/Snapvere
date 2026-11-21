@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import { ipc } from "./ipc";
 import {
   DEFAULT_CAPTURE_PREFERENCES,

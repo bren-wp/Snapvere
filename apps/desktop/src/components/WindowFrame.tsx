@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import React from "react";
 import BrandMark from "./BrandMark";
 import { useLanguage } from "../lib/LanguageProvider";

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Snapvere website release checks. Only Python standard library is required."""
 from __future__ import annotations
 

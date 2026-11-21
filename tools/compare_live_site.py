@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Measure actual pixel deviation between public snapvere.com and repo website.
 
 Report differences instead of claiming 1:1 parity. Neither page is modified.

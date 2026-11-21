@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 /** Translated customer-facing status and failure feedback. */
 export const FEEDBACK_KEYS = [
   "CAPTURE LIBRARY",

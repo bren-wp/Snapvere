@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 // TS ogledalo Rust modela (serde camelCase). Vidi src-tauri/src/models.rs.
 
 export type ImageFormat = "png" | "jpg" | "webp";

@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! Pure capture rectangle, BGRA crop and redact helpers.
 use super::*;
 

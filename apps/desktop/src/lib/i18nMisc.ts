@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 /** Remaining visible keyboard/selection/playback labels. */
 export const MISC_KEYS = [
   "Select",

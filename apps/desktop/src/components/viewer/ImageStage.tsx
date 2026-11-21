@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import { useLanguage } from "../../lib/LanguageProvider";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";

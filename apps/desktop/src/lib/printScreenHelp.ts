@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import type { Language } from "./i18n";
 
 /** This is an OS hotkey, not an always-running low-level keyboard hook. */

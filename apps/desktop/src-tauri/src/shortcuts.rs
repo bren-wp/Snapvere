@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! Globalni hotkeys (registracija + rebind).
 //!
 //! Dvije akcije: snimka zaslona i snimanje ekrana. Plugin nema "ukloni jedan

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """No regressions to the screenshot overlay or product identity in tracked sources."""
 from pathlib import Path
 

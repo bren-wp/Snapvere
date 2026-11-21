@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """SNAPVERE UI reference audit. Never accepts screenshots as approved baselines.
 
 Inventory mode reports coverage gaps; compare mode requires an external approved

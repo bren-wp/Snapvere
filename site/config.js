@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 /* Snapvere — public release configuration.
  * All browser-visible downloads remain on snapvere.com.
  * Verified release assets are mirrored into site/files/.

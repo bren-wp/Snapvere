@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! Windows DXGI Desktop Duplication — brzo hvatanje frameova za snimanje.
 //!
 //! Zašto ne xcap u petlji: `Monitor::capture_image()` radi puni GDI BitBlt cijelog

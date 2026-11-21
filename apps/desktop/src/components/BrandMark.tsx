@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 /** Shared vector silhouette with the official site/favicon.svg. */
 export default function BrandMark({ className = "" }: { className?: string }) {
   return (

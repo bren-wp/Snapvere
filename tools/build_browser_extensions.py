@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Deterministically build browser-specific extension directories and archives."""
 import argparse
 import json

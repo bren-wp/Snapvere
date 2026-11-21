@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 // Zajednički render anotacija. Koordinate su CSS px relativno na selekciju.
 // Blur uzorkuje iz frozen slike (destruktivno) preko `BlurSource` (physical origin + scale).
 

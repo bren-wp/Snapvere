@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Audit static WebExtension asset reachability, permissions and source duplication.
 
 This is a deterministic *static* reachability check, not a proof that every

@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! Snimanje ekrana — hvatanje frameova, enkodiranje i spremanje u galeriju.
 //!
 //! Sve se odvija na JEDNOJ radnoj dretvi ("snapvere-recorder"): D3D uređaj i Media

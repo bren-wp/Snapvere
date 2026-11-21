@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 // Typed wrapperi oko Tauri `invoke`. Jedina dodirna točka frontenda i Rust jezgre.
 // Tauri v2 automatski mapira camelCase (JS) → snake_case (Rust) argumente.
 

@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 /** Translations for media viewer, editor and account-free app information. */
 export const EDITOR_KEYS = [
   "Actual size",

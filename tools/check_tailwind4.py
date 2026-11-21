@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Guard Tailwind 4 CSS-first tokens and its locked install contract."""
 from pathlib import Path
 import json

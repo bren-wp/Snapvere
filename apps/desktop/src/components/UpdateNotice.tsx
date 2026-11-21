@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Language } from "../lib/i18n";
 import { useLanguage } from "../lib/LanguageProvider";

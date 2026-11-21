@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! Serde modeli dijeljeni između Rust jezgre i frontenda (preko IPC-a).
 //! Polja su `camelCase` da odgovaraju TypeScript tipovima u `src/lib/types.ts`.
 

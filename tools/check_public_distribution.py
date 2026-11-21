@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Read-only checks for Snapvere public branding and Windows installer terms."""
 import json
 import re

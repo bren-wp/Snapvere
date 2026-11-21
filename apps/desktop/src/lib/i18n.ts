@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import { GENERAL_KEYS, GENERAL_TRANSLATIONS } from "./i18nGeneral.ts";
 import { EDITOR_KEYS, EDITOR_TRANSLATIONS } from "./i18nEditor.ts";
 import { HELP_KEYS, HELP_TRANSLATIONS } from "./i18nHelp.ts";

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Fail when UI exposes a command that the Rust invoke handler does not register."""
 from pathlib import Path
 import re

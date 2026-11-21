@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import { useCallback, useEffect, useRef, useState } from "react";
 import { emit, listen } from "@tauri-apps/api/event";
 import {

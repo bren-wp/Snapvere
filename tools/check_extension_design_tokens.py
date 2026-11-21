@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Verify WebExtension colors/spacing primitives are aligned to desktop source.
 
 This tests design-token parity and responsive/accessibility guards, **not**

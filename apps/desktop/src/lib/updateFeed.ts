@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 /**
  * Public, privacy-preserving update *notification* for the Tauri/Rust edition.
  * No installers are downloaded or executed by the WebView. The only permitted

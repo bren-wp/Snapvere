@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Prevent regression to bundled SQLite vulnerable to CVE-2026-119375.
 
 Lockfile must be produced by real cargo update (never hand-edit checksums).

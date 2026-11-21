@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Capture REAL React UI renders for README (with a stubbed IPC preview bridge)."""
 from pathlib import Path
 from base64 import b64encode

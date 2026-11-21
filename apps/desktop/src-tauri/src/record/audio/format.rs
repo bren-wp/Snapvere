@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 //! Validated WASAPI mix formats, independent of device initialization.
 //! Unknown formats must never be decoded as silence or reach the resampler
 //! with a zero rate. All memory returned by GetMixFormat belongs to the caller.

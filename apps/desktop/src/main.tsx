@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { listen } from "@tauri-apps/api/event";

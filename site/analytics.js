@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 /* ─────────────────────────────────────────────────────────────
    Snapvere sajt — Google Analytics 4 uz privolu (GDPR, Consent Mode v2)
 

@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import test from "node:test";
 import assert from "node:assert/strict";
 import { LANGUAGES } from "../src/lib/i18n.ts";

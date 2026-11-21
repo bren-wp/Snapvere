@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 // Dijagnostika: hvata li xcap stvarnu sliku ili crninu na ovoj mašini?
 // Ispisuje SAMO statistiku piksela (ne sprema i ne prikazuje sadržaj ekrana).
 fn main() {

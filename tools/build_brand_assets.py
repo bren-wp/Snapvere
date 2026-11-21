@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Rebuild SNAPVERE's real launcher assets from one versioned SVG logo.
 
 Dependencies: pip install cairosvg pillow

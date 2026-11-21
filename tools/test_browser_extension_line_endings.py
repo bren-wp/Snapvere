@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Regression for the Windows-only v0.2.21 release failure.
 
 Run with: python tools/test_browser_extension_line_endings.py

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Snapvere by Brendigo
 /* TypeScript AST-based import graph. The compiler's noUnusedLocals and
  * noUnusedParameters plus Rust Clippy check individual symbols separately. */
 import fs from "node:fs";

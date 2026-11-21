@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 /* ─────────────────────────────────────────────────────────────
    Snapvere — /download/ (thank-you) stranica
 

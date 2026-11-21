@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 /**
  * Fit an image inside the media viewer without cropping oversized sources.
  *

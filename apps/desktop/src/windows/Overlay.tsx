@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Pipette,

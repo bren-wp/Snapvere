@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Snapvere by Brendigo
 """Generate a reproducible CycloneDX inventory from both verified lockfiles.
 
 No registry calls, executable plugins, credentials or external dependencies.
