@@ -80,14 +80,13 @@ pub fn run() {
             };
             app.manage(AppState::new(db));
 
-            // New installations start in the tray at login; explicit opt-outs persist.
-            startup::sync_autostart(app.handle());
-
-            // A background-only app without a tray icon has no reliable exit path.
+            // A resident process must have a working tray icon before startup is enabled.
             tray::build_tray(app.handle()).map_err(|error| {
                 log(&format!("tray initialization failed: {error}"));
                 error
             })?;
+            // Existing explicit startup opt-outs remain authoritative.
+            startup::sync_autostart(app.handle());
 
             let (capture_hk, record_hk) = shortcuts::register_defaults(app.handle());
             log(&format!(
