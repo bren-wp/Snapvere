@@ -8,6 +8,7 @@
 - **P1 / stanje izdanja:** release workflow izričito objavljuje `prerelease: true` i ima završnu provjeru. GitHub API za `v0.2.25` u trenutku audita prikazuje `prerelease: false`, premda release tekst navodi da je ovo preview bez potvrđenih stvarnih Windows testova. Provjeriti je li status ručno promijenjen i vratiti odgovarajuću oznaku dok se testovi ne dovrše.
 - **P1 / zaštita grane:** GitHub API za `main` prijavljuje `protected: false`. Postaviti ruleset/branch protection koji zahtijeva uspješne obavezne provjere, review i zabranu force-push brisanja grane. Ova postavka nije promijenjena ovim PR-om.
 - **P2 / CI:** `.github/workflows/quality.yml` nije imao `push` za `main`. Ovim PR-om dodan je kako bi i merge commit prolazio kvalitativne provjere. GitHub Release se i dalje pokreće zasebnim, selektivnim workflowom.
+- **P2 / analitika prije privole:** `site/analytics.js` čuvao je događaje u memorijskom redu prije izbora, a nakon davanja privole naknadno ih slao Google Analyticsu. Ovim PR-om su isključeni spremanje i naknadno slanje događaja prije privole, uz test prihvaćanja/odbijanja.
 - **P2 / nevaljan URL-parametar:** `site/download.js` koristio je `OS_LABEL[q.get("os")]` na objektu s naslijeđenim svojstvima. Vrijednosti `constructor`, `__proto__`, `toString` bile su pogrešno prihvaćene. Popravljeno eksplicitnom provjerom vlastitih ključeva i regresijskim Node testovima.
 
 ## Provjere koje postoje i koje su stvarno vidljive
@@ -42,6 +43,7 @@
 
 - `site/download.js`: stroga allowlist validacija OS query parametra, bez naslijeđenih svojstava prototipa.
 - `tools/tests/downloadOS.test.mjs`: regresijski testovi za valjane, nevaljane i naslijeđene nazive.
+- `site/analytics.js`: nema prikupljanja ni replaya događaja prije privole; `tools/tests/analyticsConsent.test.mjs` provjerava pristanak i odbijanje.
 - `.github/workflows/quality.yml`: pokretanje kvalitativnih provjera na `main` i izvođenje novih testova.
 
 **Izričito nije promijenjeno:** stari web binarni paketi, objavljena oznaka GitHub Releasea, branch protection, domenski update manifest ni potencijalno nekompatibilni distribucijski kanali. Za to su potrebni odvojeni kontrolirani zahvati.
