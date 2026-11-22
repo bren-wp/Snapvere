@@ -30,6 +30,7 @@ pub fn run() {
     // Isključi GPU akceleraciju u WebView2 → stabilno na svim mašinama.
     // Diagnostic flags may expose WebView2's remote debugger. Only use them in
     // debug builds; production captures must never inherit such endpoints.
+    #[cfg(windows)]
     let webview_args = if cfg!(debug_assertions) {
         match std::env::var("SNAPVERE_WEBVIEW_ARGS") {
             Ok(extra) if !extra.trim().is_empty() => format!("--disable-gpu {}", extra.trim()),
@@ -38,6 +39,7 @@ pub fn run() {
     } else {
         "--disable-gpu".to_owned()
     };
+    #[cfg(windows)]
     std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", webview_args);
 
     let app = tauri::Builder::default()
@@ -121,6 +123,7 @@ pub fn run() {
         // ── komande dostupne frontendu ───────────────────────────
         .invoke_handler(tauri::generate_handler![
             commands::get_app_language,
+            commands::get_platform_capabilities,
             commands::set_app_language,
             commands::get_capture_preferences,
             commands::get_overlay_recording_preferences,

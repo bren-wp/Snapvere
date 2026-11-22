@@ -59,6 +59,52 @@ fn require_window_label(label: &str, allowed: &[&str]) -> Result<(), String> {
     }
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlatformCapabilities {
+    os: &'static str,
+    mp4: bool,
+    microphone: bool,
+    system_audio: bool,
+    cursor_in_recordings: bool,
+}
+
+/// Native platform contract; a shared React UI must not promise unsupported
+/// Linux recorder features while the Windows encoder remains Media Foundation.
+fn platform_capabilities() -> PlatformCapabilities {
+    PlatformCapabilities {
+        os: if cfg!(windows) {
+            "windows"
+        } else if cfg!(target_os = "linux") {
+            "linux"
+        } else {
+            "macos"
+        },
+        mp4: cfg!(windows),
+        microphone: cfg!(windows),
+        system_audio: cfg!(windows),
+        cursor_in_recordings: cfg!(windows),
+    }
+}
+
+#[tauri::command]
+pub fn get_platform_capabilities(
+    window: tauri::WebviewWindow,
+) -> Result<PlatformCapabilities, String> {
+    require_window_label(window.label(), &["home", "settings", "overlay"])?;
+    Ok(platform_capabilities())
+}
+
+#[cfg(test)]
+#[test]
+fn native_capabilities_never_advertise_missing_linux_features() {
+    let capabilities = platform_capabilities();
+    assert_eq!(capabilities.mp4, cfg!(windows));
+    assert_eq!(capabilities.microphone, cfg!(windows));
+    assert_eq!(capabilities.system_audio, cfg!(windows));
+    assert_eq!(capabilities.cursor_in_recordings, cfg!(windows));
+}
+
 // No arbitrary store keys or language identifiers may be supplied by a WebView.
 fn supported_language(code: &str) -> bool {
     matches!(
@@ -176,7 +222,8 @@ pub fn get_overlay_recording_preferences(
         Some("gif") => RecordFormat::Gif,
         _ => RecordFormat::Mp4,
     };
-    let supports_audio = matches!(record_format, RecordFormat::Mp4);
+    let record_format = if cfg!(windows) { record_format } else { RecordFormat::Gif };
+    let supports_audio = cfg!(windows) && matches!(record_format, RecordFormat::Mp4);
     Ok(OverlayRecordingPreferences {
         record_mic: supports_audio && get_flag("recordMic"),
         record_system_audio: supports_audio && get_flag("recordSystemAudio"),
@@ -195,6 +242,9 @@ pub fn set_overlay_audio_preference(
     require_window_label(window.label(), &["overlay"])?;
     if key != "recordMic" && key != "recordSystemAudio" {
         return Err("Recording overlay cannot modify this setting".into());
+    }
+    if enabled && !cfg!(windows) {
+        return Err("Audio recording is not available on Linux preview builds".into());
     }
     let store = app.store("settings.json").map_err(estr)?;
     if enabled
@@ -1246,6 +1296,11 @@ fn record_options(app: &AppHandle) -> RecordOptions {
             "gif" => crate::models::RecordFormat::Gif,
             _ => crate::models::RecordFormat::default(),
         };
+    }
+    if !cfg!(windows) {
+        // A Windows-formatted settings.json must not cause Linux tray
+        // recording to attempt its unsupported MP4 audio pipeline.
+        o.format = RecordFormat::Gif;
     }
     normalize_record_audio_preferences(&mut o);
     o
