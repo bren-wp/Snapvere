@@ -11,6 +11,22 @@ export function offsetAfterDeletingLoadedCapture<T extends { id: string }>(
   return Math.max(0, previousOffset - (loaded.some((item) => item.id === deletedId) ? 1 : 0));
 }
 
+/** Fetch one extra SQL row to determine whether another page really exists.
+ * The look-ahead row is never rendered or included in the next OFFSET.
+ */
+export function splitGalleryPage<T>(fetched: readonly T[], pageSize: number): {
+  page: T[];
+  hasMore: boolean;
+} {
+  if (!Number.isSafeInteger(pageSize) || pageSize < 1) {
+    throw new Error("Invalid gallery page size");
+  }
+  return {
+    page: fetched.slice(0, pageSize),
+    hasMore: fetched.length > pageSize,
+  };
+}
+
 /** Merge overlapping gallery pages without duplicates, including duplicates within a page. */
 export function mergeUniqueById<T extends { id: string }>(
   existing: T[],

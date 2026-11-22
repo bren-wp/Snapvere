@@ -19,7 +19,7 @@ import {
 import { ipc } from "../lib/ipc";
 import { useLanguage } from "../lib/LanguageProvider";
 import { isVideo } from "../lib/types";
-import { mergeUniqueById, offsetAfterDeletingLoadedCapture } from "../lib/galleryPaging";
+import { mergeUniqueById, offsetAfterDeletingLoadedCapture, splitGalleryPage } from "../lib/galleryPaging";
 import { galleryStatusCopy } from "../lib/galleryStatusCopy";
 import type { RecordDone, Screenshot } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
@@ -60,12 +60,13 @@ export default function Home() {
     setGalleryError(false);
     try {
       const res = q.trim()
-        ? await ipc.searchScreenshots(q, PAGE_SIZE, 0, filter)
-        : await ipc.listScreenshots(PAGE_SIZE, 0, filter);
+        ? await ipc.searchScreenshots(q, PAGE_SIZE + 1, 0, filter)
+        : await ipc.listScreenshots(PAGE_SIZE + 1, 0, filter);
       if (request === galleryRequest.current) {
-        pageOffset.current = res.length;
-        setItems(res);
-        setHasMore(res.length === PAGE_SIZE);
+        const { page, hasMore: more } = splitGalleryPage(res, PAGE_SIZE);
+        pageOffset.current = page.length;
+        setItems(page);
+        setHasMore(more);
       }
     } catch (e) {
       console.error(e);
@@ -86,12 +87,13 @@ export default function Home() {
     setLoadingMore(true);
     try {
       const res = query.trim()
-        ? await ipc.searchScreenshots(query, PAGE_SIZE, offset, filter)
-        : await ipc.listScreenshots(PAGE_SIZE, offset, filter);
+        ? await ipc.searchScreenshots(query, PAGE_SIZE + 1, offset, filter)
+        : await ipc.listScreenshots(PAGE_SIZE + 1, offset, filter);
       if (request !== galleryRequest.current) return;
-      pageOffset.current = offset + res.length;
-      setItems((previous) => mergeUniqueById(previous, res));
-      setHasMore(res.length === PAGE_SIZE);
+      const { page, hasMore: more } = splitGalleryPage(res, PAGE_SIZE);
+      pageOffset.current = offset + page.length;
+      setItems((previous) => mergeUniqueById(previous, page));
+      setHasMore(more);
     } catch (error) {
       if (request === galleryRequest.current) {
         setToast(`${t("Could not load older captures:")} ${String(error)}`);
@@ -174,6 +176,15 @@ export default function Home() {
     } catch (e) {
       setToast(`${t("Could not delete capture:")} ${String(e)}`);
       return false;
+    }
+  }, [t]);
+
+  const copyPath = useCallback(async (s: Screenshot) => {
+    try {
+      await ipc.copyMediaPath(s.id);
+      setToast(t("File path copied"));
+    } catch (error) {
+      setToast(`${t("Copy file path")}: ${String(error)}`);
     }
   }, [t]);
 
@@ -449,6 +460,7 @@ export default function Home() {
                 shot={s}
                 onOpen={() => setViewId(s.id)}
                 onReveal={() => void reveal(s)}
+                onCopyPath={() => void copyPath(s)}
                 onDelete={() => void onDelete(s)}
               />
             ))}

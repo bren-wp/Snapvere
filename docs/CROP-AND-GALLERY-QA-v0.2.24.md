@@ -75,3 +75,16 @@ Under `(hover: none)` or `(pointer: coarse)`, the controls are visible
 with 40 px minimum targets. Desktop hover behavior and keyboard focus remain
 unchanged. Verify on Windows touch or device-emulated mobile input separately
 before claiming physical device parity.
+
+## Gallery convenience and precise pagination
+
+Every gallery card now exposes a native **Copy file path** button alongside
+**Show in folder** and **Delete**, with localized labels and success feedback.
+The action uses the existing origin-checked Rust command and does not expose
+arbitrary path writes or clipboard APIs to the WebView.
+
+Gallery reads request `PAGE_SIZE + 1` records to detect additional media.
+Only the first `PAGE_SIZE` records enter React state or advance the SQL
+offset; the extra row is used solely to determine whether the Load more
+button should be shown. Unit tests cover exactly full, short, and overfull
+result pages as well as invalid page sizes.

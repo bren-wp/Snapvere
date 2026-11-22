@@ -1,6 +1,6 @@
 // Snapvere by Brendigo
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { FolderOpen, Trash2, Video, Play } from "lucide-react";
+import { Copy, FolderOpen, Trash2, Video, Play } from "lucide-react";
 import type { Screenshot } from "../../lib/types";
 import { isVideo } from "../../lib/types";
 import { useLanguage } from "../../lib/LanguageProvider";
@@ -10,11 +10,13 @@ export default function CaptureCard({
   shot,
   onOpen,
   onReveal,
+  onCopyPath,
   onDelete,
 }: {
   shot: Screenshot;
   onOpen: () => void;
   onReveal: () => void;
+  onCopyPath: () => void;
   onDelete: () => void;
 }) {
   const { t, language } = useLanguage();
@@ -83,6 +85,18 @@ export default function CaptureCard({
           className="grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white transition hover:bg-black/75"
         >
           <FolderOpen size={15} />
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCopyPath();
+          }}
+          title={t("Copy file path")}
+          aria-label={`${t("Copy file path")}: ${shot.name}`}
+          className="grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white transition hover:bg-black/75"
+        >
+          <Copy size={15} />
         </button>
         <button
           type="button"
