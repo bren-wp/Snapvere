@@ -136,8 +136,8 @@ jobs:
           node --check site/download.js
           node --check site/config.js
           python -m json.tool apps/desktop/src-tauri/tauri.conf.json > /dev/null
-      - name: Regression-test public download OS parameters
-        run: node --test tools/tests/downloadOS.test.mjs
+      - name: Regression-test public downloads and analytics consent
+        run: node --test tools/tests/*.test.mjs
       - name: Verify public surfaces are Snapvere branded
         shell: bash
         run: |
