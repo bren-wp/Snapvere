@@ -205,6 +205,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Unreachable or stale browser asset found" }
           python tools/check_extension_privacy.py
           if ($LASTEXITCODE -ne 0) { throw "Extension privacy audit failed" }
+          node tools/check_translation_coverage.mjs
+          if ($LASTEXITCODE -ne 0) { throw "UI translation coverage audit failed" }
           python tools/check_extension_design_tokens.py
           if ($LASTEXITCODE -ne 0) { throw "Browser UI and Windows design palette diverged" }
           foreach ($browser in @('chrome','firefox','edge','brave','opera','vivaldi','safari')) {

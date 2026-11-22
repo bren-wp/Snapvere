@@ -53,9 +53,11 @@ jobs:
         run: python tools/check_source_headers.py
       - name: Enforce reachable Rust modules (dead-code graph)
         run: python tools/check_rust_modules.py
-      - name: Enforce reachable TypeScript modules (dead-code graph)
+      - name: Enforce production-only TypeScript module reachability
         working-directory: apps/desktop
         run: node ../../tools/check_dead_code.mjs
+      - name: Verify all static UI translations and update messages in 12 locales
+        run: node tools/check_translation_coverage.mjs
       - name: Verify locked Prettier CLI
         working-directory: apps/desktop
         run: npm exec --no -- prettier --version

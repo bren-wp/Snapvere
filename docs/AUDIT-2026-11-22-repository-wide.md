@@ -100,3 +100,17 @@ request a Windows version feed. The Linux recording limitation is now a
 customer-facing explanatory notice translated in all 12 UI languages, not a
 "preview"/developer label; native IPC error details are not shown verbatim.
 Hosted-site privacy claims remain separate from hosting connection logs.
+
+## 22 November 2026 — stronger regression gates for dead code, extension security and i18n
+
+The original TS import graph considered modules used only by unit tests as
+live. The dead-code check now starts from `apps/desktop/src/main.tsx` alone,
+and will flag test-only imports masquerading as production components.
+Browser extension privacy tests now inspect each of seven manifests for broad
+host permissions, remote messaging/content injection, unsafe evaluation and
+network APIs in canonical source. A TypeScript AST audit catches missing
+translations inside ternary `t(...)` expressions across production code,
+and separately validates all ten updater messages in each of eleven
+non-English language tables. Native Rust messages remain a separate
+localization QA boundary. These are source-level gates, not runtime
+exfiltration or binary-dependency proofs.
