@@ -6,7 +6,7 @@ for (const name of browsers) {
   test(name + " is independently installable source with minimum permissions", () => {
     const manifest = JSON.parse(readFileSync(new URL("../../" + name + "/manifest.json", import.meta.url), "utf8"));
     assert.equal(manifest.manifest_version, 3);
-    assert.equal(manifest.version, "0.2.1");
+    assert.equal(manifest.version, "0.2.2");
     assert.deepEqual(manifest.permissions, ["activeTab", "downloads", "scripting", "clipboardWrite"]);
     assert.equal(manifest.host_permissions, undefined);
     assert.equal(manifest.content_scripts, undefined);

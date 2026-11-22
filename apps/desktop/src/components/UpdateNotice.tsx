@@ -1,8 +1,9 @@
 // Snapvere by Brendigo
 import { useCallback, useEffect, useRef, useState } from "react";
+import { BellRing } from "lucide-react";
 import type { Language } from "../lib/i18n";
 import { useLanguage } from "../lib/LanguageProvider";
-import { checkForUpdates, type AvailableUpdate } from "../lib/updateFeed";
+import { autoUpdateChecksEnabled, checkForUpdates, shouldShowReleaseNotice, type AvailableUpdate } from "../lib/updateFeed";
 import { version as installedVersion } from "../../package.json";
 
 type TextSet = Readonly<{
@@ -64,19 +65,29 @@ const words: Partial<Record<Language, TextSet>> = {
     download: "Odpri uradni prenos", settings: "Poglej posodobitev v nastavitvah", close: "Zapri", automatic: "Samodejno preveri ob zagonu", disabled: "Samodejno preverjanje je izklopljeno. Preverite ročno." },
 };
 
+const AUTO_KEY = "snapvere-auto-update-check";
+const DISMISS_KEY = "snapvere-dismissed-update-version";
+
 export default function UpdateNotice({
-  mode, onAction,
+  mode, onAction, raised = false,
 }: {
   mode: "home" | "settings";
   onAction: () => void | Promise<void>;
+  /** Raise the corner notice above a transient Home action toast. */
+  raised?: boolean;
 }) {
   const { language } = useLanguage();
   const w = words[language] ?? en;
   const [available, setAvailable] = useState<AvailableUpdate | null>(null);
   const [state, setState] = useState<"idle" | "checking" | "current" | "error">("checking");
-  const [dismissed, setDismissed] = useState(false);
+  // Closing one release should not reopen its banner on every window focus
+  // or hourly fetch; a newly published version is shown again.
+  const [dismissedVersion, setDismissedVersion] = useState<string | null>(() => {
+    try { return localStorage.getItem(DISMISS_KEY); }
+    catch { return null; }
+  });
   const [autoEnabled, setAutoEnabled] = useState(() => {
-    try { return localStorage.getItem("snapvere-auto-update-check") !== "false"; }
+    try { return autoUpdateChecksEnabled(localStorage.getItem(AUTO_KEY)); }
     catch { return true; }
   });
   const controller = useRef<AbortController | null>(null);
@@ -92,7 +103,6 @@ export default function UpdateNotice({
       const info = await checkForUpdates(installedVersion, active.signal);
       if (!active.signal.aborted) {
         setAvailable(info);
-        setDismissed(false);
         setState("current");
       }
     } catch (error) {
@@ -110,7 +120,25 @@ export default function UpdateNotice({
     // Check again while the app stays open. A minimized-to-tray window checks
     // when it regains focus, avoiding polling a hidden capture application.
     const onFocus = () => {
-      if (autoEnabled && Date.now() - lastAttemptAt.current >= 5 * 60_000) {
+      // WebView2's distinct Settings/Home windows may share localStorage but
+      // need not deliver a cross-window storage event consistently. Reconcile
+      // both saved preferences before scheduling another network request.
+      let enabledOnDisk = autoEnabled;
+      try {
+        enabledOnDisk = autoUpdateChecksEnabled(localStorage.getItem(AUTO_KEY));
+        setDismissedVersion(localStorage.getItem(DISMISS_KEY));
+      } catch { /* Keep current in-memory preference if storage is blocked. */ }
+      if (enabledOnDisk !== autoEnabled) {
+        setAutoEnabled(enabledOnDisk);
+        if (!enabledOnDisk) {
+          controller.current?.abort();
+          setAvailable(null);
+          setState("idle");
+        }
+        // Enabling triggers one request through the effect, not two.
+        return;
+      }
+      if (enabledOnDisk && Date.now() - lastAttemptAt.current >= 5 * 60_000) {
         void check();
       }
     };
@@ -125,21 +153,53 @@ export default function UpdateNotice({
     };
   }, [autoEnabled, check]);
 
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === AUTO_KEY) {
+        setAutoEnabled(autoUpdateChecksEnabled(event.newValue));
+        if (!autoUpdateChecksEnabled(event.newValue)) {
+          controller.current?.abort();
+          setAvailable(null);
+          setState("idle");
+        }
+      }
+      if (event.key === DISMISS_KEY) setDismissedVersion(event.newValue);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  const dismiss = () => {
+    if (!available) return;
+    setDismissedVersion(available.version);
+    try { localStorage.setItem(DISMISS_KEY, available.version); }
+    catch { /* Dismiss still works for this session. */ }
+  };
+
   const changeAuto = (enabled: boolean) => {
     setAutoEnabled(enabled);
-    try { localStorage.setItem("snapvere-auto-update-check", String(enabled)); }
+    try { localStorage.setItem(AUTO_KEY, String(enabled)); }
     catch { /* A blocked store must not break Settings. */ }
     if (!enabled) {
       controller.current?.abort();
+      setAvailable(null);
       setState("idle");
     }
   };
 
-  if (mode === "home" && (!available || dismissed)) return null;
+  if (mode === "home" && !shouldShowReleaseNotice(available, dismissedVersion)) return null;
   return (
-    <section role="status" aria-live="polite" className="rounded-xl border border-border bg-elevated/80 px-4 py-3 text-sm">
+    <section
+      role="status"
+      aria-live="polite"
+      aria-label={available ? w.available : w.check}
+      className={mode === "home"
+        ? `fixed ${raised ? "bottom-20" : "bottom-4"} right-4 z-30 w-[min(380px,calc(100vw-2rem))] rounded-2xl border border-border bg-surface p-4 text-sm shadow-card ring-1 ring-white/10`
+        : "rounded-xl border border-border bg-elevated/80 px-4 py-3 text-sm"}
+    >
       {available ? (
         <div className="flex flex-wrap items-center gap-3">
+          {mode === "home" && <BellRing size={20} className="shrink-0 text-accent" aria-hidden="true" />}
           <div className="min-w-0 flex-1">
             <strong className="text-text">{w.available}: {available.version}</strong>
             {available.notes && <p className="mt-1 line-clamp-2 text-xs text-muted">{available.notes}</p>}
@@ -148,7 +208,7 @@ export default function UpdateNotice({
             className="rounded-lg bg-accent px-3 py-2 font-semibold text-white focus-visible:ring-2 focus-visible:ring-accent">
             {mode === "settings" ? w.download : w.settings}
           </button>
-          <button type="button" onClick={() => setDismissed(true)}
+          <button type="button" onClick={dismiss}
             className="rounded-lg px-2 py-2 text-muted hover:text-text"
             aria-label={w.close}>{w.close}</button>
         </div>

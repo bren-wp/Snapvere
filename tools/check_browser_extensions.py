@@ -20,7 +20,7 @@ for browser in BROWSERS:
     directory = ROOT / browser
     manifest = json.loads((directory / "manifest.json").read_text("utf-8"))
     assert manifest["manifest_version"] == 3
-    assert manifest["version"] == "0.2.1"
+    assert manifest["version"] == "0.2.2"
     assert set(manifest["permissions"]) == {
         "activeTab", "downloads", "scripting", "clipboardWrite"
     }

@@ -19,7 +19,7 @@ def run() -> None:
         browser = playwright.chromium.launch(headless=True)
         for page_name in ("popup", "editor"):
             for theme in ("dark", "light"):
-                for width in ((280, 355, 420) if page_name == "popup" else (320, 768, 1280)):
+                for width in ((260, 280, 320, 355, 376, 420) if page_name == "popup" else (320, 768, 1280)):
                     ctx = browser.new_context(
                         color_scheme=theme,
                         viewport={"width": width, "height": 860},
@@ -39,7 +39,7 @@ def run() -> None:
                           .map(button => {
                             const r = button.getBoundingClientRect();
                             return {name: button.textContent.trim(), left: r.left,
-                              right: r.right, width: r.width};
+                              right: r.right, width: r.width, height: r.height};
                           }),
                         bg: getComputedStyle(document.documentElement)
                             .getPropertyValue("--bg").trim(),
@@ -47,9 +47,28 @@ def run() -> None:
                     assert geometry["documentWidth"] <= width + 2, (
                         f"{page_name}/{theme}/{width}: horizontal overflow {geometry}"
                     )
+                    if page_name == "popup":
+                        labels = page.locator(".action-label")
+                        assert labels.count() == 4, "Popup action labels missing"
+                        expected_width = min(width, 376)
+                        assert page.locator("html").evaluate(
+                            "(node) => Math.round(node.getBoundingClientRect().width)"
+                        ) == expected_width, "Popup document width is incorrect"
+                        assert page.locator(".identity strong").evaluate(
+                            "(node) => node.scrollWidth <= node.clientWidth + 2"
+                        ), f"Popup header text overflows at {width}px"
+                        if width >= 355:
+                            for label in labels.all():
+                                assert label.evaluate(
+                                    "(node) => node.getBoundingClientRect().height <= 25"
+                                ), f"Popup action label wraps at {width}px"
                     assert geometry["buttons"], f"{page_name}: no actual buttons"
                     for btn in geometry["buttons"]:
                         assert btn["width"] >= 25, f"{page_name}: narrow control {btn}"
+                        if page_name == "popup":
+                            assert btn["height"] >= 40, (
+                                f"{page_name}/{theme}/{width}: capture button has small touch target {btn}"
+                            )
                         assert btn["left"] >= -2 and btn["right"] <= width + 2, (
                             f"{page_name}/{theme}/{width}: clipped control {btn}"
                         )

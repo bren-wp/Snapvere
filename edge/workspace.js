@@ -150,8 +150,11 @@
     // background switch or another window opening must not yield pixels from
     // a different tab under the original page's screenshot identity.
     const active = await api.tabs.query({ active: true, windowId: original.windowId });
-    if (active.length !== 1 || active[0].id !== original.id) {
-      throw new Error("Active tab changed during capture; no screenshot was saved.");
+    // A navigation keeps the same numeric tab id; compare the URL whenever
+    // the temporary activeTab grant exposes it, not just the tab identity.
+    if (active.length !== 1 || active[0].id !== original.id ||
+        (typeof original.url === "string" && active[0].url !== original.url)) {
+      throw new Error("Active tab changed or navigated during capture; no screenshot was saved.");
     }
   }
 
@@ -240,10 +243,13 @@
     let scale;
     let completed = 0;
     try {
-      await execute(api, tab.id, armScrollRestore, [metrics.originalX, metrics.originalY]);
       for (let index = 0; index < positions.length; index++) {
-        // Prevent leaking a screenshot of a different tab if the user changes focus.
+        // Validate before injecting a scroll restore timer into the page: a
+        // tab can navigate to a different document while a capture is pending.
         await ensureOriginalTab(api, tab);
+        // Refresh the page-side 30 second restoration watchdog each frame.
+        // A slow full-page capture must not reset scroll in mid-stitch.
+        await execute(api, tab.id, armScrollRestore, [metrics.originalX, metrics.originalY]);
         const state = await execute(api, tab.id, moveDocument, [positions[index]]);
         if (state.url !== metrics.url) throw new Error("Page navigated during capture");
         if (Math.abs(state.y - positions[index]) > 3) {
@@ -283,9 +289,15 @@
       if (completed !== positions.length) throw new Error("Incomplete screenshot");
       return await openEditor(api, await asPng(canvas), "draw");
     } finally {
-      // Even on failed capture, restore the user's original scroll position.
-      try { await execute(api, tab.id, restoreDocument, [metrics.originalX, metrics.originalY]); }
-      catch (error) { console.warn("Could not restore page scroll", error); }
+      // Never scroll a different document after same-tab navigation: the
+      // original page is gone, and changing the new page's scroll would be
+      // surprising and potentially destructive to the user's context.
+      try {
+        const url = await execute(api, tab.id, () => window.location.href);
+        if (url === metrics.url) {
+          await execute(api, tab.id, restoreDocument, [metrics.originalX, metrics.originalY]);
+        }
+      } catch (error) { console.warn("Could not restore original page scroll", error); }
     }
   }
 

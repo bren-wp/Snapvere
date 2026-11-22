@@ -1,4 +1,4 @@
-# SNAPVERE browser extensions — v0.2.1 (development)
+# SNAPVERE browser extensions — v0.2.2 (development)
 
 Seven independently installable-source WebExtensions in the repository root:
 
@@ -6,7 +6,14 @@ Seven independently installable-source WebExtensions in the repository root:
 
 Every directory contains its own manifest and all required assets. Shared canonical source lives in `extensions/source/`, and `tools/build_browser_extensions.py` verifies that each browser copy exactly matches it. No extension runtime depends on GitHub or a remote script.
 
-## Reliability improvements in v0.2.1
+## Responzivni popup v0.2.2
+
+- A stable preferred 376 px popup document width prevents the Chromium shrink-to-fit feedback loop seen in narrow browser toolbar popups.
+- Each capture action has a dedicated icon column and readable left-aligned text; action labels remain on one line at regular popup widths while smaller windows are supported.
+- Two themes and Chromium geometry checks cover widths 280, 320, 355, 376 and 420 pixels, including clipping, heading and button-label checks.
+- No new browser permissions, account, upload or remote code. All seven folders remain deterministic copies of extensions/source.
+
+## Reliability improvements in v0.2.2
 
 - The crop selection outline and unfinished pointer strokes remain **visual guides only**. Saved PNGs and images copied to Windows now render from the clean annotation state, without accidentally baking the dotted crop box into the screenshot.
 - **Select area / Edit visible tab** also validate the original active browser tab immediately before and after capture, refusing an accidental screenshot of another tab when the user switches windows.
@@ -43,7 +50,7 @@ node --test extensions/tests/*.test.mjs
 python tools/build_browser_extensions.py --build --zip-dir browser-extension-dist
 ```
 
-GitHub Actions produces seven self-contained `Snapvere-<browser>-extension-0.2.0.zip` source archives and runs JS syntax, manifest, capture, geometry, popup and security checks.
+GitHub Actions produces seven self-contained `Snapvere-<browser>-extension-0.2.2.zip` source archives and runs JS syntax, manifest, capture, geometry, popup and security checks.
 
 Install Chrome, Edge, Brave, Opera or Vivaldi in Developer Mode using **Load unpacked** and its corresponding directory. For Firefox use `about:debugging#/runtime/this-firefox` and its `firefox/manifest.json`; production Firefox installs require Mozilla's signing/distribution rules. **Safari** requires packaging the source with Xcode/Apple Web Extension Packager into a native macOS/iOS container, signing and testing. The Safari folder is not a signed installable .app.
 
@@ -52,3 +59,13 @@ Install Chrome, Edge, Brave, Opera or Vivaldi in Developer Mode using **Load unp
 This version is not published in browser stores and has **no physical-browser acceptance** yet. Verify each browser's activeTab capture, full-page stitching and restricted pages, 100–200% page zoom and devicePixelRatio, tab-switch cancellation, 30-minute cache expiry, clipboard OS handoff and keyboard accessibility before store submissions.
 
 The Windows app's global PrintScreen key is a separate feature; browser extensions cannot intercept a global key when the browser is closed. Physical device QA and design 1:1 comparisons are not claimed by synthetic CI.
+
+- v0.2.2 hardening: a captured browser tab that **navigates without changing its tab ID** is now rejected before/after visible-tab capture whenever activeTab exposes its URL, preventing pixels from the next page from being accepted. Full-page captures refresh the in-page scroll-restoration watchdog for every frame, preventing a slow stitch from restoring scroll mid-capture. Added navigation race regression cases.
+
+- Full-page restoration now checks the original page URL before restoring scroll, refusing to scroll an unrelated replacement document after same-tab navigation. The active URL is also verified before arming each watchdog renewal; this behavior has a dedicated regression test.
+
+- Visible-tab PNG capture and the extension keyboard shortcut now target the originally active browser **window ID** and verify that its tab ID and available URL remain unchanged before and after requesting pixels. Tab/window switches and same-tab navigation cannot silently download another page's image. Added tests for both races, retaining temporary `activeTab` access with no new permissions.
+
+- Popup completion messages distinguish an accepted browser download from a completed disk write. The user now sees **Screenshot download started. Check Downloads.**, not a premature claim that PNG bytes are already saved. The ZIP and popup behavior tests cover the new status.
+
+- The actual screenshot-sized 260 px popup viewport is now included in the automated dark/light Chromium geometry suite, with a minimum 40 px height for capture action targets. Earlier tests at 280/320/355/376/420 px remain enabled.

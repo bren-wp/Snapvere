@@ -1,5 +1,19 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.25 — responsive browser extensions and bottom-right update notices (development)
+
+- Extend popup Chromium regression coverage to the user's 260 px narrow browser toolbar width, including minimum 40 px capture button height and horizontal overflow checks in both themes.
+
+- Resolve Home toast collisions: the corner update notification moves up while a transient capture/action message is visible, preserving both messages without clipping or overlap.
+- Report accepted browser PNG downloads as started, rather than prematurely claiming completion before the browser finishes writing the file.
+
+- Restore normal popup width in Chrome, Edge, Brave, Opera, Vivaldi, Firefox and Safari by giving the extension document a stable preferred width instead of constraining `body` with `100vw`; polish icon/label alignment and small-window controls.
+- Bump the independently versioned browser source distributions to v0.2.2 and extend real Chromium layout checks at five viewport widths in dark and light modes.
+- Move the existing official first-party update alert in the Tauri Windows Home to a bottom-right in-app notification, preserve close-per-version across restarts and synchronize the Settings opt-out with Home.
+- Keep version-only HTTPS update notices separate from signed installer deployment: never silently download or execute releases.
+- Align all Windows Cargo/npm/Tauri versions and release gates to v0.2.25; Windows native acceptance and store-signed browser distribution remain required before production sign-off.
+
+
 ## v0.2.24 — secure crop boundary and gallery workflow (development)
 
 - Fix scanline bleed at the right monitor boundary: the BGRA recorder now clips every row independently and fills out-of-bounds pixels with black instead of copying from the next row.

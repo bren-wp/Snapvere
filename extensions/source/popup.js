@@ -17,7 +17,8 @@ async function act(mode) {
   try {
     if (mode === "visible") {
       const result = await globalThis.SnapvereCapture.captureVisibleTab(api);
-      setStatus("Screenshot saved to Downloads.", "success");
+      // downloads.download resolves when queued, not when bytes hit disk.
+      setStatus("Screenshot download started. Check Downloads.", "success");
       note.textContent = result.filename;
     } else if (mode === "area" || mode === "edit") {
       await globalThis.SnapvereWorkspace.captureForEditor(api, mode === "area" ? "crop" : "draw");

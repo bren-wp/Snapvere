@@ -89,6 +89,7 @@ function fullPageTabRace(switchOnQuery) {
           y: args[0], url: "https://example.com/",
         } }];
         if (name === "restoreDocument") restored += 1;
+        if (name === "") return [{ result: "https://example.com/" }];
         return [{ result: null }];
       },
     },
@@ -149,4 +150,76 @@ test("region capture refuses pixels if browser switched tabs while taking screen
   const flow = setupEditorTabSwitch(3);
   await assert.rejects(flow.run(), /Active tab changed/);
   assert.equal(flow.stats().screenshots, 1);
+});
+
+function navigationRace(navigateAtCheck) {
+  const root = { console, Blob, Date, Number };
+  runInNewContext(code, root);
+  let checks = 0, screenshots = 0;
+  const api = {
+    tabs: {
+      async query() {
+        checks += 1;
+        return [{
+          id: 19, windowId: 7,
+          url: checks >= navigateAtCheck ? "https://example.com/other" : "https://example.com/start",
+        }];
+      },
+      async captureVisibleTab() {
+        screenshots += 1;
+        return "data:image/png;base64,AA==";
+      },
+    },
+  };
+  return {
+    run: () => root.SnapvereWorkspace.captureForEditor(api, "crop"),
+    stats: () => ({ checks, screenshots }),
+  };
+}
+
+test("region capture refuses same-tab navigation before taking screenshot", async () => {
+  const race = navigationRace(2);
+  await assert.rejects(race.run(), /navigated during capture/);
+  assert.equal(race.stats().screenshots, 0);
+});
+
+test("region capture refuses same-tab navigation while acquiring pixels", async () => {
+  const race = navigationRace(3);
+  await assert.rejects(race.run(), /navigated during capture/);
+  assert.equal(race.stats().screenshots, 1);
+});
+
+test("full-page capture never restores scroll on a navigated replacement document", async () => {
+  const context = {
+    console, Blob, Date, Number,
+    document: { createElement() { return {}; } },
+  };
+  runInNewContext(code, context);
+  let checks = 0, restored = 0, captured = 0;
+  const api = {
+    tabs: {
+      async query() {
+        checks += 1;
+        return [{
+          id: 21, windowId: 7,
+          url: checks >= 2 ? "https://example.com/replacement" : "https://example.com/original",
+        }];
+      },
+      async captureVisibleTab() { captured += 1; return "data:image/png;base64,AA=="; },
+    },
+    scripting: {
+      async executeScript({ func }) {
+        if (func.name === "measureDocument") return [{ result: {
+          width: 300, height: 200, viewportWidth: 300, viewportHeight: 200,
+          originalX: 0, originalY: 30, url: "https://example.com/original",
+        } }];
+        if (func.name === "restoreDocument") restored += 1;
+        if (func.name === "") return [{ result: "https://example.com/replacement" }];
+        return [{ result: null }];
+      },
+    },
+  };
+  await assert.rejects(context.SnapvereWorkspace.captureFullPage(api), /navigated during capture/);
+  assert.equal(captured, 0, "Never capture pixels from a replacement page");
+  assert.equal(restored, 0, "Do not rewrite the replacement page's scroll position");
 });
