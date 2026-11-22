@@ -76,3 +76,15 @@
 - **Windows i 7 browser proširenja:** GitHub Actions statički testovi i preview snimke nisu isto što i stvarni Windows 10/11 screenshot/recording/audio/multi-DPI testovi te potpisivanje/odobrenje paketa u trgovinama. Nema vjerodostojnog 1:1 mjerenja referentnih screenshotova ili CPU/RAM/performance before/after mjerenja.
 
 **Status:** PR #43, #48 i #49 su pregledni razvojni zahvati; stabilno izdanje i zatvaranje P1 Issues nisu opravdani sve dok su gore navedeni kriteriji otvoreni.
+
+## 22 November 2026 — zero-telemetry website audit/fix
+
+The website previously included an optional Google Analytics loader, event
+tracking code, consent UI, GA host exemptions in both CSP deployments, and
+privacy language describing analytics. Those executable paths were removed:
+`site/analytics.js` deleted; site JS tracking hooks and consent controls
+removed; third-party script, image and connection hosts removed from CSP;
+privacy policy updated. Site source/CI guards now reject regression. This
+is a source-level hardening result, not proof of hosted network behavior or
+third-party hosting log deletion. Desktop native update checks and full i18n
+coverage are separate ongoing audit tasks.

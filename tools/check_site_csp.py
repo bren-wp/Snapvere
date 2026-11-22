@@ -41,10 +41,14 @@ for name, required in {
 scripts = directives["script-src"]
 assert "'self'" in scripts
 assert "'unsafe-inline'" not in scripts and "'unsafe-eval'" not in scripts
-assert scripts.count("https://www.googletagmanager.com") == 1
-assert set(directives["connect-src"]) == {
-    "'self'", "https://www.google-analytics.com", "https://region1.google-analytics.com",
-}, "No broad external network access"
+assert all(token == "'self'" or token.startswith("'sha256-") for token in scripts), (
+    "No third-party scripts or unsafe JavaScript are permitted"
+)
+assert directives["connect-src"] == ["'self'"], "No external telemetry origins"
+assert directives["img-src"] == ["'self'", "data:"], "Self-hosted images only"
+assert not any("google" in token.lower() for token in HEADER.split()), (
+    "Analytics domains must never return to the CSP"
+)
 assert directives.get("upgrade-insecure-requests") == [], "Require secure subresources"
 assert "'unsafe-inline'" in directives["style-src"], (
     "Current site has design-only inline style attributes; isolate style exception from scripts"
