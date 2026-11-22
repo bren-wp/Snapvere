@@ -28,6 +28,7 @@ import {
 } from "../lib/galleryPaging";
 import type { GalleryFilter } from "../lib/galleryPaging";
 import { galleryStatusCopy } from "../lib/galleryStatusCopy";
+import { galleryKeyboardShortcut } from "../lib/galleryKeyboard";
 import type { RecordDone, Screenshot } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
 import Viewer from "../components/Viewer";
@@ -59,6 +60,7 @@ export default function Home() {
   const pagingToken = useRef(0);
   const pageOffset = useRef(0);
   const loadedItems = useRef<Screenshot[]>([]);
+  const searchInput = useRef<HTMLInputElement>(null);
 
   // A new query, refresh, or deletion must supersede any older page request.
   // Tokens also keep an obsolete promise's finally block from clearing the
@@ -137,6 +139,27 @@ export default function Home() {
       galleryRequest.current += 1;
     };
   }, [query, filter, load]);
+
+  useEffect(() => {
+    // Do not handle Home shortcuts while the media Viewer owns the keyboard.
+    if (viewId) return;
+    const onShortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.repeat) return;
+      const action = galleryKeyboardShortcut(
+        event.key, event.ctrlKey, event.metaKey, event.altKey, event.shiftKey,
+      );
+      if (action === "search" && searchInput.current) {
+        event.preventDefault();
+        searchInput.current.focus();
+        searchInput.current.select();
+      } else if (action === "refresh" && !loading) {
+        event.preventDefault();
+        void load();
+      }
+    };
+    window.addEventListener("keydown", onShortcut);
+    return () => window.removeEventListener("keydown", onShortcut);
+  }, [load, loading, viewId]);
 
   useEffect(() => {
     const w = getCurrentWindow();
@@ -398,6 +421,7 @@ export default function Home() {
           <div className="snapvere-gallery-search relative">
             <Search size={16} aria-hidden="true" className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
             <input
+              ref={searchInput}
               type="search"
               value={query}
               onChange={(e) => {

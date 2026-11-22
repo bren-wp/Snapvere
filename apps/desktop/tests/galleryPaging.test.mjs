@@ -1,6 +1,7 @@
 // Snapvere by Brendigo
 import test from "node:test";
 import assert from "node:assert/strict";
+import { galleryKeyboardShortcut } from "../src/lib/galleryKeyboard.ts";
 import {
   createGallerySelectionStore,
   mergeUniqueById,
@@ -55,4 +56,18 @@ test("delayed clipboard and recording callbacks use the latest gallery selection
   assert.deepEqual(oldSnapshot, { query: "", filter: "all" });
   selection.setFilter("images");
   assert.deepEqual(delayedRefreshSelection(), { query: "meeting", filter: "images" });
+});
+
+test("Home keyboard shortcuts avoid browser and editor modifier conflicts", () => {
+  const get = (key, ctrl = false, meta = false, alt = false, shift = false) =>
+    galleryKeyboardShortcut(key, ctrl, meta, alt, shift);
+  assert.equal(get("F5"), "refresh");
+  assert.equal(get("f", true), "search");
+  assert.equal(get("F", false, true), "search");
+  assert.equal(get("F5", true), null);
+  assert.equal(get("F5", false, true), null);
+  assert.equal(get("f", true, false, true), null);
+  assert.equal(get("f", true, false, false, true), null);
+  assert.equal(get("f"), null);
+  assert.equal(get("F5", false, false, false, true), null);
 });

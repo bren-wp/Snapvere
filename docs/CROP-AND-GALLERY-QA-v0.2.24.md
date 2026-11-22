@@ -128,3 +128,12 @@ indexes with the same leading column. A Rust test verifies the migration.
 Home now provides an accessible manual gallery refresh control with localized
 tooltip/screen-reader text in all 12 languages. It uses the existing
 current-selection-safe command and does not expand native permissions.
+
+## Gallery keyboard productivity
+
+Home handles **Ctrl+F** (Windows/Linux) or **Cmd+F** (macOS) to focus and select
+the gallery search field and **F5** to refresh the currently selected query
+and media type. The handler is disabled while the modal Viewer is active, and
+rejects Shift/Alt combinations and key repeats. The logic is unit tested for
+shortcut combinations and collision prevention. No additional Tauri capability
+is granted, and the existing pixel layout is preserved.
