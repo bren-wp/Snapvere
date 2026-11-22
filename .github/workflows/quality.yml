@@ -2,6 +2,7 @@ name: Snapvere build and quality checks
 on:
   push:
     branches:
+      - main
       - "feature/**"
       - "fix/**"
   pull_request:
@@ -135,6 +136,8 @@ jobs:
           node --check site/download.js
           node --check site/config.js
           python -m json.tool apps/desktop/src-tauri/tauri.conf.json > /dev/null
+      - name: Regression-test public download OS parameters
+        run: node --test tools/tests/downloadOS.test.mjs
       - name: Verify public surfaces are Snapvere branded
         shell: bash
         run: |
