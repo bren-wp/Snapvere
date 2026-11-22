@@ -248,7 +248,7 @@ pub fn set_overlay_audio_preference(
         return Err("Recording overlay cannot modify this setting".into());
     }
     if enabled && !cfg!(windows) {
-        return Err("Audio recording is not available on Linux preview builds".into());
+        return Err("Audio recording is not supported on Linux".into());
     }
     let store = app.store("settings.json").map_err(estr)?;
     if enabled
@@ -787,7 +787,7 @@ pub fn begin_region_capture(
 /// Zajednička ulazna točka za hotkey, tray i frontend.
 pub fn dispatch_region_capture(app: &AppHandle, mode: CaptureMode) {
     if record::is_active(app) {
-        let _ = app.emit("snapvere:toast", "Snimanje je u tijeku");
+        let _ = app.emit("snapvere:toast", "A recording is already in progress.");
         return;
     }
     // Drugi pritisak dok je overlay već gore = odustani. Prije je ponovno hvatao
@@ -836,7 +836,7 @@ pub fn dispatch_region_capture(app: &AppHandle, mode: CaptureMode) {
                         "could not restore gallery after failed capture: {restore_error}"
                     ));
                 }
-                let _ = app.emit("snapvere:toast", format!("Capture nije uspio: {e}"));
+                let _ = app.emit("snapvere:toast", "Screen capture failed. Open Diagnostics for details.");
             }
         });
 
@@ -1112,7 +1112,7 @@ pub fn dispatch_capture_fullscreen(app: &AppHandle) {
                     let _ = app.emit("snapvere:shot-saved", shot);
                 }
                 Err(e) => {
-                    let _ = app.emit("snapvere:toast", format!("Capture nije uspio: {e}"));
+                    let _ = app.emit("snapvere:toast", "Screen capture failed. Open Diagnostics for details.");
                 }
             }
         });
@@ -1309,7 +1309,7 @@ fn start_recording_inner(
         ));
         let _ = app.emit(
             "snapvere:toast",
-            "Recording started (controls unavailable — press the hotkey again to stop)",
+            "Recording started. Press the recording shortcut again to stop.",
         );
     }
     Ok(status)
@@ -1430,7 +1430,7 @@ pub fn dispatch_record_fullscreen(app: &AppHandle) {
             }
             let opts = record_options(&app);
             if let Err(e) = start_recording_inner(&app, None, None, opts) {
-                let _ = app.emit("snapvere:toast", format!("Snimanje nije krenulo: {e}"));
+                let _ = app.emit("snapvere:toast", "Recording could not start. Open Diagnostics for details.");
                 log(&format!("dispatch_record_fullscreen: {e}"));
             }
         });

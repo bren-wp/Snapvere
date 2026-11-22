@@ -179,14 +179,17 @@ export default function Home() {
     const subs = [
       listen<RecordDone>("snapvere:rec-done", (e) => {
         const { error, cancelled } = e.payload;
-        if (error) setToast(`${t("Recording failed:")} ${error}`);
+        if (error) {
+          console.error("Recording error stored locally", error);
+          setToast(t("Recording failed. Open Diagnostics for details."));
+        }
         else if (!cancelled) {
           setToast(t("Recording saved"));
           void load();
         }
       }),
       listen<Screenshot>("snapvere:shot-saved", () => void load()),
-      listen<string>("snapvere:toast", (e) => setToast(e.payload)),
+      listen<string>("snapvere:toast", (e) => setToast(t(e.payload))),
     ];
     return () => {
       subs.forEach((x) => void x.then((un) => un()));
