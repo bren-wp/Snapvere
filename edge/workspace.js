@@ -150,8 +150,11 @@
     // background switch or another window opening must not yield pixels from
     // a different tab under the original page's screenshot identity.
     const active = await api.tabs.query({ active: true, windowId: original.windowId });
-    if (active.length !== 1 || active[0].id !== original.id) {
-      throw new Error("Active tab changed during capture; no screenshot was saved.");
+    // A navigation keeps the same numeric tab id; compare the URL whenever
+    // the temporary activeTab grant exposes it, not just the tab identity.
+    if (active.length !== 1 || active[0].id !== original.id ||
+        (typeof original.url === "string" && active[0].url !== original.url)) {
+      throw new Error("Active tab changed or navigated during capture; no screenshot was saved.");
     }
   }
 
@@ -240,8 +243,10 @@
     let scale;
     let completed = 0;
     try {
-      await execute(api, tab.id, armScrollRestore, [metrics.originalX, metrics.originalY]);
       for (let index = 0; index < positions.length; index++) {
+        // Refresh the page-side 30 second restoration watchdog each frame.
+        // A slow full-page capture must not reset scroll in mid-stitch.
+        await execute(api, tab.id, armScrollRestore, [metrics.originalX, metrics.originalY]);
         // Prevent leaking a screenshot of a different tab if the user changes focus.
         await ensureOriginalTab(api, tab);
         const state = await execute(api, tab.id, moveDocument, [positions[index]]);
