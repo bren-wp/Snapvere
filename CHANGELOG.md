@@ -6,6 +6,7 @@
 - Validate output size and frame offsets before accessing native buffers, with regression tests for truncated driver data, oversized coordinates, and short destination buffers.
 - Fail closed when a frame cannot be safely redacted: zero incomplete pixel buffers instead of silently leaving sensitive unpixelated content.
 - Add **Open capture folder** directly to the gallery toolbar using existing translations for all 12 languages.
+- Keep the gallery's folder and clipboard actions together as a responsive group instead of orphaning the clipboard action on a separate row at compact window widths.
 - Apply **All / Images / Videos** in the SQLite query before pagination, instead of filtering only the first 120 loaded items. Search, tags, and older capture paging now share the same bounded query. The native IPC permits only Home and Settings, never overlay, editor, or recorder views.
 - Synchronize Cargo, Tauri and npm manifests/lockfiles to development version v0.2.24.
 - Keep v0.2.23 installers published until all new CI and physical Windows checks complete.

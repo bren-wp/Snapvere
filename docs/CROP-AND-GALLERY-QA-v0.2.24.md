@@ -48,3 +48,10 @@ If recording-frame dimensions and memory contents disagree, privacy redaction
 blacks out the available buffer instead of returning without masking.
 The crop helper likewise clears a truncated destination. Unit tests verify
 that invalid lengths never leave old pixels or unredacted frame data visible.
+
+## Responsive gallery action grouping
+
+The Home toolbar keeps the two file actions (open captures folder and import
+from clipboard) in one wrapping flex group. Compact viewports move the whole
+group to the next row rather than leaving a lone button. The design remains
+keyboard-navigable and uses the existing responsive layout and native IPC.

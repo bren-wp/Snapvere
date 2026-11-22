@@ -371,27 +371,29 @@ export default function Home() {
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => void openCaptureFolder()}
-            aria-label={t("Open capture folder")}
-            title={t("Open capture folder")}
-            className="snapvere-btn-secondary inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm"
-          >
-            <FolderOpen size={16} aria-hidden="true" />
-            <span>{t("Open capture folder")}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => void importFromClipboard()}
-            disabled={captureBusy}
-            aria-label={clipboardText.action}
-            title={clipboardText.action}
-            className="snapvere-btn-secondary inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm disabled:opacity-50"
-          >
-            <ClipboardPaste size={16} aria-hidden="true" />
-            <span>{clipboardText.action}</span>
-          </button>
+          <div className="snapvere-gallery-actions">
+            <button
+              type="button"
+              onClick={() => void openCaptureFolder()}
+              aria-label={t("Open capture folder")}
+              title={t("Open capture folder")}
+              className="snapvere-btn-secondary inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm"
+            >
+              <FolderOpen size={16} aria-hidden="true" />
+              <span>{t("Open capture folder")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void importFromClipboard()}
+              disabled={captureBusy}
+              aria-label={clipboardText.action}
+              title={clipboardText.action}
+              className="snapvere-btn-secondary inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm disabled:opacity-50"
+            >
+              <ClipboardPaste size={16} aria-hidden="true" />
+              <span>{clipboardText.action}</span>
+            </button>
+          </div>
         </div>
       </section>
 
