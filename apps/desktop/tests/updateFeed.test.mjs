@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseVersion, isNewerVersion, parseUpdateManifest, checkForUpdates,
-  UPDATE_PRODUCT, UPDATE_FEED_URL, OFFICIAL_DOWNLOAD_URL } from '../src/lib/updateFeed.ts';
+  UPDATE_PRODUCT, UPDATE_FEED_URL, OFFICIAL_DOWNLOAD_URL, canCheckWindowsUpdates } from '../src/lib/updateFeed.ts';
 
 test('accepts numeric versions and compares all components, not strings', () => {
   assert.deepEqual(parseVersion('2.10.0'), [2, 10, 0]);
@@ -85,4 +85,11 @@ test("manual update check preference supports opt-out and default-on migration",
   assert.equal(autoUpdateChecksEnabled('true'), true);
   assert.equal(autoUpdateChecksEnabled('false'), false);
   assert.equal(autoUpdateChecksEnabled('old-preference'), true);
+});
+
+test('native update channel rejects Linux and unknown OS before any Windows feed request', () => {
+  assert.equal(canCheckWindowsUpdates('windows'), true);
+  for (const platform of ['linux', 'macos', '', null]) {
+    assert.equal(canCheckWindowsUpdates(platform), false, String(platform));
+  }
 });

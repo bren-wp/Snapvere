@@ -1,9 +1,10 @@
 // Snapvere by Brendigo
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BellRing } from "lucide-react";
+import { ipc } from "../lib/ipc";
 import type { Language } from "../lib/i18n";
 import { useLanguage } from "../lib/LanguageProvider";
-import { autoUpdateChecksEnabled, checkForUpdates, shouldShowReleaseNotice, type AvailableUpdate } from "../lib/updateFeed";
+import { autoUpdateChecksEnabled, canCheckWindowsUpdates, checkForUpdates, shouldShowReleaseNotice, type AvailableUpdate } from "../lib/updateFeed";
 import { version as installedVersion } from "../../package.json";
 
 type TextSet = Readonly<{
@@ -90,10 +91,27 @@ export default function UpdateNotice({
     try { return autoUpdateChecksEnabled(localStorage.getItem(AUTO_KEY)); }
     catch { return true; }
   });
+  const [platformOs, setPlatformOs] = useState<string | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    // Fail closed until the trusted native platform has been identified.
+    void ipc.getPlatformCapabilities().then((caps) => {
+      if (mounted) setPlatformOs(caps.os);
+    }).catch((error) => {
+      console.warn("Cannot determine native update channel", error);
+    });
+    return () => { mounted = false; };
+  }, []);
   const controller = useRef<AbortController | null>(null);
   const lastAttemptAt = useRef(0);
 
   const check = useCallback(async () => {
+    if (!canCheckWindowsUpdates(platformOs)) {
+      controller.current?.abort();
+      setAvailable(null);
+      setState("idle");
+      return;
+    }
     lastAttemptAt.current = Date.now();
     controller.current?.abort();
     const active = new AbortController();
@@ -113,8 +131,14 @@ export default function UpdateNotice({
         setState("error");
       }
     }
-  }, []);
+  }, [platformOs]);
   useEffect(() => {
+    if (!canCheckWindowsUpdates(platformOs)) {
+      controller.current?.abort();
+      setAvailable(null);
+      setState("idle");
+      return;
+    }
     if (autoEnabled) void check();
     else setState("idle");
     // Check again while the app stays open. A minimized-to-tray window checks
@@ -151,7 +175,7 @@ export default function UpdateNotice({
       window.clearInterval(interval);
       window.removeEventListener("focus", onFocus);
     };
-  }, [autoEnabled, check]);
+  }, [platformOs, autoEnabled, check]);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -187,6 +211,10 @@ export default function UpdateNotice({
     }
   };
 
+  // Linux previews do not consume the Windows-only version feed.
+  // Until there is a separate authenticated Linux feed, use manual
+  // GitHub Releases navigation via Settings / About instead.
+  if (!canCheckWindowsUpdates(platformOs)) return null;
   if (mode === "home" && !shouldShowReleaseNotice(available, dismissedVersion)) return null;
   return (
     <section

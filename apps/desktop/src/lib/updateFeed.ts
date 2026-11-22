@@ -7,6 +7,10 @@
 export const UPDATE_FEED_URL = "https://update.snapvere.com/stable.json";
 export const OFFICIAL_DOWNLOAD_URL = "https://snapvere.com/download/tauri/";
 export const UPDATE_PRODUCT = "snapvere-tauri-windows";
+/** A Windows-only release feed must never advertise Windows installers on Linux. */
+export function canCheckWindowsUpdates(os: string | null): boolean {
+  return os === "windows";
+}
 const MAX_MANIFEST_BYTES = 8192;
 const TIMEOUT_MS = 6500;
 
