@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="color-scheme" content="dark">
+  <meta name="color-scheme" content="light dark">
   <title>SNAPVERE — Browser capture</title>
   <link rel="stylesheet" href="popup.css">
 </head>
@@ -20,18 +20,18 @@
     <section class="panel" aria-label="Screenshot actions">
       <h1>Capture your tab</h1>
       <p>Keep screenshots on your device. Choose what to capture or open the editor.</p>
-      <div class="action-stack">
+      <div class="action-stack" role="group" aria-label="Capture options">
         <button class="capture" type="button" data-action="visible">
-          <span aria-hidden="true">▣</span> Save visible tab PNG
+          <span class="action-icon" aria-hidden="true">▣</span><span class="action-label">Save visible tab PNG</span>
         </button>
         <button class="secondary" type="button" data-action="area">
-          <span aria-hidden="true">⊞</span> Select area &amp; crop
+          <span class="action-icon" aria-hidden="true">⊞</span><span class="action-label">Select area &amp; crop</span>
         </button>
         <button class="secondary" type="button" data-action="full">
-          <span aria-hidden="true">↧</span> Full webpage
+          <span class="action-icon" aria-hidden="true">↧</span><span class="action-label">Full webpage</span>
         </button>
         <button class="secondary" type="button" data-action="edit">
-          <span aria-hidden="true">✎</span> Edit visible tab
+          <span class="action-icon" aria-hidden="true">✎</span><span class="action-label">Edit visible tab</span>
         </button>
       </div>
       <p id="status" class="status" role="status" aria-live="polite">Ready to capture.</p>
