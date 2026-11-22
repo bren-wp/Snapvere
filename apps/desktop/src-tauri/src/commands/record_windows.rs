@@ -44,57 +44,6 @@ fn safe_window_position(
     )
 }
 
-#[cfg(test)]
-mod selection_tests {
-    use super::*;
-
-    fn monitor(id: u32, x: i32, primary: bool) -> MonitorInfo {
-        MonitorInfo {
-            id,
-            name: format!("Monitor {id}"),
-            x,
-            y: 0,
-            width: 1920,
-            height: 1080,
-            scale: 1.0,
-            is_primary: primary,
-        }
-    }
-
-    #[test]
-    fn explicit_missing_monitor_never_falls_back_to_another_screen() {
-        let monitors = [monitor(1, 0, true), monitor(2, -1920, false)];
-        assert!(select_record_monitor(&monitors, Some(3), (10, 10)).is_err());
-        assert_eq!(
-            select_record_monitor(&monitors, Some(2), (10, 10))
-                .unwrap()
-                .id,
-            2
-        );
-        assert_eq!(
-            select_record_monitor(&monitors, None, (-500, 200))
-                .unwrap()
-                .id,
-            2
-        );
-        assert_eq!(
-            select_record_monitor(&monitors, None, (5000, 200))
-                .unwrap()
-                .id,
-            1
-        );
-        assert!(select_record_monitor(&[], None, (0, 0)).is_err());
-    }
-
-    #[test]
-    fn overlay_coordinates_are_clamped_without_wraparound() {
-        let left = safe_window_position(i32::MIN, -100, -200, 50);
-        let right = safe_window_position(i32::MAX, 100, 200, -50);
-        assert_eq!((left.x, left.y), (i32::MIN, -50));
-        assert_eq!((right.x, right.y), (i32::MAX, 50));
-    }
-}
-
 /// Odredi monitor za snimanje: eksplicitni id, inače onaj pod mišem.
 pub(super) fn resolve_target(
     app: &AppHandle,
@@ -217,4 +166,55 @@ pub(super) fn show_rec_frame(
     let _ = win.emit("snapvere:rec-frame", rect);
     let _ = win.show();
     Ok(())
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::*;
+
+    fn monitor(id: u32, x: i32, primary: bool) -> MonitorInfo {
+        MonitorInfo {
+            id,
+            name: format!("Monitor {id}"),
+            x,
+            y: 0,
+            width: 1920,
+            height: 1080,
+            scale: 1.0,
+            is_primary: primary,
+        }
+    }
+
+    #[test]
+    fn explicit_missing_monitor_never_falls_back_to_another_screen() {
+        let monitors = [monitor(1, 0, true), monitor(2, -1920, false)];
+        assert!(select_record_monitor(&monitors, Some(3), (10, 10)).is_err());
+        assert_eq!(
+            select_record_monitor(&monitors, Some(2), (10, 10))
+                .unwrap()
+                .id,
+            2
+        );
+        assert_eq!(
+            select_record_monitor(&monitors, None, (-500, 200))
+                .unwrap()
+                .id,
+            2
+        );
+        assert_eq!(
+            select_record_monitor(&monitors, None, (5000, 200))
+                .unwrap()
+                .id,
+            1
+        );
+        assert!(select_record_monitor(&[], None, (0, 0)).is_err());
+    }
+
+    #[test]
+    fn overlay_coordinates_are_clamped_without_wraparound() {
+        let left = safe_window_position(i32::MIN, -100, -200, 50);
+        let right = safe_window_position(i32::MAX, 100, 200, -50);
+        assert_eq!((left.x, left.y), (i32::MIN, -50));
+        assert_eq!((right.x, right.y), (i32::MAX, 50));
+    }
 }

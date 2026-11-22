@@ -331,7 +331,7 @@ fn gif_niza_kvaliteta_smanjuje_izlaznu_rezoluciju() {
             gifenc::GifEncoder::new(&path, w, h, 10, 30).expect("GIF low-quality encoder");
         // Valid frame with a gradient, so the encoder must process actual pixels.
         let mut frame = vec![0u8; (w * h * 4) as usize];
-        for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
+        for (i, pixel) in frame.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             pixel[0] = (i % 256) as u8;
             pixel[1] = ((i / w as usize) % 256) as u8;
             pixel[2] = 100;
