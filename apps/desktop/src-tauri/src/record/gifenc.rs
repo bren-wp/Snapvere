@@ -27,7 +27,7 @@ fn gif_quality_profile(quality: u8) -> (u32, i32) {
     match quality.clamp(30, 100) {
         30..=49 => (480, 15),
         50..=69 => (720, 10),
-        70..=89 => (MAX_WIDTH, 7),
+        70..=89 => (MAX_WIDTH, 10),
         _ => (MAX_WIDTH, 3),
     }
 }
@@ -180,7 +180,7 @@ mod tests {
     fn gif_quality_now_affects_resolution_and_palette_cost() {
         assert_eq!(gif_quality_profile(30), (480, 15));
         assert_eq!(gif_quality_profile(60), (720, 10));
-        assert_eq!(gif_quality_profile(80), (960, 7));
+        assert_eq!(gif_quality_profile(80), (960, 10));
         assert_eq!(gif_quality_profile(100), (960, 3));
         assert_eq!(fit(1920, 1080, 480), (480, 270));
         assert_eq!(fit(1920, 1080, 720), (720, 405));

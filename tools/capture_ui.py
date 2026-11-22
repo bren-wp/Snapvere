@@ -595,11 +595,21 @@ with Image.open(OUTPUT / "settings-recording.png") as windows_image, Image.open(
     assert windows_image.size == linux_image.size == (1120, 740), (
         "Linux/Windows Settings previews must use identical viewport geometry"
     )
-    for unchanged in ((0, 0, 690, 740), (900, 0, 1120, 740)):
+    # Only compare invariant UI geometry. Linux genuinely has a different
+    # format, contextual GIF quality guidance and disabled native audio.
+    # Comparing their dynamic option labels would make a functional fix
+    # incorrectly fail a pixel-parity test.
+    invariant_regions = (
+        (0, 0, 1120, 75),      # shared application title bar
+        (0, 75, 190, 740),    # shared settings navigation/sidebar
+        (190, 75, 1120, 215), # shared title, breadcrumb and heading
+        (925, 215, 1120, 740) # common right-side layout/margin
+    )
+    for unchanged in invariant_regions:
         left = windows_image.convert("RGB").crop(unchanged)
         right = linux_image.convert("RGB").crop(unchanged)
         assert ImageChops.difference(left, right).getbbox() is None, (
-            f"Shared Windows/Linux Settings layout regressed at {unchanged}"
+            f"Shared Windows/Linux invariant UI region changed at {unchanged}"
         )
 
 for path in OUTPUT.glob("*.png"):
