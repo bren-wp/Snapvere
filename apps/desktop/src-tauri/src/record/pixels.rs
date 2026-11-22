@@ -107,11 +107,14 @@ pub(super) fn crop_bgra(
             output.fill(0);
             continue;
         }
-        let source_start = sy
-            .checked_mul(source_stride)
-            .and_then(|base| x.checked_mul(4).and_then(|column| base.checked_add(column)));
-        let bytes = source_start
-            .and_then(|start| start.checked_add(copy_bytes).and_then(|end| src.get(start..end)));
+        let source_start = sy.checked_mul(source_stride).and_then(|base| {
+            let column = x.checked_mul(4)?;
+            base.checked_add(column)
+        });
+        let bytes = source_start.and_then(|start| {
+            let end = start.checked_add(copy_bytes)?;
+            src.get(start..end)
+        });
         if let Some(bytes) = bytes {
             output[..copy_bytes].copy_from_slice(bytes);
             output[copy_bytes..].fill(0);

@@ -1443,7 +1443,12 @@ pub fn list_screenshots(
 ) -> Result<Vec<Screenshot>, String> {
     require_window_label(window.label(), &["home"])?;
     let items = lock(&state.db)
-        .gallery_page("", kind.as_deref().unwrap_or("all"), limit.unwrap_or(200), offset.unwrap_or(0))
+        .gallery_page(
+            "",
+            kind.as_deref().unwrap_or("all"),
+            limit.unwrap_or(200),
+            offset.unwrap_or(0),
+        )
         .map_err(estr)?;
     allow_media_dirs(&app, &items);
     Ok(items)

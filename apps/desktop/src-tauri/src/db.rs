@@ -211,7 +211,7 @@ impl Db {
         }
     }
 
-
+    /// Legacy unfiltered gallery search delegates to the same bounded query.
     pub fn search(&self, query: &str, limit: u32, offset: u32) -> anyhow::Result<Vec<Screenshot>> {
         self.gallery_page(query, "all", limit, offset)
     }
