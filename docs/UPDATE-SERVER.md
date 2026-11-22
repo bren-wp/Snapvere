@@ -90,3 +90,12 @@ A version-only manifest never authorizes executing remote installers.
 
 This in-app notice is opt-out: disable automatic checks under Settings → About.
 It performs no tracking, telemetry, screenshot upload or unattended install.
+
+### Focus synchronization and opt-out reliability
+
+Home and Settings read the shared local update-check preferences on window focus,
+in addition to ordinary `storage` events. Some WebView2 installations do not
+relay `storage` to another Tauri window consistently. When the user opts out
+in Settings, Home aborts an in-flight check and clears stale notification data
+when it regains focus. Re-enabling checks triggers exactly one immediate request
+via the existing effect. The version dismissal is also reconciled on focus.

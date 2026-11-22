@@ -150,3 +150,40 @@ test("region capture refuses pixels if browser switched tabs while taking screen
   await assert.rejects(flow.run(), /Active tab changed/);
   assert.equal(flow.stats().screenshots, 1);
 });
+
+function navigationRace(navigateAtCheck) {
+  const root = { console, Blob, Date, Number };
+  runInNewContext(code, root);
+  let checks = 0, screenshots = 0;
+  const api = {
+    tabs: {
+      async query() {
+        checks += 1;
+        return [{
+          id: 19, windowId: 7,
+          url: checks >= navigateAtCheck ? "https://example.com/other" : "https://example.com/start",
+        }];
+      },
+      async captureVisibleTab() {
+        screenshots += 1;
+        return "data:image/png;base64,AA==";
+      },
+    },
+  };
+  return {
+    run: () => root.SnapvereWorkspace.captureForEditor(api, "crop"),
+    stats: () => ({ checks, screenshots }),
+  };
+}
+
+test("region capture refuses same-tab navigation before taking screenshot", async () => {
+  const race = navigationRace(2);
+  await assert.rejects(race.run(), /navigated during capture/);
+  assert.equal(race.stats().screenshots, 0);
+});
+
+test("region capture refuses same-tab navigation while acquiring pixels", async () => {
+  const race = navigationRace(3);
+  await assert.rejects(race.run(), /navigated during capture/);
+  assert.equal(race.stats().screenshots, 1);
+});

@@ -123,3 +123,8 @@ export function shouldShowReleaseNotice(
 ): boolean {
   return available !== null && available.version !== dismissedVersion;
 }
+
+/** Missing or invalid old preferences keep update checks enabled by default. */
+export function autoUpdateChecksEnabled(value: string | null): boolean {
+  return value !== "false";
+}

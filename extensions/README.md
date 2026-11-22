@@ -59,3 +59,5 @@ Install Chrome, Edge, Brave, Opera or Vivaldi in Developer Mode using **Load unp
 This version is not published in browser stores and has **no physical-browser acceptance** yet. Verify each browser's activeTab capture, full-page stitching and restricted pages, 100–200% page zoom and devicePixelRatio, tab-switch cancellation, 30-minute cache expiry, clipboard OS handoff and keyboard accessibility before store submissions.
 
 The Windows app's global PrintScreen key is a separate feature; browser extensions cannot intercept a global key when the browser is closed. Physical device QA and design 1:1 comparisons are not claimed by synthetic CI.
+
+- v0.2.2 hardening: a captured browser tab that **navigates without changing its tab ID** is now rejected before/after visible-tab capture whenever activeTab exposes its URL, preventing pixels from the next page from being accepted. Full-page captures refresh the in-page scroll-restoration watchdog for every frame, preventing a slow stitch from restoring scroll mid-capture. Added navigation race regression cases.

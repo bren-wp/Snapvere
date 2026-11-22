@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { BellRing } from "lucide-react";
 import type { Language } from "../lib/i18n";
 import { useLanguage } from "../lib/LanguageProvider";
-import { checkForUpdates, shouldShowReleaseNotice, type AvailableUpdate } from "../lib/updateFeed";
+import { autoUpdateChecksEnabled, checkForUpdates, shouldShowReleaseNotice, type AvailableUpdate } from "../lib/updateFeed";
 import { version as installedVersion } from "../../package.json";
 
 type TextSet = Readonly<{
@@ -85,7 +85,7 @@ export default function UpdateNotice({
     catch { return null; }
   });
   const [autoEnabled, setAutoEnabled] = useState(() => {
-    try { return localStorage.getItem(AUTO_KEY) !== "false"; }
+    try { return autoUpdateChecksEnabled(localStorage.getItem(AUTO_KEY)); }
     catch { return true; }
   });
   const controller = useRef<AbortController | null>(null);
@@ -118,7 +118,25 @@ export default function UpdateNotice({
     // Check again while the app stays open. A minimized-to-tray window checks
     // when it regains focus, avoiding polling a hidden capture application.
     const onFocus = () => {
-      if (autoEnabled && Date.now() - lastAttemptAt.current >= 5 * 60_000) {
+      // WebView2's distinct Settings/Home windows may share localStorage but
+      // need not deliver a cross-window storage event consistently. Reconcile
+      // both saved preferences before scheduling another network request.
+      let enabledOnDisk = autoEnabled;
+      try {
+        enabledOnDisk = autoUpdateChecksEnabled(localStorage.getItem(AUTO_KEY));
+        setDismissedVersion(localStorage.getItem(DISMISS_KEY));
+      } catch { /* Keep current in-memory preference if storage is blocked. */ }
+      if (enabledOnDisk !== autoEnabled) {
+        setAutoEnabled(enabledOnDisk);
+        if (!enabledOnDisk) {
+          controller.current?.abort();
+          setAvailable(null);
+          setState("idle");
+        }
+        // Enabling triggers one request through the effect, not two.
+        return;
+      }
+      if (enabledOnDisk && Date.now() - lastAttemptAt.current >= 5 * 60_000) {
         void check();
       }
     };
@@ -136,8 +154,12 @@ export default function UpdateNotice({
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
       if (event.key === AUTO_KEY) {
-        setAutoEnabled(event.newValue !== "false");
-        if (event.newValue === "false") setAvailable(null);
+        setAutoEnabled(autoUpdateChecksEnabled(event.newValue));
+        if (!autoUpdateChecksEnabled(event.newValue)) {
+          controller.current?.abort();
+          setAvailable(null);
+          setState("idle");
+        }
       }
       if (event.key === DISMISS_KEY) setDismissedVersion(event.newValue);
     };
