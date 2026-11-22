@@ -19,6 +19,19 @@ const MAX_WIDTH: u32 = 960;
 const MAX_SOURCE_DIMENSION: u32 = 16_384;
 const MAX_SOURCE_PIXELS: u64 = 134_217_728;
 
+/// GIF quality was previously ignored by the encoder despite being saved in
+/// Settings. Use bounded output width and NeuQuant sampling effort for an
+/// explicit file-size vs. visual-quality tradeoff on Windows and Linux.
+/// Default quality 80 retains the established 960-pixel maximum.
+fn gif_quality_profile(quality: u8) -> (u32, i32) {
+    match quality.clamp(30, 100) {
+        30..=49 => (480, 15),
+        50..=69 => (720, 10),
+        70..=89 => (MAX_WIDTH, 10),
+        _ => (MAX_WIDTH, 3),
+    }
+}
+
 fn input_frame_bytes(width: u32, height: u32) -> Result<usize, String> {
     if width == 0 || height == 0 || width > MAX_SOURCE_DIMENSION || height > MAX_SOURCE_DIMENSION {
         return Err("GIF source dimensions exceed supported limits".into());
@@ -40,14 +53,16 @@ pub struct GifEncoder {
     src_w: u32,
     src_h: u32,
     delay_cs: u16,
+    palette_speed: i32,
     /// Reupotrebljivi RGBA buffer za kvantizaciju.
     rgba: Vec<u8>,
 }
 
 impl GifEncoder {
-    pub fn new(path: &Path, w: u32, h: u32, fps: u32) -> Result<Self, String> {
+    pub fn new(path: &Path, w: u32, h: u32, fps: u32, quality: u8) -> Result<Self, String> {
         input_frame_bytes(w, h)?;
-        let (out_w, out_h) = fit(w, h);
+        let (max_width, palette_speed) = gif_quality_profile(quality);
+        let (out_w, out_h) = fit(w, h, max_width);
         let file = File::create(path).map_err(|e| format!("GIF create: {e}"))?;
         let mut enc = Encoder::new(BufWriter::new(file), out_w as u16, out_h as u16, &[])
             .map_err(|e| format!("GIF encoder: {e}"))?;
@@ -69,6 +84,7 @@ impl GifEncoder {
             src_w: w,
             src_h: h,
             delay_cs,
+            palette_speed,
             rgba: vec![0u8; (out_w as usize) * (out_h as usize) * 4],
         })
     }
@@ -86,14 +102,16 @@ impl GifEncoder {
             out_w,
             out_h,
             delay_cs,
+            palette_speed,
             rgba,
             ..
         } = self;
         let Some(enc) = enc.as_mut() else {
             return Err("GIF enkoder je već zatvoren".into());
         };
-        // speed 10 = razuman kompromis kvalitete i brzine NeuQuant kvantizacije.
-        let mut frame = Frame::from_rgba_speed(*out_w as u16, *out_h as u16, rgba, 10);
+        // Lower NeuQuant speed values spend more CPU on a higher-quality
+        // palette; cap both the resolution and CPU cost for lengthy GIFs.
+        let mut frame = Frame::from_rgba_speed(*out_w as u16, *out_h as u16, rgba, *palette_speed);
         frame.delay = *delay_cs;
         frame.dispose = DisposalMethod::Any;
         enc.write_frame(&frame)
@@ -146,17 +164,29 @@ impl GifEncoder {
 }
 
 /// Skaliraj na najviše `MAX_WIDTH` uz očuvanje omjera (parne dimenzije radi urednosti).
-fn fit(w: u32, h: u32) -> (u32, u32) {
-    if w <= MAX_WIDTH || w == 0 {
+fn fit(w: u32, h: u32, max_width: u32) -> (u32, u32) {
+    if w <= max_width || w == 0 {
         return (w.max(1), h.max(1));
     }
-    let nh = ((h as u64 * MAX_WIDTH as u64) / w as u64).max(1) as u32;
-    (MAX_WIDTH, nh)
+    let nh = ((u64::from(h) * u64::from(max_width)) / u64::from(w)).max(1) as u32;
+    (max_width, nh)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gif_quality_now_affects_resolution_and_palette_cost() {
+        assert_eq!(gif_quality_profile(30), (480, 15));
+        assert_eq!(gif_quality_profile(60), (720, 10));
+        assert_eq!(gif_quality_profile(80), (960, 10));
+        assert_eq!(gif_quality_profile(100), (960, 3));
+        assert_eq!(fit(1920, 1080, 480), (480, 270));
+        assert_eq!(fit(1920, 1080, 720), (720, 405));
+        assert_eq!(fit(1920, 1080, 960), (960, 540));
+        assert_eq!(fit(400, 200, 960), (400, 200));
+    }
 
     #[test]
     fn rejects_unbounded_capture_dimensions() {

@@ -9,6 +9,7 @@ import type {
   ImageFormat,
   MonitorInfo,
   PixelRect,
+  PlatformCapabilities,
   RecFrameRect,
   RecordOptions,
   RecordStatus,
@@ -19,6 +20,7 @@ import type {
 export const ipc = {
   // Language preferences are read-only to non-settings windows.
   getAppLanguage: () => invoke<string>("get_app_language"),
+  getPlatformCapabilities: () => invoke<PlatformCapabilities>("get_platform_capabilities"),
   setAppLanguage: (language: string) =>
     invoke<void>("set_app_language", { language }),
   // ── least-privilege settings snapshots ──

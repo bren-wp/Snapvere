@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0a0a0b" />
+  <title>Snapvere Tauri/Rust — Windows and Linux preview distribution</title>
+  <meta name="description" content="The separate Snapvere Tauri/Rust Windows and Linux preview channel. Verify platform-specific EXE, MSI, Debian and AppImage packages." />
+  <meta name="robots" content="noindex, follow" />
+  <link rel="canonical" href="https://snapvere.com/download/tauri/" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/styles.css?v=7" />
+</head>
+<body>
+  <header class="nav"><div class="wrap nav__inner"><a class="brand" href="/" aria-label="Snapvere home"><img class="brand__mark" src="/favicon.svg" alt="" width="46" height="46" /> SNAPVERE</a><nav class="nav__links" aria-label="Main navigation"><a href="/">Product</a><a href="/download/">WinUI edition</a><a href="/privacy/">Privacy</a></nav></div></header>
+  <main class="wrap dl">
+    <section class="dl__card" aria-labelledby="tauri-title">
+      <h1 class="dl__title" id="tauri-title">Snapvere Tauri/Rust edition</h1>
+      <p class="lede">Windows 10/11 x64 and Linux x86_64 &middot; GitHub preview distribution &middot; No account required.</p>
+      <p><strong>Different distribution, different installer.</strong> The main Snapvere download page currently provides the WinUI/.NET v0.2.4 edition. Those EXE/MSI files are not compatible in-place Tauri/Rust updates.</p>
+      <div class="hero__cta"><a class="btn btn--primary btn--lg" href="https://github.com/bren-wp/Snapvere/releases" target="_blank" rel="noopener noreferrer">Open official Tauri/Rust releases</a></div>
+      <h2 class="dl__editions-title">Verify the matching release assets</h2>
+      <ol class="steps">
+        <li class="step"><span class="step__num">01</span><h3 class="step__title">Choose the same edition and version</h3><p>Select the Tauri/Rust release version offered by your installed app. Preview builds do not have confirmed full physical Windows acceptance.</p></li>
+        <li class="step"><span class="step__num">02</span><h3 class="step__title">Choose the correct operating system</h3><p>Windows: Snapvere-Portable.exe, Snapvere-Setup.exe or Snapvere-Setup.msi. Linux preview: Snapvere-Linux-amd64.deb or Snapvere-Linux-x86_64.AppImage. Verify every download using SHA256SUMS.txt from the same release. SHA-256 confirms file integrity, not publisher identity.</p></li>
+        <li class="step"><span class="step__num">03</span><h3 class="step__title">Do not switch editions in place</h3><p>Do not install WinUI files over Tauri or Tauri files over WinUI. Back up local captures and settings before any manual migration; an automatic migration path has not been verified.</p></li>
+      </ol>
+      <p class="dl__integrity">The Linux packages are preview builds and may not exist in older releases. Linux MP4, microphone, system audio and recorded cursor are not yet available; Linux X11/Wayland behavior, installer signing, and physical Windows 10/11 QA require independent verification. Unsigned previews are not production-certified.</p>
+      <p class="dl__note"><a href="/download/">Go to the original WinUI/.NET download page</a></p>
+    </section>
+  </main>
+  <footer class="footer"><div class="wrap"><div class="footer__bottom"><span>&copy; 2026 Snapvere by Brendigo</span><a href="/privacy/">Privacy</a></div></div></footer>
+</body>
+</html>

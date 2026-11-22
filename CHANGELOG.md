@@ -1,5 +1,22 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.26 — Windows/Linux parity work and release-channel hardening (unreleased, pending CI/QA)
+
+- Avoid duplicate full Windows/Linux CI builds for one commit by running quality on PRs and post-merge main, with manual branch dispatch preserved.
+- Fail safely when a selected monitor is disconnected instead of silently capturing a different monitor; reject mismatched region and monitor IDs, with unit regression tests.
+- Clamp recorder HUD and annotation overlay positions across mixed-DPI and extreme virtual desktop coordinates.
+- Make GIF recording quality meaningful on both Windows and Linux: adjustable 480/720/960-pixel output cap and palette sampling effort, keeping quality 80 at the familiar 960-pixel maximum.
+- Keep GIF quality available in shared Settings, with browser regression checks for both platforms.
+- Full Windows/Linux physical QA, authenticated signing and publication remain pending.
+
+## v0.2.26 — Windows edition channel isolation (unreleased, pending CI/QA)
+
+- Route Tauri/Rust updates to a dedicated download guide, never to incompatible WinUI/.NET installers.
+- Identify existing WinUI/.NET v0.2.4 packages clearly; preserve their bytes and hashes.
+- Restrict approved release destinations and add regression checks for edition separation.
+- Synchronize Cargo, Tauri and npm manifests and lockfiles. Signing, native QA and publication remain outstanding.
+
+
 ## v0.2.25 — responsive browser extensions and bottom-right update notices (development)
 
 - Extend popup Chromium regression coverage to the user's 260 px narrow browser toolbar width, including minimum 40 px capture button height and horizontal overflow checks in both themes.

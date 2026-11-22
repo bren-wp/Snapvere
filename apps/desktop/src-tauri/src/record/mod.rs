@@ -134,6 +134,8 @@ pub struct Session {
 /// bez ovoga bi svako PRVO snimanje kasnilo pola sekunde prije nego HUD išta pokaže.
 /// Otvorena duplikacija se odmah pušta; ne držimo ništa trajno.
 pub fn warm_up() {
+    // Linux already uses xcap; there is no DXGI or Media Foundation to warm up.
+    #[cfg(windows)]
     let _ = std::thread::Builder::new()
         .name("snapvere-warmup".into())
         .spawn(|| {
@@ -544,7 +546,7 @@ fn open_encoder(
         #[cfg(not(windows))]
         RecordFormat::Mp4 => Err("MP4 snimanje je zasad dostupno samo na Windowsu".into()),
         RecordFormat::Gif => Ok(Encoder::Gif(Box::new(gifenc::GifEncoder::new(
-            path, w, h, fps,
+            path, w, h, fps, quality,
         )?))),
     }
 }

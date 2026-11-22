@@ -59,6 +59,52 @@ fn require_window_label(label: &str, allowed: &[&str]) -> Result<(), String> {
     }
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlatformCapabilities {
+    os: &'static str,
+    mp4: bool,
+    microphone: bool,
+    system_audio: bool,
+    cursor_in_recordings: bool,
+}
+
+/// Native platform contract; a shared React UI must not promise unsupported
+/// Linux recorder features while the Windows encoder remains Media Foundation.
+fn platform_capabilities() -> PlatformCapabilities {
+    PlatformCapabilities {
+        os: if cfg!(windows) {
+            "windows"
+        } else if cfg!(target_os = "linux") {
+            "linux"
+        } else {
+            "macos"
+        },
+        mp4: cfg!(windows),
+        microphone: cfg!(windows),
+        system_audio: cfg!(windows),
+        cursor_in_recordings: cfg!(windows),
+    }
+}
+
+#[tauri::command]
+pub fn get_platform_capabilities(
+    window: tauri::WebviewWindow,
+) -> Result<PlatformCapabilities, String> {
+    require_window_label(window.label(), &["home", "settings", "overlay"])?;
+    Ok(platform_capabilities())
+}
+
+#[cfg(test)]
+#[test]
+fn native_capabilities_never_advertise_missing_linux_features() {
+    let capabilities = platform_capabilities();
+    assert_eq!(capabilities.mp4, cfg!(windows));
+    assert_eq!(capabilities.microphone, cfg!(windows));
+    assert_eq!(capabilities.system_audio, cfg!(windows));
+    assert_eq!(capabilities.cursor_in_recordings, cfg!(windows));
+}
+
 // No arbitrary store keys or language identifiers may be supplied by a WebView.
 fn supported_language(code: &str) -> bool {
     matches!(
@@ -176,7 +222,12 @@ pub fn get_overlay_recording_preferences(
         Some("gif") => RecordFormat::Gif,
         _ => RecordFormat::Mp4,
     };
-    let supports_audio = matches!(record_format, RecordFormat::Mp4);
+    let record_format = if cfg!(windows) {
+        record_format
+    } else {
+        RecordFormat::Gif
+    };
+    let supports_audio = cfg!(windows) && matches!(record_format, RecordFormat::Mp4);
     Ok(OverlayRecordingPreferences {
         record_mic: supports_audio && get_flag("recordMic"),
         record_system_audio: supports_audio && get_flag("recordSystemAudio"),
@@ -195,6 +246,9 @@ pub fn set_overlay_audio_preference(
     require_window_label(window.label(), &["overlay"])?;
     if key != "recordMic" && key != "recordSystemAudio" {
         return Err("Recording overlay cannot modify this setting".into());
+    }
+    if enabled && !cfg!(windows) {
+        return Err("Audio recording is not supported on Linux".into());
     }
     let store = app.store("settings.json").map_err(estr)?;
     if enabled
@@ -408,15 +462,62 @@ fn copy_rgba_to_clipboard(app: &AppHandle, img: &image::RgbaImage) -> Result<(),
     app.clipboard().write_image(&image).map_err(estr)
 }
 
-/// Trenutna pozicija miša u fizičkim px (Windows). Fallback (0,0).
-fn cursor_pos() -> (i32, i32) {
+/// On Linux, ask the windowing backend for the real desktop pointer position.
+/// Returning (0,0) unconditionally would capture the wrong monitor on X11
+/// setups where the primary screen is left of or below (0,0).
+#[cfg(not(windows))]
+fn checked_cursor_position(x: f64, y: f64) -> Option<(i32, i32)> {
+    let (x, y) = (x.round(), y.round());
+    let valid = |value: f64| {
+        value.is_finite() && (f64::from(i32::MIN)..=f64::from(i32::MAX)).contains(&value)
+    };
+    (valid(x) && valid(y)).then_some((x as i32, y as i32))
+}
+
+#[cfg(all(test, not(windows)))]
+#[test]
+fn linux_cursor_rejects_nonfinite_and_out_of_range_positions() {
+    assert_eq!(checked_cursor_position(-1900.2, 89.6), Some((-1900, 90)));
+    assert_eq!(checked_cursor_position(f64::NAN, 0.0), None);
+    assert_eq!(checked_cursor_position(f64::INFINITY, 0.0), None);
+    assert_eq!(checked_cursor_position(2147483648.0, 0.0), None);
+}
+
+/// Physical desktop cursor point. If Wayland denies a global pointer query,
+/// capture the primary monitor instead of assuming the desktop origin is (0,0).
+fn cursor_pos(app: &AppHandle) -> (i32, i32) {
     #[cfg(windows)]
     {
+        let _ = app;
         use windows::Win32::Foundation::POINT;
         use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
         let mut p = POINT::default();
         if unsafe { GetCursorPos(&mut p) }.is_ok() {
             return (p.x, p.y);
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        if let Ok(position) = app.cursor_position() {
+            if let Some(point) = checked_cursor_position(position.x, position.y) {
+                return point;
+            }
+        }
+        if let Ok(monitors) = capture::list_monitors() {
+            if let Some(primary) = monitors
+                .iter()
+                .find(|m| m.is_primary)
+                .or_else(|| monitors.first())
+            {
+                let center = |origin: i32, extent: u32| {
+                    (i64::from(origin) + i64::from(extent) / 2)
+                        .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
+                };
+                return (
+                    center(primary.x, primary.width),
+                    center(primary.y, primary.height),
+                );
+            }
         }
     }
     (0, 0)
@@ -686,7 +787,7 @@ pub fn begin_region_capture(
 /// Zajednička ulazna točka za hotkey, tray i frontend.
 pub fn dispatch_region_capture(app: &AppHandle, mode: CaptureMode) {
     if record::is_active(app) {
-        let _ = app.emit("snapvere:toast", "Snimanje je u tijeku");
+        let _ = app.emit("snapvere:toast", "A recording is already in progress.");
         return;
     }
     // Drugi pritisak dok je overlay već gore = odustani. Prije je ponovno hvatao
@@ -735,7 +836,11 @@ pub fn dispatch_region_capture(app: &AppHandle, mode: CaptureMode) {
                         "could not restore gallery after failed capture: {restore_error}"
                     ));
                 }
-                let _ = app.emit("snapvere:toast", format!("Capture nije uspio: {e}"));
+                log(&format!("Capture failed locally: {e}"));
+                let _ = app.emit(
+                    "snapvere:toast",
+                    "Screen capture failed. Open Diagnostics for details.",
+                );
             }
         });
 
@@ -749,7 +854,7 @@ pub fn dispatch_region_capture(app: &AppHandle, mode: CaptureMode) {
 /// Never write a transient frozen.png to disk or depend on asset:// grants:
 /// the overlay receives the pixels over a scoped Tauri IPC command.
 fn region_capture_blocking(app: &AppHandle, mode: CaptureMode) -> Result<(), String> {
-    let (cx, cy) = cursor_pos();
+    let (cx, cy) = cursor_pos(app);
     let t = std::time::Instant::now();
     let token = Utc::now().timestamp_millis();
 
@@ -1011,7 +1116,11 @@ pub fn dispatch_capture_fullscreen(app: &AppHandle) {
                     let _ = app.emit("snapvere:shot-saved", shot);
                 }
                 Err(e) => {
-                    let _ = app.emit("snapvere:toast", format!("Capture nije uspio: {e}"));
+                    log(&format!("Capture failed locally: {e}"));
+                    let _ = app.emit(
+                        "snapvere:toast",
+                        "Screen capture failed. Open Diagnostics for details.",
+                    );
                 }
             }
         });
@@ -1208,10 +1317,25 @@ fn start_recording_inner(
         ));
         let _ = app.emit(
             "snapvere:toast",
-            "Recording started (controls unavailable — press the hotkey again to stop)",
+            "Recording started. Press the recording shortcut again to stop.",
         );
     }
     Ok(status)
+}
+
+/// Clamp before narrowing: a corrupt u64 setting must never wrap to a
+/// misleading small frame rate on Windows or Linux.
+fn normalize_record_fps(raw: u64) -> u32 {
+    raw.clamp(5, 60) as u32
+}
+
+#[cfg(test)]
+#[test]
+fn extreme_persisted_fps_never_wraps() {
+    assert_eq!(normalize_record_fps(0), 5);
+    assert_eq!(normalize_record_fps(24), 24);
+    assert_eq!(normalize_record_fps(60), 60);
+    assert_eq!(normalize_record_fps(u64::MAX), 60);
 }
 
 /// Opcije snimanja iz Settings store-a; svaka greška → razumni default.
@@ -1221,7 +1345,7 @@ fn record_options(app: &AppHandle) -> RecordOptions {
         return o;
     };
     if let Some(v) = store.get("recordFps").and_then(|v| v.as_u64()) {
-        o.fps = (v as u32).clamp(5, 60);
+        o.fps = normalize_record_fps(v);
     }
     if let Some(v) = store.get("recordQuality").and_then(|v| v.as_u64()) {
         o.quality = v.clamp(1, 100) as u8;
@@ -1246,6 +1370,11 @@ fn record_options(app: &AppHandle) -> RecordOptions {
             "gif" => crate::models::RecordFormat::Gif,
             _ => crate::models::RecordFormat::default(),
         };
+    }
+    if !cfg!(windows) {
+        // A Windows-formatted settings.json must not cause Linux tray
+        // recording to attempt its unsupported MP4 audio pipeline.
+        o.format = RecordFormat::Gif;
     }
     normalize_record_audio_preferences(&mut o);
     o
@@ -1309,7 +1438,10 @@ pub fn dispatch_record_fullscreen(app: &AppHandle) {
             }
             let opts = record_options(&app);
             if let Err(e) = start_recording_inner(&app, None, None, opts) {
-                let _ = app.emit("snapvere:toast", format!("Snimanje nije krenulo: {e}"));
+                let _ = app.emit(
+                    "snapvere:toast",
+                    "Recording could not start. Open Diagnostics for details.",
+                );
                 log(&format!("dispatch_record_fullscreen: {e}"));
             }
         });

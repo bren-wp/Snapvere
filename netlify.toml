@@ -15,7 +15,7 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "geolocation=(), microphone=(), camera=()"
-    Content-Security-Policy = "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
+    Content-Security-Policy = "default-src 'none'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; script-src 'self' 'sha256-uajlxsPQ4Jo6W4fgW5sv+cwmjnHVwP64qHKITPLq/eU=' 'sha256-Vk4233Z0N+ELdeJN4GntaNsyZp9y2LREQRuaQx0J7W4=' 'sha256-ZnYJX5ypMaaAhxxWhSEjbMkhO2A9yPmbzEQH3LFaITA='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'none'; worker-src 'none'; upgrade-insecure-requests"
 
 # Fiksna imena fajlova → uvijek revalidiraj (immutable bi zaključao stari cache).
 [[headers]]

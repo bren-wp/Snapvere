@@ -59,16 +59,18 @@ dangerous_scripts = {
 assert not dangerous_scripts, f"Unreviewed install lifecycle scripts: {dangerous_scripts}"
 assert not manifest.get("optionalDependencies"), "Unexpected optional native packages"
 
-analytics = (SITE / "analytics.js").read_text(encoding="utf-8")
-assert "https://www.googletagmanager.com/gtag/js" in analytics
-assert 'state === "granted"' in analytics
-assert 'data-choice="granted"' not in analytics  # consent built via safe DOM nodes
-assert "window.snapvereTrack" in analytics
-for path in SITE.rglob("*.js"):
-    if path.name == "analytics.js":
+# The public website may not load third-party analytics or record behavior.
+# This check is source-level defense-in-depth, not a proof about host access logs.
+assert not (SITE / "analytics.js").exists(), "The removed analytics module must stay deleted"
+for path in SITE.rglob("*"):
+    if path.suffix not in {".html", ".js", ".css"}:
         continue
-    text = path.read_text(encoding="utf-8")
-    assert not re.search(r"(?:XMLHttpRequest|navigator\.sendBeacon|WebSocket)\s*\(", text), path
+    source = path.read_text(encoding="utf-8").lower()
+    for marker in ("googletagmanager", "google-analytics", "snapveretrack",
+                   "gaid", "data-consent-open", "sendbeacon(",
+                   "gtag(", "analytics_storage"):
+        assert marker not in source, f"Website telemetry marker {marker} in {path}"
+    assert not re.search(r"(?:xmlhttprequest|websocket|eventsource)\s*\(", source), path
 
 assert count >= 40, f"Native/frontend scan unexpectedly covered only {count} files"
 print(f"Source backdoor-pattern guard: {count} native/frontend source files checked")
@@ -77,4 +79,4 @@ assert 'https://update.snapvere.com/stable.json' in feed
 assert 'https://snapvere.com/download/' in feed
 assert 'credentials: "omit"' in feed and 'redirect: "error"' in feed
 print("No unreviewed process spawning or network calls; only the official read-only update feed is allowed")
-print("Site consented Google Analytics is the sole explicitly reviewed third-party script")
+print("No third-party analytics or website interaction telemetry is permitted")

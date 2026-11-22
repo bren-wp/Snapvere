@@ -41,7 +41,7 @@ export function Toggle({ label, checked, onChange, disabled = false }: { label: 
     </button>
   );
 }
-export function Segmented({ value, options, onChange }: { value: string; options: { v: string; l: string }[]; onChange: (v: string) => void }) {
+export function Segmented({ value, options, onChange, disabledValues = [] }: { value: string; options: { v: string; l: string }[]; onChange: (v: string) => void; disabledValues?: string[] }) {
   return (
     <div role="group" className="flex rounded-lg border border-border p-0.5">
       {options.map((o) => (
@@ -49,8 +49,9 @@ export function Segmented({ value, options, onChange }: { value: string; options
           type="button"
           key={o.v}
           aria-pressed={value === o.v}
+          disabled={disabledValues.includes(o.v)}
           onClick={() => onChange(o.v)}
-          className={`rounded-md px-3 py-1 text-sm transition-colors ${value === o.v ? "bg-accent text-white" : "text-muted hover:text-text"}`}
+          className={`rounded-md px-3 py-1 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${value === o.v ? "bg-accent text-white" : "text-muted hover:text-text"}`}
         >
           {o.l}
         </button>

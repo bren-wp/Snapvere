@@ -27,4 +27,13 @@ assert v >= (0, 39, 0), (
     f"VULNERABLE bundled SQLite: libsqlite3-sys {version}, needs >= 0.39.0 "
     "(RUSTSEC-2026-0459, CVE-2026-119375)"
 )
-print(f"SQLite supply-chain check passed: libsqlite3-sys {version} patched")
+# RUSTSEC-2026-0592: url <= 2.5.8 can stack-overflow on nested blob: URLs.
+urls = [item for item in packages if item["name"] == "url"]
+assert len(urls) == 1, f"Expected one url crate, got {len(urls)}"
+url_version = urls[0]["version"]
+match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", url_version)
+assert match, f"Unexpected url crate version {url_version}"
+assert tuple(int(piece) for piece in match.groups()) >= (2, 5, 9), (
+    f"VULNERABLE url {url_version}: RUSTSEC-2026-0592 requires >= 2.5.9"
+)
+print(f"SQLite + URL supply-chain checks passed: libsqlite3-sys {version}, url {url_version}")

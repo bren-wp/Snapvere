@@ -1,9 +1,12 @@
 name: Snapvere build and quality checks
 on:
+  # Feature branches are verified by pull_request; triggering on both
+  # push and pull_request scheduled two full native builds for one commit,
+  # exhausting Windows/Linux runners and repeatedly cancelling useful CI.
+  # Keep mandatory post-merge main checks and manual branch dispatch.
   push:
     branches:
-      - "feature/**"
-      - "fix/**"
+      - main
   pull_request:
     branches:
       - main
@@ -50,9 +53,11 @@ jobs:
         run: python tools/check_source_headers.py
       - name: Enforce reachable Rust modules (dead-code graph)
         run: python tools/check_rust_modules.py
-      - name: Enforce reachable TypeScript modules (dead-code graph)
+      - name: Enforce production-only TypeScript module reachability
         working-directory: apps/desktop
         run: node ../../tools/check_dead_code.mjs
+      - name: Verify all static UI translations and update messages in 12 locales
+        run: node tools/check_translation_coverage.mjs
       - name: Verify locked Prettier CLI
         working-directory: apps/desktop
         run: npm exec --no -- prettier --version
@@ -71,6 +76,8 @@ jobs:
         run: python tools/check_tailwind4.py
       - name: Fail on unsafe dynamic HTML/code execution in public JavaScript
         run: python tools/check_frontend_security.py
+      - name: Verify least-privilege public website CSP and inline script hashes
+        run: python tools/check_site_csp.py
       - name: Verify first-party downloads, HTML links and checksums
         run: python tools/check_website.py
       - name: Verify installer EULA and block public GitHub links
@@ -98,7 +105,7 @@ jobs:
           path = Path("extension-package-validation/Snapvere-update-stable.json")
           data = json.loads(path.read_text(encoding="utf-8"))
           assert data["product"] == "snapvere-tauri-windows"
-          assert data["download_url"] == "https://snapvere.com/download/"
+          assert data["download_url"] == "https://snapvere.com/download/tauri/"
           assert len(list(path.parent.glob(f"Snapvere-*-extension-{extension_version}.zip"))) == 7
           print("All seven browser ZIPs and version-only update feed passed release rehearsal")
           PY
@@ -123,9 +130,10 @@ jobs:
           echo "Release tag v$version is available for this application change."
       - name: Verify matching public and desktop design tokens
         run: python tools/check_brand_tokens.py
-      - name: Audit browser extension dead-file graph and desktop design token parity
+      - name: Audit browser extension source reachability, privacy and design
         run: |
           python tools/audit_browser_extension_graph.py
+          python tools/check_extension_privacy.py
           python tools/check_extension_design_tokens.py
       - name: Check capture overlay pipeline and legacy brand references
         run: python tools/check_capture_pipeline.py
@@ -135,6 +143,8 @@ jobs:
           node --check site/download.js
           node --check site/config.js
           python -m json.tool apps/desktop/src-tauri/tauri.conf.json > /dev/null
+      - name: Regression-test downloads, analytics consent and edition isolation
+        run: node --test tools/tests/*.test.mjs
       - name: Verify public surfaces are Snapvere branded
         shell: bash
         run: |
@@ -273,5 +283,80 @@ jobs:
         with:
           name: Snapvere-Windows-QA-${{ github.sha }}
           path: dist-installers/*
+          if-no-files-found: error
+          retention-days: 30
+
+  linux:
+    name: Linux x86_64 native tests and preview packages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install Tauri / xcap Linux system build prerequisites
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential pkg-config libssl-dev libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev \
+            libclang-dev libxcb1-dev libxrandr-dev libdbus-1-dev \
+            libpipewire-0.3-dev libwayland-dev libegl-dev libgbm-dev libfuse2t64
+      - name: Verify required GBM development linker library
+        run: |
+          pkg-config --exists gbm
+          pkg-config --modversion gbm
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+      - name: Install locked JS dependencies without postinstall scripts
+        working-directory: apps/desktop
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typecheck shared Windows / Linux React frontend
+        working-directory: apps/desktop
+        run: npm run lint && npm run test:unit
+      - name: Verify Rust formatting
+        working-directory: apps/desktop/src-tauri
+        run: cargo fmt --all -- --check
+      - name: Linux Rust unit and integration tests (no display required)
+        working-directory: apps/desktop/src-tauri
+        run: cargo test --locked
+      - name: Linux Clippy (warnings treated as errors)
+        working-directory: apps/desktop/src-tauri
+        run: cargo clippy --all-targets --locked -- -D warnings
+      - name: Build Linux Debian and AppImage previews
+        working-directory: apps/desktop
+        run: npm run tauri -- build --bundles deb,appimage
+      - name: Verify exactly one Linux package of each type and SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist-linux
+          deb=(apps/desktop/src-tauri/target/release/bundle/deb/*.deb)
+          appimage=(apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage)
+          [[ ${#deb[@]} == 1 && -s "${deb[0]}" ]] || { echo "::error::Expected exactly one .deb"; exit 1; }
+          [[ ${#appimage[@]} == 1 && -s "${appimage[0]}" ]] || { echo "::error::Expected exactly one .AppImage"; exit 1; }
+          test "$(stat -c%s "${deb[0]}")" -gt 1000000
+          test "$(stat -c%s "${appimage[0]}")" -gt 1000000
+          cp -- "${deb[0]}" dist-linux/Snapvere-Linux-amd64.deb
+          cp -- "${appimage[0]}" dist-linux/Snapvere-Linux-x86_64.AppImage
+          chmod 755 dist-linux/Snapvere-Linux-x86_64.AppImage
+          (cd dist-linux && sha256sum Snapvere-Linux-amd64.deb Snapvere-Linux-x86_64.AppImage > SHA256SUMS-Linux.txt)
+          (cd dist-linux && sha256sum --check SHA256SUMS-Linux.txt)
+      - name: Upload PRIVATE untested Linux previews for QA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Snapvere-Linux-QA-${{ github.sha }}
+          path: dist-linux/*
           if-no-files-found: error
           retention-days: 30

@@ -12,6 +12,5 @@ window.SNAPVERE = Object.freeze({
     windowsSetupMsi: "/files/Snapvere-Setup.msi",
     checksums: "/files/SHA256SUMS.txt",
     mac: ""
-  }),
-  gaId: ""
+  })
 });

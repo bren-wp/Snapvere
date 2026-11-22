@@ -510,7 +510,7 @@ export default function Overlay() {
         // Backend sakriva overlay i diže HUD; ovdje nema više posla.
       } catch (err) {
         console.error(err);
-        setToast(String(err));
+        setToast(t("Recording could not start. Open Diagnostics for details."));
         setStarting(false);
       }
     },
@@ -533,7 +533,7 @@ export default function Overlay() {
       } catch (err) {
         console.error(err);
         // Keep the frozen frame and annotations available for retry.
-        setToast(`${t("Export failed:")} ${String(err)}`);
+        setToast(t("Export failed:"));
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -552,7 +552,7 @@ export default function Overlay() {
       closeSoon();
     } catch (err) {
       console.error(err);
-      setToast(`${t("Save failed:")} ${String(err)}`);
+      setToast(t("Save failed:"));
     }
   };
 

@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 PRODUCT = "snapvere-tauri-windows"
-DOWNLOAD_URL = "https://snapvere.com/download/"
+DOWNLOAD_URL = "https://snapvere.com/download/tauri/"
 SEMVER = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
 
 

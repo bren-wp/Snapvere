@@ -6,6 +6,7 @@ from base64 import b64encode
 import json
 from shutil import copyfile
 from playwright.sync_api import sync_playwright
+from PIL import Image, ImageChops
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "docs" / "screenshots"
@@ -18,6 +19,7 @@ TAURI_PREVIEW = r"""
   const realFetch = window.fetch.bind(window);
   window.fetch = (resource, options) => {
     if (resource === "https://update.snapvere.com/stable.json") {
+      window.__SNAPVERE_TEST_UPDATE_REQUESTS = (window.__SNAPVERE_TEST_UPDATE_REQUESTS || 0) + 1;
       const scenario = new URL(window.location.href).searchParams.has("previewUpdate");
       return Promise.resolve(new Response(JSON.stringify({
         product: "snapvere-tauri-windows",
@@ -62,6 +64,19 @@ TAURI_PREVIEW = r"""
       if (command === "plugin:event|listen") {
         eventCallbacks.set(args.event, args.handler);
         return 1;
+      }
+      // Native capabilities were introduced with the Linux preview. The UI
+      // must be tested against a realistic Windows contract rather than a
+      // missing command that silently disables the Windows-only update feed.
+      if (command === "get_platform_capabilities") {
+        const linux = new URL(window.location.href).searchParams.has("previewLinux");
+        return {
+          os: linux ? "linux" : "windows",
+          mp4: !linux,
+          microphone: !linux,
+          systemAudio: !linux,
+          cursorInRecordings: !linux
+        };
       }
       if (command === "get_frozen_rgba") return previewRgbaPacket();
       if (command === "get_frozen_frame") return window.__SNAPVERE_PREVIEW_FRAME_URL;
@@ -145,12 +160,43 @@ with sync_playwright() as p:
     ).wait_for(timeout=5000)
     assert clipboard_import.is_enabled(), "Failed clipboard import must release capture controls"
     page.screenshot(path=str(OUTPUT / "home-clipboard-import-error.png"))
+    # A new install must never contact the update server automatically.
+    assert page.evaluate("() => (window.__SNAPVERE_TEST_UPDATE_REQUESTS || 0) === 0"), (
+        "Default desktop startup must not request an update feed"
+    )
     update_preview = app.new_page()
+    # A version notice is only expected after the user opted in explicitly.
+    update_preview.add_init_script(
+        "localStorage.setItem('snapvere-auto-update-check', 'true')"
+    )
     update_preview.goto("http://127.0.0.1:1420/?previewUpdate=1", wait_until="networkidle")
     update_preview.get_by_text("New Snapvere version available", exact=False).wait_for(timeout=10000)
     update_preview.get_by_role("button", name="View update in Settings").wait_for(timeout=10000)
     update_preview.screenshot(path=str(OUTPUT / "home-update-available.png"))
     update_preview.close()
+
+    # Linux is rendered with the SAME components, but must not request the
+    # Windows-only update manifest or expose unsupported native recording.
+    linux_settings = app.new_page()
+    linux_settings.goto(
+        "http://127.0.0.1:1420/?previewLinux=1&previewUpdate=1#settings",
+        wait_until="networkidle",
+    )
+    linux_settings.get_by_role("navigation").get_by_role(
+        "button", name="Recording settings", exact=True
+    ).click()
+    linux_settings.get_by_text("On Linux, silent GIF recording is available.", exact=False).wait_for(timeout=10000)
+    assert linux_settings.get_by_role("button", name="MP4", exact=True).is_disabled()
+    assert linux_settings.get_by_role("slider", name="Quality", exact=True).is_enabled()
+    assert linux_settings.get_by_role("switch", name="Record microphone").is_disabled()
+    assert linux_settings.get_by_role("switch", name="Record system audio").is_disabled()
+    assert linux_settings.get_by_role("switch", name="Include the mouse cursor").is_disabled()
+    assert linux_settings.evaluate(
+        "() => (window.__SNAPVERE_TEST_UPDATE_REQUESTS || 0) === 0"
+    ), "Linux preview must not request the Windows-only updater manifest"
+    linux_settings.screenshot(path=str(OUTPUT / "settings-linux-preview.png"))
+    linux_settings.close()
+
     # Reproducible hover/focus captures; never assert these match native Windows
     # baselines just because the DOM state exists in headless Chromium.
     primary = page.get_by_role("group", name="Capture actions").get_by_role(
@@ -218,6 +264,9 @@ with sync_playwright() as p:
     # rather than merely drawing grey-looking controls.
     settings.get_by_role("navigation").get_by_role("button", name="Recording settings", exact=True).click()
     settings.get_by_role("button", name="GIF", exact=True).click()
+    assert settings.get_by_role("slider", name="Quality", exact=True).is_enabled(), (
+        "GIF quality slider must control real native GIF output"
+    )
     assert settings.get_by_role("switch", name="Record microphone").is_disabled()
     assert settings.get_by_role("switch", name="Record system audio").is_disabled()
     settings.screenshot(path=str(OUTPUT / "settings-recording-gif-disabled.png"))
@@ -543,6 +592,33 @@ with sync_playwright() as p:
         }, indent=2) + "\\n", encoding="utf-8"
     )
     browser.close()
+
+# Synthetic UI layout parity: Linux and Windows share exact component geometry.
+# Differences are expected only inside recording controls (disabled vs enabled).
+# The layout/header/sidebar and unchanged text must remain identical, pixel-for-pixel.
+# This is a deterministic Chromium frontend comparison, NOT native Linux/Windows QA.
+with Image.open(OUTPUT / "settings-recording.png") as windows_image, Image.open(
+    OUTPUT / "settings-linux-preview.png"
+) as linux_image:
+    assert windows_image.size == linux_image.size == (1120, 740), (
+        "Linux/Windows Settings previews must use identical viewport geometry"
+    )
+    # Only compare invariant UI geometry. Linux genuinely has a different
+    # format, contextual GIF quality guidance and disabled native audio.
+    # Comparing their dynamic option labels would make a functional fix
+    # incorrectly fail a pixel-parity test.
+    invariant_regions = (
+        (0, 0, 1120, 75),      # shared application title bar
+        (0, 75, 190, 740),    # shared settings navigation/sidebar
+        (190, 75, 1120, 215), # shared title, breadcrumb and heading
+        (925, 215, 1120, 740) # common right-side layout/margin
+    )
+    for unchanged in invariant_regions:
+        left = windows_image.convert("RGB").crop(unchanged)
+        right = linux_image.convert("RGB").crop(unchanged)
+        assert ImageChops.difference(left, right).getbbox() is None, (
+            f"Shared Windows/Linux invariant UI region changed at {unchanged}"
+        )
 
 for path in OUTPUT.glob("*.png"):
     if path.stat().st_size < 5000:

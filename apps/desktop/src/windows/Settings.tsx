@@ -12,7 +12,7 @@ import { ipc } from "../lib/ipc";
 import { LANGUAGES, type Language } from "../lib/i18n";
 import { useLanguage } from "../lib/LanguageProvider";
 import { printScreenCopy } from "../lib/printScreenHelp";
-import type { ImageFormat, RecordFormat } from "../lib/types";
+import type { ImageFormat, RecordFormat, PlatformCapabilities } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
 import { DEFAULTS, normalizeSettings, type AppSettings } from "./settings/preferences";
 import { Section, Row, Toggle, Segmented, HotkeyInput } from "./settings/SettingsControls";
@@ -59,7 +59,16 @@ export default function Settings() {
   const [hotkeyRegistrationChecked, setHotkeyRegistrationChecked] = useState(false);
   const printHelp = printScreenCopy(language);
   const [notice, setNotice] = useState<string | null>(null);
+  const [platform, setPlatform] = useState<PlatformCapabilities | null>(null);
+  const linuxGifOnly = platform?.os === "linux";
   const [status, setStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    void ipc.getPlatformCapabilities().then(setPlatform).catch((error) => {
+      void error;
+      setNotice(t("Could not load settings:"));
+    });
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -125,6 +134,14 @@ export default function Settings() {
       setNotice(`${t("Shortcut was not changed:")} ${String(error)}`);
     }
   };
+
+  useEffect(() => {
+    // A shared user profile can contain Windows MP4 preferences; persist an
+    // explicit Linux-safe GIF selection so tray and overlay agree with Settings.
+    if (linuxGifOnly && store && s.recordFormat !== "gif") {
+      set("recordFormat", "gif");
+    }
+  }, [linuxGifOnly, store, s.recordFormat]);
 
   const applyTheme = (theme: "dark" | "light") => {
     if (!store) {
@@ -270,7 +287,7 @@ export default function Settings() {
             </Row>
             <Row
               label={t("Launch on startup")}
-              hint={t("Start Snapvere when you sign in (on by default).")}
+              hint={linuxGifOnly ? undefined : t("Start Snapvere when you sign in (on by default).")}
             >
               <Toggle label={t("Launch on startup")} checked={autostart} onChange={toggleAutostart} disabled={!store || autostartBusy} />
             </Row>
@@ -320,7 +337,7 @@ export default function Settings() {
               {t("Click a field and press your shortcut. Changes apply immediately.")}
               <br />
               <span className="text-muted/80">
-                {t("The Fn key may be handled by your keyboard. Choose a shortcut Windows can detect.")}
+                {t(linuxGifOnly ? "This shortcut was not detected. Try another key combination." : "The Fn key may be handled by your keyboard. Choose a shortcut Windows can detect.")}
               </span>
             </p>
           </Section>
@@ -358,7 +375,8 @@ export default function Settings() {
           <Section title={t("Recording")}>
             <Row label={t("Format")} hint={t("MP4 supports video and audio; GIF is silent.")}>
               <Segmented
-                value={s.recordFormat}
+                value={linuxGifOnly ? "gif" : s.recordFormat}
+                disabledValues={linuxGifOnly ? ["mp4"] : []}
                 options={[
                   { v: "mp4", l: "MP4" },
                   { v: "gif", l: "GIF" },
@@ -378,13 +396,18 @@ export default function Settings() {
                 onChange={(v) => set("recordFps", Number(v))}
               />
             </Row>
-            <Row label={`${t("Quality")} (${s.recordQuality})`} hint={t("Controls the video bitrate.")}>
+            <Row
+              label={`${t("Quality")} (${s.recordQuality})`}
+              hint={t(linuxGifOnly || s.recordFormat === "gif"
+                ? "GIF exports are limited to 960 px and 256 colors per frame."
+                : "Controls the video bitrate.")}
+            >
               <input
                 type="range"
                 min={30}
                 max={100}
                 value={s.recordQuality}
-                disabled={s.recordFormat === "gif"}
+                aria-label={t("Quality")}
                 onChange={(e) => set("recordQuality", +e.target.value)}
                 className="w-48"
               />
@@ -392,7 +415,8 @@ export default function Settings() {
             <Row label={t("Include the mouse cursor")}>
               <Toggle
                 label={t("Include the mouse cursor")}
-                checked={s.recordCursor}
+                checked={!linuxGifOnly && s.recordCursor}
+                disabled={linuxGifOnly}
                 onChange={(v) => set("recordCursor", v)}
               />
             </Row>
@@ -402,8 +426,8 @@ export default function Settings() {
             >
               <Toggle
                 label={t("Record microphone")}
-                checked={s.recordFormat === "mp4" && s.recordMic}
-                disabled={s.recordFormat === "gif"}
+                checked={!linuxGifOnly && s.recordFormat === "mp4" && s.recordMic}
+                disabled={linuxGifOnly || s.recordFormat === "gif"}
                 onChange={(v) => set("recordMic", v)}
               />
             </Row>
@@ -413,8 +437,8 @@ export default function Settings() {
             >
               <Toggle
                 label={t("Record system audio")}
-                checked={s.recordFormat === "mp4" && s.recordSystemAudio}
-                disabled={s.recordFormat === "gif"}
+                checked={!linuxGifOnly && s.recordFormat === "mp4" && s.recordSystemAudio}
+                disabled={linuxGifOnly || s.recordFormat === "gif"}
                 onChange={(v) => set("recordSystemAudio", v)}
               />
             </Row>
@@ -433,7 +457,12 @@ export default function Settings() {
                 onChange={(v) => set("recordMaxSeconds", Number(v))}
               />
             </Row>
-            {s.recordFormat === "gif" && (
+            {linuxGifOnly && (
+              <p className="text-xs text-muted" role="status">
+                {t("On Linux, silent GIF recording is available. MP4, audio and recorded cursor are not supported.")}
+              </p>
+            )}
+            {(linuxGifOnly || s.recordFormat === "gif") && (
               <p className="text-xs text-muted">
                 {t("GIF exports are limited to 960 px and 256 colors per frame.")}
               </p>

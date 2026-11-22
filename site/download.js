@@ -3,16 +3,20 @@
    Snapvere — /download/ (thank-you) stranica
 
    /download/?os=windows&from=hero
-     → download krene sam nakon kratke pauze, GA dobije `file_download`
-       (os, placement = odakle je klik došao, method = auto).
+     → download počinje nakon korisničkog odabira, bez analitike.
    /download/ bez ?os
      → samo gumb, ništa se ne skida samo od sebe (sigurno za linkove
        poput /download/#install i za posjetitelje iz tražilice).
    Mobitel / OS bez builda → bez auto-downloada, jasna poruka.
    ───────────────────────────────────────────────────────────── */
 const CFG = window.SNAPVERE || { version: "", downloads: {} };
-const OS_LABEL = { windows: "Windows", mac: "macOS" };
-const track = (name, params) => window.snapvereTrack && window.snapvereTrack(name, params);
+const OS_LABEL = Object.freeze({ windows: "Windows", mac: "macOS" });
+
+// URL parameters must match explicit keys: objects also inherit names such as
+// "constructor", "toString" and "__proto__", which are not operating systems.
+function supportedOS(value) {
+  return typeof value === "string" && Object.hasOwn(OS_LABEL, value) ? value : null;
+}
 const AUTO_DELAY_MS = 900;
 
 function detectOS() {
@@ -29,18 +33,6 @@ const $ = (id) => document.getElementById(id);
 
 function fileName(url) {
   return decodeURIComponent(url.split("/").pop() || "");
-}
-
-function eventParams(os, url, extra) {
-  const name = fileName(url);
-  return {
-    os,
-    app_version: CFG.version,
-    file_name: name,
-    file_extension: name.split(".").pop(),
-    link_url: url,
-    ...extra,
-  };
 }
 
 // Gumb pokazuje ikonu, tekst i ime fajla za zadani OS.
@@ -62,17 +54,13 @@ function wireEditionLinks() {
     const url = CFG.downloads[key];
     if (!url) { el.hidden = true; return; }
     el.href = url;
-    el.addEventListener("click", () => {
-      track("file_download", eventParams("windows", url, { placement: "edition-selector", method: "button" }));
-    });
   });
 }
 
 function render() {
   wireEditionLinks();
   const q = new URLSearchParams(location.search);
-  const wanted = OS_LABEL[q.get("os")] ? q.get("os") : null;
-  const from = (q.get("from") || "direct").slice(0, 24);
+  const wanted = supportedOS(q.get("os"));
   const device = detectOS();
   const v = CFG.version ? `v${CFG.version} ` : "";
 
@@ -94,9 +82,7 @@ function render() {
       "It lands here as soon as it’s cleared for release. The Windows build is ready today.";
     const winUrl = setButton("windows");
     note.textContent = "Windows editions are available below. Other platforms will appear here after release testing.";
-    track("download_unavailable", { os: target, placement: from });
     $("dl-btn").addEventListener("click", () => {
-      track("file_download", eventParams("windows", winUrl, { placement: from, method: "button" }));
       started();
     });
     return;
@@ -118,12 +104,6 @@ function render() {
     retry.href = url;
     note.replaceChildren(document.createTextNode("Didn’t start? "), retry, document.createTextNode("."));
 
-    // ponovni klik (link ili veliki gumb) = retry, ne novi download u statistici
-    [$("dl-retry"), $("dl-btn")].forEach((el) =>
-      el.addEventListener("click", () => track("download_retry", { os: target, placement: from }))
-    );
-
-    track("file_download", eventParams(target, url, { placement: from, method: "auto" }));
     setTimeout(() => {
       window.location.assign(url);
       started();
@@ -136,7 +116,6 @@ function render() {
       sub.textContent = `This looks like a ${OS_LABEL[device]} computer — the installer below is for ${OS_LABEL[target]}.`;
     }
     $("dl-btn").addEventListener("click", () => {
-      track("file_download", eventParams(target, url, { placement: from, method: "button" }));
       started();
     });
   }

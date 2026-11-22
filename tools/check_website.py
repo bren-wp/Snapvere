@@ -16,6 +16,8 @@ EXPECTED = {
     "Snapvere-Setup.msi",
 }
 FORBIDDEN_PUBLIC_DOMAINS = ("github.com", "ko-fi.com", "paypal.com", "paypal.me")
+TAURI_RELEASES_PAGE = SITE / "download/tauri/index.html"
+TAURI_RELEASES_URL = "https://github.com/bren-wp/Snapvere/releases"
 
 
 class Links(HTMLParser):
@@ -41,7 +43,8 @@ def verify_site() -> None:
         parser.feed(text)
         for tag, url in parser.urls:
             host = urlparse(url).hostname
-            if host and any(host == name or host.endswith("." + name) for name in FORBIDDEN_PUBLIC_DOMAINS):
+            official_release = page == TAURI_RELEASES_PAGE and tag == "a" and url == TAURI_RELEASES_URL
+            if not official_release and host and any(host == name or host.endswith("." + name) for name in FORBIDDEN_PUBLIC_DOMAINS):
                 raise AssertionError(f"External public link in {page}: {url}")
             if tag in ("img", "script") and url.startswith("/"):
                 asset = SITE / url.lstrip("/").split("?")[0]
@@ -53,7 +56,9 @@ def verify_site() -> None:
             continue
         text = path.read_text(encoding="utf-8").lower()
         for domain in FORBIDDEN_PUBLIC_DOMAINS:
-            if domain in text:
+            official_release = (domain == "github.com" and path == TAURI_RELEASES_PAGE and
+                                text.count(domain) == 1 and TAURI_RELEASES_URL.lower() in text)
+            if domain in text and not official_release:
                 raise AssertionError(f"Unexpected third-party promotional URL in {path}: {domain}")
         for placeholder in ("support-links", "data-support-link", "private upload coming"):
             if placeholder in text:
@@ -84,12 +89,17 @@ def verify_site() -> None:
     for name in EXPECTED | {"SHA256SUMS.txt"}:
         assert f"/files/{name}" in config, f"Release link missing in config: {name}"
 
+    winui = (SITE / "download/index.html").read_text(encoding="utf-8")
+    tauri = TAURI_RELEASES_PAGE.read_text(encoding="utf-8")
+    assert "WinUI/.NET" in winui and "/download/tauri/" in winui
+    assert "Tauri/Rust" in tauri and TAURI_RELEASES_URL in tauri
+    assert "/files/Snapvere-" not in tauri, "Tauri downloads must not refer to WinUI packages"
     homepage = (SITE / "index.html").read_text(encoding="utf-8")
     assert '/screenshots/home.png' in homepage
     assert '/screenshots/settings.png' in homepage
     assert "Brendigo" in homepage and "Snapvere" in homepage
     assert "snapvere.com" in homepage
-    print(f"Snapvere site verified: {len(html_files)} pages, all 3 packages + checksums, 0 forbidden public links")
+    print(f"Snapvere site verified: {len(html_files)} pages, all 3 packages + checksums, only one approved Tauri GitHub release link")
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseVersion, isNewerVersion, parseUpdateManifest, checkForUpdates,
-  UPDATE_PRODUCT, UPDATE_FEED_URL, OFFICIAL_DOWNLOAD_URL } from '../src/lib/updateFeed.ts';
+  UPDATE_PRODUCT, UPDATE_FEED_URL, OFFICIAL_DOWNLOAD_URL, canCheckWindowsUpdates } from '../src/lib/updateFeed.ts';
 
 test('accepts numeric versions and compares all components, not strings', () => {
   assert.deepEqual(parseVersion('2.10.0'), [2, 10, 0]);
@@ -16,12 +16,15 @@ test('accepts numeric versions and compares all components, not strings', () => 
 });
 
 test('accepts only Tauri-Windows edition and official download host', () => {
+  assert.equal(OFFICIAL_DOWNLOAD_URL, 'https://snapvere.com/download/tauri/');
   const valid = { product: UPDATE_PRODUCT, version: '0.2.20', download_url: OFFICIAL_DOWNLOAD_URL,
     notes: 'Bug fixes' };
   assert.deepEqual(parseUpdateManifest(valid, '0.2.19'), {version:'0.2.20', notes:'Bug fixes'});
   assert.equal(parseUpdateManifest(valid, '0.2.21'), null);
   assert.throws(() => parseUpdateManifest({...valid, product:'snapvere-winui-windows'}, '0.2.19'));
   assert.throws(() => parseUpdateManifest({...valid, download_url:'https://github.com/example'}, '0.2.19'));
+  assert.throws(() => parseUpdateManifest({...valid, download_url:'https://snapvere.com/download/'}, '0.2.19'));
+  assert.throws(() => parseUpdateManifest({...valid, download_url:'https://snapvere.com/files/Snapvere-Setup.exe'}, '0.2.19'));
   assert.throws(() => parseUpdateManifest({...valid, notes:'x'.repeat(900)}, '0.2.19'));
   assert.throws(() => parseUpdateManifest([], '0.2.19'));
 });
@@ -76,10 +79,19 @@ test('dismissed update banner stays closed for the same version and returns on a
   assert.equal(shouldShowReleaseNotice({version:'0.2.26', notes:''}, '0.2.25'), true);
 });
 
-test("manual update check preference supports opt-out and default-on migration", async () => {
+test("update feed is offline until the user explicitly opts in", async () => {
   const { autoUpdateChecksEnabled } = await import('../src/lib/updateFeed.ts');
-  assert.equal(autoUpdateChecksEnabled(null), true);
+  assert.equal(autoUpdateChecksEnabled(null), false);
   assert.equal(autoUpdateChecksEnabled('true'), true);
   assert.equal(autoUpdateChecksEnabled('false'), false);
-  assert.equal(autoUpdateChecksEnabled('old-preference'), true);
+  assert.equal(autoUpdateChecksEnabled('old-preference'), false);
+  assert.equal(autoUpdateChecksEnabled('TRUE'), false);
+  assert.equal(autoUpdateChecksEnabled(''), false);
+});
+
+test('native update channel rejects Linux and unknown OS before any Windows feed request', () => {
+  assert.equal(canCheckWindowsUpdates('windows'), true);
+  for (const platform of ['linux', 'macos', '', null]) {
+    assert.equal(canCheckWindowsUpdates(platform), false, String(platform));
+  }
 });

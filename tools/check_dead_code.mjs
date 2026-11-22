@@ -19,8 +19,9 @@ function walk(dir) {
 }
 const all = walk(src).filter((p) => /\.(tsx?|jsx?)$/.test(p) && !p.endsWith(".d.ts"));
 const allSet = new Set(all);
-const entrypoints = [path.join(src, "main.tsx"),
-  ...walk(path.join(project, "tests")).filter((p) => /\.(mjs|js|ts|tsx)$/.test(p))];
+// Tests cannot justify shipping a module that the app never imports.
+// Only the production Vite/Tauri frontend entrypoint proves runtime reachability.
+const entrypoints = [path.join(src, "main.tsx")];
 const reachable = new Set();
 function visit(file) {
   if (reachable.has(file)) return;
@@ -55,5 +56,5 @@ if (orphaned.length) {
   console.error("Unused production TS modules (delete or wire them into the app):\n" + orphaned.join("\n"));
   process.exitCode = 1;
 } else {
-  console.log("Dead-code module graph OK: " + all.length + " production TS/TSX modules reachable via app/tests");
+  console.log("Production dead-code graph OK: " + all.length + " TS/TSX modules reachable from main.tsx (tests excluded)");
 }

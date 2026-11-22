@@ -1,4 +1,4 @@
-name: Snapvere Windows release
+name: Snapvere Windows and Linux preview release
 on:
   push:
     branches: [main]
@@ -12,13 +12,91 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: snapvere-windows-release-main
+  group: snapvere-desktop-release-main
   cancel-in-progress: false
 jobs:
+  linux-build:
+    name: Build Linux preview .deb and AppImage from release revision
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install Tauri and xcap Linux native dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential pkg-config libssl-dev libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev \
+            libclang-dev libxcb1-dev libxrandr-dev libdbus-1-dev \
+            libpipewire-0.3-dev libwayland-dev libegl-dev libgbm-dev libfuse2t64
+      - name: Verify required GBM development linker library
+        run: |
+          pkg-config --exists gbm
+          pkg-config --modversion gbm
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+      - name: Install locked JS dependencies
+        working-directory: apps/desktop
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Shared frontend and Linux native acceptance gates
+        working-directory: apps/desktop
+        run: |
+          npm run lint
+          npm run test:unit
+          npm run build
+      - name: Native Linux Rust checks
+        working-directory: apps/desktop/src-tauri
+        run: |
+          cargo fmt --all -- --check
+          cargo test --locked
+          cargo clippy --all-targets --locked -- -D warnings
+      - name: Build both Linux distribution packages
+        working-directory: apps/desktop
+        run: npm run tauri -- build --bundles deb,appimage
+      - name: Verify packages and generate Linux checksum manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          deb=(apps/desktop/src-tauri/target/release/bundle/deb/*.deb)
+          images=(apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage)
+          [[ ${#deb[@]} == 1 && ${#images[@]} == 1 ]] || {
+            echo "::error::Expected exactly one .deb and one .AppImage"
+            exit 1
+          }
+          test "$(stat -c%s "${deb[0]}")" -gt 1000000
+          test "$(stat -c%s "${images[0]}")" -gt 1000000
+          mkdir -p dist-linux
+          cp -- "${deb[0]}" dist-linux/Snapvere-Linux-amd64.deb
+          cp -- "${images[0]}" dist-linux/Snapvere-Linux-x86_64.AppImage
+          chmod 755 dist-linux/Snapvere-Linux-x86_64.AppImage
+          (cd dist-linux && sha256sum Snapvere-Linux-amd64.deb Snapvere-Linux-x86_64.AppImage > SHA256SUMS-Linux.txt)
+          (cd dist-linux && sha256sum --check SHA256SUMS-Linux.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Snapvere-Linux-release-${{ github.sha }}
+          path: dist-linux/*
+          if-no-files-found: error
+          retention-days: 90
+
   windows-release:
+    needs: linux-build
     permissions:
       contents: write
-    name: Build and publish Windows Portable / NSIS / MSI
+    name: Verify Windows packages and publish Windows + Linux preview
     runs-on: windows-latest
     timeout-minutes: 85
     steps:
@@ -129,6 +207,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Extension security policy failed" }
           python tools/audit_browser_extension_graph.py
           if ($LASTEXITCODE -ne 0) { throw "Unreachable or stale browser asset found" }
+          python tools/check_extension_privacy.py
+          if ($LASTEXITCODE -ne 0) { throw "Extension privacy audit failed" }
+          node tools/check_translation_coverage.mjs
+          if ($LASTEXITCODE -ne 0) { throw "UI translation coverage audit failed" }
           python tools/check_extension_design_tokens.py
           if ($LASTEXITCODE -ne 0) { throw "Browser UI and Windows design palette diverged" }
           foreach ($browser in @('chrome','firefox','edge','brave','opera','vivaldi','safari')) {
@@ -149,7 +231,12 @@ jobs:
       - name: Build Windows NSIS EXE and WiX MSI bundles
         working-directory: apps/desktop
         run: npm run tauri -- build --bundles nsis,msi
-      - name: Collect and verify ALL THREE release packages
+      - name: Download already verified Linux preview packages from this commit
+        uses: actions/download-artifact@v4
+        with:
+          name: Snapvere-Linux-release-${{ github.sha }}
+          path: dist-linux
+      - name: Collect and verify Windows and Linux release packages
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -165,6 +252,26 @@ jobs:
           Copy-Item $portable (Join-Path $dist "Snapvere-Portable.exe")
           Copy-Item $nsis.FullName (Join-Path $dist "Snapvere-Setup.exe")
           Copy-Item $msi.FullName (Join-Path $dist "Snapvere-Setup.msi")
+          $linuxNames = @('Snapvere-Linux-amd64.deb','Snapvere-Linux-x86_64.AppImage')
+          $linuxHashes = @{}
+          $linuxManifest = Join-Path $PWD 'dist-linux/SHA256SUMS-Linux.txt'
+          if (-not (Test-Path $linuxManifest)) { throw 'Missing Linux QA checksum manifest' }
+          foreach ($line in @(Get-Content $linuxManifest)) {
+            if ($line -notmatch '^([0-9a-f]{64})  (Snapvere-Linux-(?:amd64\.deb|x86_64\.AppImage))$') {
+              throw "Unexpected Linux checksum entry: $line"
+            }
+            if ($linuxHashes.ContainsKey($Matches[2])) { throw "Duplicate Linux package: $($Matches[2])" }
+            $linuxHashes[$Matches[2]] = $Matches[1]
+          }
+          if ($linuxHashes.Count -ne $linuxNames.Count) { throw 'Incomplete Linux manifest' }
+          foreach ($name in $linuxNames) {
+            $file = Join-Path $PWD "dist-linux/$name"
+            if (-not (Test-Path $file)) { throw "Missing Linux package: $name" }
+            if ((Get-Item $file).Length -lt 1000000) { throw "Undersized Linux package: $name" }
+            $actualHash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actualHash -ne $linuxHashes[$name]) { throw "Linux checksum mismatch: $name" }
+            Copy-Item $file (Join-Path $dist $name)
+          }
           python tools/generate_sbom.py --output "dist-installers/Snapvere-SBOM.cdx.json"
           if ($LASTEXITCODE -ne 0) { throw "Could not generate supply-chain SBOM" }
           # Reproducible, per-browser extension source ZIPs are shipped in the
@@ -185,10 +292,10 @@ jobs:
           $feed = Get-Content (Join-Path $dist 'Snapvere-update-stable.json') -Raw | ConvertFrom-Json
           if ($feed.product -ne 'snapvere-tauri-windows' -or
               $feed.version -ne "${{ steps.version.outputs.value }}" -or
-              $feed.download_url -ne 'https://snapvere.com/download/') {
+              $feed.download_url -ne 'https://snapvere.com/download/tauri/') {
             throw 'Invalid release version manifest; refusing publication'
           }
-          $expected = @('Snapvere-Portable.exe','Snapvere-Setup.exe','Snapvere-Setup.msi')
+          $expected = @('Snapvere-Portable.exe','Snapvere-Setup.exe','Snapvere-Setup.msi') + $linuxNames
           foreach ($name in $expected) {
             $f = Join-Path $dist $name
             if (-not (Test-Path $f)) { throw "Required Windows artifact missing: $name" }
@@ -206,10 +313,28 @@ jobs:
       - name: Upload verified installers as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Snapvere-v${{ steps.version.outputs.value }}-Windows
+          name: Snapvere-v${{ steps.version.outputs.value }}-Windows-and-Linux
           path: dist-installers/*
           if-no-files-found: error
           retention-days: 90
+      - name: Reconcile metadata of previously mislabelled unsigned preview v0.2.25
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = 'v0.2.25'
+          $repo = '${{ github.repository }}'
+          $existing = gh api "repos/$repo/releases/tags/$tag" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or !$existing.id) { throw "Cannot inspect previous release $tag" }
+          if (-not $existing.draft -and -not $existing.prerelease) {
+            gh release edit $tag --repo $repo --prerelease
+            if ($LASTEXITCODE -ne 0) { throw "Cannot restore prerelease status for $tag" }
+          }
+          $verified = gh api "repos/$repo/releases/tags/$tag" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or -not $verified.prerelease) {
+            throw "Previous unsigned preview $tag still appears stable"
+          }
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -221,24 +346,27 @@ jobs:
           fail_on_unmatched_files: true
           files: dist-installers/*
           body: |
-            # Snapvere v${{ steps.version.outputs.value }} — Windows
+            # Snapvere v${{ steps.version.outputs.value }} — Windows + Linux previews
             Branded by **Brendigo** · https://brendigo.com · https://snapvere.com
 
             ### Download
             - **Snapvere-Portable.exe** — run directly; no installer or administrator access required (Windows WebView2 runtime is required)
             - **Snapvere-Setup.exe** — NSIS installer
             - **Snapvere-Setup.msi** — MSI installer
+            - **Snapvere-Linux-amd64.deb** — Linux amd64 preview; install on compatible Debian/Ubuntu distributions
+            - **Snapvere-Linux-x86_64.AppImage** — Linux x86_64 preview AppImage (requires compatible system libraries)
             - **SHA256SUMS.txt** — integrity checksums for all packages and the dependency inventory
             - **Snapvere-SBOM.cdx.json** — reproducible CycloneDX 1.6 dependency inventory from npm and Cargo lockfiles
             - **Seven browser extension ZIP packages v0.2.2** — Chrome, Firefox, Edge, Brave, Opera, Vivaldi and Safari independently bundled source packages (Safari requires Apple packaging/signing)
             - **Snapvere-update-stable.json** — server-ready version notification manifest; upload it as `stable.json` to your configured `update.snapvere.com` only after the matching Tauri release is available on the official download page
 
-            All ten Windows installer/browser extension artifacts, the SBOM and the update manifest are covered by SHA256SUMS.txt.
+            All Windows and Linux installers, the seven browser extensions, the SBOM and the update manifest are covered by SHA256SUMS.txt.
             The browser ZIPs are developer/source packages, not approved or signed browser-store distributions.
 
-            All three Windows executables originate from the same Tauri build, and the seven extension ZIPs are generated from audited source at the same release commit.
+            All three Windows executables and both Linux bundles are compiled from the **same Git revision**; the seven extension ZIPs are generated from audited source at that commit.
 
             ### Changes in v${{ steps.version.outputs.value }}
+            - Separate Tauri/Rust update notices from incompatible WinUI/.NET website installers.
             - Fix the collapsed browser extension popup shown in compact browser
               toolbar windows: stable document sizing, readable one-line actions,
               proper icon/label alignment and responsive dark/light layout.
@@ -249,6 +377,7 @@ jobs:
               A newer release can notify again; startup checks remain optional.
             - Keep official HTTPS-only, time-bounded, version-only update checks
               and a user-initiated download link; no silent installer execution.
+            - Mark the previous unsigned v0.2.25 metadata as prerelease and enforce the same status for the new packages.
             - Preserve private offline capture, PrintScreen, local gallery,
               clipboard transfer and existing least-privilege permissions.
             - Enforce TypeScript, Rust tests/Clippy, RustSec and SHA-256 release
@@ -259,7 +388,9 @@ jobs:
             are opened on the official website and should be verified against
             publisher signatures and published SHA-256 hashes.
 
-            **Preview release.** Native Windows 10/11 capture, recorder, audio, multi-monitor,
+            **Preview release.** Linux uses the same React/Tauri design, screenshot/editor/gallery and silent GIF backend; Linux MP4, microphone, system audio and recorded mouse cursor are not implemented. Linux X11/Wayland compatibility needs physical QA.
+
+            Native Windows 10/11 capture, recorder, audio, multi-monitor,
             accessibility, install/upgrade/uninstall and 1:1 visual comparisons are not yet
             confirmed on representative physical Windows devices. CI does not substitute for QA.
 
@@ -294,6 +425,8 @@ jobs:
             'Snapvere-Portable.exe',
             'Snapvere-Setup.exe',
             'Snapvere-Setup.msi',
+            'Snapvere-Linux-amd64.deb',
+            'Snapvere-Linux-x86_64.AppImage',
             'Snapvere-SBOM.cdx.json',
             'Snapvere-update-stable.json',
             'SHA256SUMS.txt'
@@ -320,4 +453,4 @@ jobs:
           if ($unhashed.Count -ne 0 -or $checksumFiles.Count -ne ($requiredAssets.Count - 1)) {
             throw "Published release assets are not fully covered by SHA256SUMS.txt"
           }
-          Write-Host "Verified $($requiredAssets.Count) published assets ($($browserZips.Count) browser extensions and all Windows packages)."
+          Write-Host "Verified $($requiredAssets.Count) assets including Linux packages, seven browser extensions, and Windows installers."

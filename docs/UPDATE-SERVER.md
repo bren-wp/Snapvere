@@ -1,6 +1,6 @@
 # SNAPVERE — self-hosted update notifications
 
-This is the **Tauri/Rust Windows** distribution of SNAPVERE, not the separately distributed WinUI/.NET edition. Update checks are optional, informational, and cannot silently execute installers. Only upload a manifest when the corresponding installer has been tested and placed on the official SNAPVERE download site.
+This is the **Tauri/Rust Windows** distribution of SNAPVERE, not the separately distributed WinUI/.NET edition. Update checks are optional, informational, and cannot silently execute installers. Only upload a manifest when the matching Tauri installer is published and its checksum and edition verified on the dedicated download page. Never use the WinUI website version for a Tauri feed.
 
 ## 1. Prepare `update.snapvere.com`
 
@@ -17,11 +17,11 @@ The contents must be a small UTF-8 JSON document (maximum 8192 bytes), with `Con
   "product": "snapvere-tauri-windows",
   "version": "0.2.20",
   "notes": "Fixed crashes and improved capture reliability.",
-  "download_url": "https://snapvere.com/download/"
+  "download_url": "https://snapvere.com/download/tauri/"
 }
 ```
 
-The `version` field must be a strictly numeric `major.minor.patch`. **Version 0.2.20 is only an example** — do not post it unless a corresponding, tested 0.2.20 Tauri/Rust installer is actually available on the official download page. Do not mix public WinUI binaries with Tauri/Rust update packages.
+The separate Tauri channel is `/download/tauri/`, linking only to official GitHub Releases. `/download/` remains the WinUI/.NET v0.2.4 channel. The `version` field must be a strictly numeric `major.minor.patch`. **Version 0.2.20 is only an example** — do not post it unless a corresponding, tested 0.2.20 Tauri/Rust installer is actually available on the official download page. Do not mix public WinUI binaries with Tauri/Rust update packages.
 
 Example static site configuration (Nginx; provide your own certificate/key securely):
 
@@ -51,7 +51,7 @@ Upload the manifest atomically (write to a temporary file then rename it) **afte
 
 At startup, Home performs a 6.5-second maximum, cache-disabled, credential-free GET to the exact URL above. While visible, the app checks at most hourly, and it rechecks upon regaining focus if at least five minutes have elapsed; **no hidden-window polling or background service** is required. Settings → About performs the same check and offers a manual **Check for updates** button. Settings also provides **Check automatically on startup**, enabled by default and optional. Unavailable DNS, invalid JSON, an unchanged/older version or an offline PC must never stop normal capture/recording.
 
-If the manifest version is newer than the app's local version, Home shows a localized notification. The user may open Settings, where a button opens **only** `https://snapvere.com/download/`. No data or binary URLs from untrusted JSON are followed; malformed, nonofficial download URLs are rejected. The app does **not** download, execute or silently install a binary.
+If the manifest version is newer than the app's local version, Home shows a localized notification. The user may open Settings, where a button opens **only** `https://snapvere.com/download/tauri/`. No data or binary URLs from untrusted JSON are followed; malformed, nonofficial download URLs are rejected. The app does **not** download, execute or silently install a binary.
 
 Only the public feed is requested; no screenshots, recordings, file paths, personal settings, activation data or telemetry are sent by the update code. A normal HTTPS request may expose the device's IP address and generic HTTP client information to the server; disclose that in your website privacy notice.
 

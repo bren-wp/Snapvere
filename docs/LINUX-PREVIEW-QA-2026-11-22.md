@@ -1,0 +1,49 @@
+# Snapvere Linux desktop preview — native platform acceptance (2026-11-22)
+
+The Linux application is built from the exact **same Tauri/Rust and React source**
+as the Windows application. All screens, CSS design tokens, localization,
+gallery/editor logic and component sizes are shared rather than rebuilt.
+
+## Current verified implementation boundary (not a claim of device QA)
+
+| Capability | Windows (existing code path) | Linux (new preview code path) |
+|---|---|---|
+| Shared Home, Settings, Gallery, Viewer, Editor themes | Shared React | Identical source |
+| Offline SQLite gallery, search, delete, local image export | Supported in code | Shared native Rust |
+| PNG/JPEG/WebP screenshots, selection | xcap/DXGI | xcap (X11; Wayland depends on portal/runtime) |
+| GIF recording with pause/resume/stop and blur | Native recorder | xcap frame loop + GIF encoder |
+| MP4/H.264 recording and microphone/system audio | Media Foundation/WASAPI | **Not available**; native capability UI disables |
+| Embed mouse cursor into recorded frame | Win32 cursor compositor | **Not available**; capability UI disables |
+| Global hotkey / tray / automatic start | Windows APIs | Linux desktop environment dependent |
+| Packaging | Portable.exe, NSIS, MSI | amd64 .deb, x86_64 AppImage |
+| Code signing, genuine Linux runtime QA | Incomplete | **Not completed** |
+
+The Linux native CI builds both Linux packages using Ubuntu 24.04, with
+Tauri/WebKitGTK and xcap's system libraries installed. It runs locked Rust
+tests, Clippy with errors on warnings, React TypeScript tests and verifies
+SHA-256 for both artifacts. Those outputs are **private QA artifacts** until
+all build checks succeed; they are not published as a stable product.
+
+## Required real Linux device acceptance
+
+- Ubuntu 24.04 and Debian 12: test .deb install, launch, close-to-tray,
+  uninstall, updates and local capture recovery.
+- X11 with multiple monitors, mixed scaling, negative coordinates: test
+  screenshot, region overlay alignment, GIF record, pause/resume,
+  clipboard, keyboard shortcuts, data integrity and privacy.
+- GNOME/KDE Wayland: verify xcap portal handling; if unsupported, report a
+  clear error and do not claim universal Wayland parity.
+- Compare actual Windows and Linux screenshots at identical CSS viewport
+  sizes, DPI scales and color themes. No 'pixel-perfect' claim without
+  measured image-difference results.
+- Test long captures, disk exhaustion, corrupt SQLite, SIGKILL during GIF
+  finalization, login startup, browser handoff, locale and accessibility.
+- Verify sandbox / portal permissions, installed files and dependencies.
+- Publish Linux assets **only in a GitHub prerelease** after Linux CI
+  succeeds. Both packages and their SHA-256 must be in the same versioned
+  release as the matching Windows builds; never overwrite WinUI website EXEs.
+
+Linux MP4 and audio parity is a separate native implementation objective.
+Never silently export GIF when a user explicitly selects MP4; treat explicit
+MP4/audio requests as unsupported. Legacy saved Windows preferences are
+normalized to GIF for the Linux tray/overlay only.

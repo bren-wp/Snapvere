@@ -13,7 +13,8 @@ pub fn is_background_start(args: impl IntoIterator<Item = String>) -> bool {
 
 // Unset means fresh installation. Invalid stored values must not change Windows startup.
 fn should_autostart(preference: Option<Option<bool>>) -> Option<bool> {
-    preference.unwrap_or(Some(true))
+    // Preserve Windows tray-first startup; Linux requires explicit opt-in.
+    preference.unwrap_or(Some(cfg!(windows)))
 }
 
 pub fn sync_autostart(app: &tauri::AppHandle) {
@@ -33,7 +34,7 @@ pub fn sync_autostart(app: &tauri::AppHandle) {
     let enabled = match should_autostart(stored.as_ref().map(|value| value.as_bool())) {
         Some(enabled) => enabled,
         None => {
-            log("autostart: invalid stored preference; Windows startup unchanged");
+            log("autostart: invalid stored preference; system startup unchanged");
             return;
         }
     };
@@ -73,7 +74,7 @@ mod tests {
 
     #[test]
     fn default_is_enabled_but_explicit_user_opt_out_is_respected() {
-        assert_eq!(should_autostart(None), Some(true));
+        assert_eq!(should_autostart(None), Some(cfg!(windows)));
         assert_eq!(should_autostart(Some(Some(true))), Some(true));
         assert_eq!(should_autostart(Some(Some(false))), Some(false));
         assert_eq!(should_autostart(Some(None)), None);
