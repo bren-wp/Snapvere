@@ -249,7 +249,7 @@ jobs:
           $linuxManifest = Join-Path $PWD 'dist-linux/SHA256SUMS-Linux.txt'
           if (-not (Test-Path $linuxManifest)) { throw 'Missing Linux QA checksum manifest' }
           foreach ($line in @(Get-Content $linuxManifest)) {
-            if ($line -notmatch '^([0-9a-f]{64})  (Snapvere-Linux-(?:amd64\\.deb|x86_64\\.AppImage))$') {
+            if ($line -notmatch '^([0-9a-f]{64})  (Snapvere-Linux-(?:amd64\.deb|x86_64\.AppImage))$') {
               throw "Unexpected Linux checksum entry: $line"
             }
             if ($linuxHashes.ContainsKey($Matches[2])) { throw "Duplicate Linux package: $($Matches[2])" }
@@ -309,6 +309,24 @@ jobs:
           path: dist-installers/*
           if-no-files-found: error
           retention-days: 90
+      - name: Reconcile metadata of previously mislabelled unsigned preview v0.2.25
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = 'v0.2.25'
+          $repo = '${{ github.repository }}'
+          $existing = gh api "repos/$repo/releases/tags/$tag" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or !$existing.id) { throw "Cannot inspect previous release $tag" }
+          if (-not $existing.draft -and -not $existing.prerelease) {
+            gh release edit $tag --repo $repo --prerelease
+            if ($LASTEXITCODE -ne 0) { throw "Cannot restore prerelease status for $tag" }
+          }
+          $verified = gh api "repos/$repo/releases/tags/$tag" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or -not $verified.prerelease) {
+            throw "Previous unsigned preview $tag still appears stable"
+          }
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -351,6 +369,7 @@ jobs:
               A newer release can notify again; startup checks remain optional.
             - Keep official HTTPS-only, time-bounded, version-only update checks
               and a user-initiated download link; no silent installer execution.
+            - Mark the previous unsigned v0.2.25 metadata as prerelease and enforce the same status for the new packages.
             - Preserve private offline capture, PrintScreen, local gallery,
               clipboard transfer and existing least-privilege permissions.
             - Enforce TypeScript, Rust tests/Clippy, RustSec and SHA-256 release
