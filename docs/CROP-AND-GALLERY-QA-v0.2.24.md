@@ -88,3 +88,16 @@ Only the first `PAGE_SIZE` records enter React state or advance the SQL
 offset; the extra row is used solely to determine whether the Load more
 button should be shown. Unit tests cover exactly full, short, and overfull
 result pages as well as invalid page sizes.
+
+## Concurrent reload and page safety
+
+On every new query, category change, refresh and successful deletion the
+frontend invalidates older paging generations. The generation is checked before
+using any fetched results **and** before clearing the pending request's
+spinner in `finally`; older promises cannot reset the state of a newer request.
+A synchronous ref to loaded cards prevents stale deletion-offset calculations
+when React schedules several state updates close together.
+
+An initial gallery failure retains the centered retry option; a failed
+refresh with existing cards now keeps the cards but also shows a persistent
+retry banner so the user is not misled into thinking the results are current.

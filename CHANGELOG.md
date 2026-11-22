@@ -11,7 +11,8 @@
 - Add one-click **Copy file path** to every gallery card, using the existing Home-only native IPC clipboard command and localized feedback (no new webview permissions).
 - Look ahead by one SQLite result when loading each page, so **Load more** appears only if another older capture actually exists. The look-ahead row is neither rendered nor counted as loaded.
 - Apply **All / Images / Videos** in the SQLite query before pagination, instead of filtering only the first 120 loaded items.
-- Prevent missing older captures after deletion from a paginated gallery by adjusting the SQL offset and invalidating pre-deletion requests. Show a localized retry action instead of a misleading empty-gallery state when loading fails. Search, tags, and older capture paging now share the same bounded query. The native IPC permits only Home and Settings, never overlay, editor, or recorder views.
+- Prevent missing older captures after deletion from a paginated gallery by adjusting the SQL offset and invalidating pre-deletion requests.
+- Harden asynchronous gallery loading: newer searches and refreshes invalidate older paging tasks immediately, and stale completion handlers cannot cancel the busy state of a newer request. Persist a retry banner when a refresh fails but cached gallery cards remain visible. Show a localized retry action instead of a misleading empty-gallery state when loading fails. Search, tags, and older capture paging now share the same bounded query. The native IPC permits only Home and Settings, never overlay, editor, or recorder views.
 - Synchronize Cargo, Tauri and npm manifests/lockfiles to development version v0.2.24.
 - Keep v0.2.23 installers published until all new CI and physical Windows checks complete.
 

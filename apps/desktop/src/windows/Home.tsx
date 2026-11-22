@@ -48,14 +48,22 @@ export default function Home() {
   const [viewId, setViewId] = useState<string | null>(null);
   const galleryRequest = useRef(0);
   const pagingBusy = useRef(false);
+  const pagingToken = useRef(0);
   const pageOffset = useRef(0);
   const loadedItems = useRef<Screenshot[]>([]);
-  useEffect(() => {
-    loadedItems.current = items;
-  }, [items]);
+
+  // A new query, refresh, or deletion must supersede any older page request.
+  // Tokens also keep an obsolete promise's finally block from clearing the
+  // busy indicator of a newer request.
+  const invalidatePaging = useCallback(() => {
+    pagingToken.current += 1;
+    pagingBusy.current = false;
+    setLoadingMore(false);
+  }, []);
 
   const load = useCallback(async (q: string) => {
     const request = ++galleryRequest.current;
+    invalidatePaging();
     setLoading(true);
     setGalleryError(false);
     try {
@@ -65,6 +73,7 @@ export default function Home() {
       if (request === galleryRequest.current) {
         const { page, hasMore: more } = splitGalleryPage(res, PAGE_SIZE);
         pageOffset.current = page.length;
+        loadedItems.current = page;
         setItems(page);
         setHasMore(more);
       }
@@ -77,11 +86,12 @@ export default function Home() {
     } finally {
       if (request === galleryRequest.current) setLoading(false);
     }
-  }, [t, filter]);
+  }, [t, filter, invalidatePaging]);
 
   const loadMore = useCallback(async () => {
     if (pagingBusy.current || loading || !hasMore) return;
     pagingBusy.current = true;
+    const pageToken = ++pagingToken.current;
     const request = galleryRequest.current;
     const offset = pageOffset.current;
     setLoadingMore(true);
@@ -92,15 +102,19 @@ export default function Home() {
       if (request !== galleryRequest.current) return;
       const { page, hasMore: more } = splitGalleryPage(res, PAGE_SIZE);
       pageOffset.current = offset + page.length;
-      setItems((previous) => mergeUniqueById(previous, page));
+      const merged = mergeUniqueById(loadedItems.current, page);
+      loadedItems.current = merged;
+      setItems(merged);
       setHasMore(more);
     } catch (error) {
       if (request === galleryRequest.current) {
         setToast(`${t("Could not load older captures:")} ${String(error)}`);
       }
     } finally {
-      pagingBusy.current = false;
-      setLoadingMore(false);
+      if (pageToken === pagingToken.current) {
+        pagingBusy.current = false;
+        setLoadingMore(false);
+      }
     }
   }, [hasMore, loading, query, filter, t]);
 
@@ -163,21 +177,23 @@ export default function Home() {
       if (currentlyLoaded.some((item) => item.id === s.id)) {
         // Discard in-flight pages; their SQL offsets predate the deletion.
         galleryRequest.current += 1;
+        invalidatePaging();
         pageOffset.current = offsetAfterDeletingLoadedCapture(
           currentlyLoaded,
           s.id,
           pageOffset.current,
         );
-        setItems((prev) => prev.filter((x) => x.id !== s.id));
+        const remaining = currentlyLoaded.filter((item) => item.id !== s.id);
+        loadedItems.current = remaining;
+        setItems(remaining);
         setLoading(false);
-        setLoadingMore(false);
       }
       return true;
     } catch (e) {
       setToast(`${t("Could not delete capture:")} ${String(e)}`);
       return false;
     }
-  }, [t]);
+  }, [t, invalidatePaging]);
 
   const copyPath = useCallback(async (s: Screenshot) => {
     try {
@@ -373,6 +389,10 @@ export default function Home() {
               type="search"
               value={query}
               onChange={(e) => {
+                // Invalidate synchronously, before the 200 ms query debounce.
+                galleryRequest.current += 1;
+                invalidatePaging();
+                loadedItems.current = [];
                 setQuery(e.target.value);
                 setGalleryError(false);
                 setItems([]);
@@ -393,6 +413,9 @@ export default function Home() {
                 type="button"
                 onClick={() => {
                   if (filter === f) return;
+                  galleryRequest.current += 1;
+                  invalidatePaging();
+                  loadedItems.current = [];
                   setFilter(f);
                   setGalleryError(false);
                   setItems([]);
@@ -433,6 +456,20 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Keep older results visible after a failed refresh, but clearly label
+          them as stale and provide an explicit retry action. */}
+      {galleryError && visible.length > 0 && (
+        <div role="alert" className="mx-5 mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-elevated/85 px-4 py-3 text-sm">
+          <span>{t("Could not load the gallery")}</span>
+          <button
+            type="button"
+            onClick={() => void load(query)}
+            className="snapvere-btn-secondary rounded-full px-4 py-2 text-sm font-medium focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            {galleryText.retry}
+          </button>
+        </div>
+      )}
       {/* galerija */}
       <main className="min-h-0 flex-1 overflow-auto px-5 pb-5">
         {loading && items.length === 0 ? (
