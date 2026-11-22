@@ -2,6 +2,9 @@
 
 ## v0.2.25 — responsive browser extensions and bottom-right update notices (development)
 
+- Resolve Home toast collisions: the corner update notification moves up while a transient capture/action message is visible, preserving both messages without clipping or overlap.
+- Report accepted browser PNG downloads as started, rather than prematurely claiming completion before the browser finishes writing the file.
+
 - Restore normal popup width in Chrome, Edge, Brave, Opera, Vivaldi, Firefox and Safari by giving the extension document a stable preferred width instead of constraining `body` with `100vw`; polish icon/label alignment and small-window controls.
 - Bump the independently versioned browser source distributions to v0.2.2 and extend real Chromium layout checks at five viewport widths in dark and light modes.
 - Move the existing official first-party update alert in the Tauri Windows Home to a bottom-right in-app notification, preserve close-per-version across restarts and synchronize the Settings opt-out with Home.

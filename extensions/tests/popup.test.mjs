@@ -33,6 +33,7 @@ test("visible tab saves locally, other buttons are independent", async () => {
   popup.click("visible");
   await tick();
   assert.equal(popup.status.dataset.state, "success");
+  assert.match(popup.status.textContent, /download started/i);
   assert.equal(popup.note.textContent, "Snapvere/shot.png");
   assert.ok(popup.buttons.every(x => x.disabled === false));
 });

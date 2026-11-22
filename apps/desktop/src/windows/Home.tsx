@@ -572,7 +572,7 @@ export default function Home() {
         )}
       </main>
 
-      <UpdateNotice mode="home" onAction={openSettings} />
+      <UpdateNotice mode="home" onAction={openSettings} raised={toast !== null} />
 
       {viewId && (
         <Viewer

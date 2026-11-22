@@ -69,10 +69,12 @@ const AUTO_KEY = "snapvere-auto-update-check";
 const DISMISS_KEY = "snapvere-dismissed-update-version";
 
 export default function UpdateNotice({
-  mode, onAction,
+  mode, onAction, raised = false,
 }: {
   mode: "home" | "settings";
   onAction: () => void | Promise<void>;
+  /** Raise the corner notice above a transient Home action toast. */
+  raised?: boolean;
 }) {
   const { language } = useLanguage();
   const w = words[language] ?? en;
@@ -192,7 +194,7 @@ export default function UpdateNotice({
       aria-live="polite"
       aria-label={available ? w.available : w.check}
       className={mode === "home"
-        ? "fixed bottom-4 right-4 z-30 w-[min(380px,calc(100vw-2rem))] rounded-2xl border border-border bg-surface p-4 text-sm shadow-card ring-1 ring-white/10"
+        ? `fixed ${raised ? "bottom-20" : "bottom-4"} right-4 z-30 w-[min(380px,calc(100vw-2rem))] rounded-2xl border border-border bg-surface p-4 text-sm shadow-card ring-1 ring-white/10`
         : "rounded-xl border border-border bg-elevated/80 px-4 py-3 text-sm"}
     >
       {available ? (
