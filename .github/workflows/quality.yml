@@ -2,6 +2,7 @@ name: Snapvere build and quality checks
 on:
   push:
     branches:
+      - main
       - "feature/**"
       - "fix/**"
   pull_request:
@@ -71,6 +72,8 @@ jobs:
         run: python tools/check_tailwind4.py
       - name: Fail on unsafe dynamic HTML/code execution in public JavaScript
         run: python tools/check_frontend_security.py
+      - name: Verify least-privilege public website CSP and inline script hashes
+        run: python tools/check_site_csp.py
       - name: Verify first-party downloads, HTML links and checksums
         run: python tools/check_website.py
       - name: Verify installer EULA and block public GitHub links
@@ -135,8 +138,8 @@ jobs:
           node --check site/download.js
           node --check site/config.js
           python -m json.tool apps/desktop/src-tauri/tauri.conf.json > /dev/null
-      - name: Regression-test edition-isolated releases
-        run: node --test tools/tests/editionChannels.test.mjs
+      - name: Regression-test downloads, analytics consent and edition isolation
+        run: node --test tools/tests/*.test.mjs
       - name: Verify public surfaces are Snapvere branded
         shell: bash
         run: |
