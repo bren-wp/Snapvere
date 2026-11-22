@@ -160,7 +160,15 @@ with sync_playwright() as p:
     ).wait_for(timeout=5000)
     assert clipboard_import.is_enabled(), "Failed clipboard import must release capture controls"
     page.screenshot(path=str(OUTPUT / "home-clipboard-import-error.png"))
+    # A new install must never contact the update server automatically.
+    assert page.evaluate("() => (window.__SNAPVERE_TEST_UPDATE_REQUESTS || 0) === 0"), (
+        "Default desktop startup must not request an update feed"
+    )
     update_preview = app.new_page()
+    # A version notice is only expected after the user opted in explicitly.
+    update_preview.add_init_script(
+        "localStorage.setItem('snapvere-auto-update-check', 'true')"
+    )
     update_preview.goto("http://127.0.0.1:1420/?previewUpdate=1", wait_until="networkidle")
     update_preview.get_by_text("New Snapvere version available", exact=False).wait_for(timeout=10000)
     update_preview.get_by_role("button", name="View update in Settings").wait_for(timeout=10000)
