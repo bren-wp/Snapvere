@@ -265,7 +265,7 @@ fn gif_enkoder_daje_valjanu_animaciju() {
 
     let (w, h) = (64u32, 48u32);
     {
-        let mut enc = gifenc::GifEncoder::new(&path, w, h, 10).expect("GIF enkoder");
+        let mut enc = gifenc::GifEncoder::new(&path, w, h, 10, 80).expect("GIF enkoder");
         let mut frame = vec![0u8; (w * h * 4) as usize];
         for i in 0..6 {
             // Svaki frame druga boja — kvantizator tako mora proizvesti različit sadržaj.
@@ -300,13 +300,14 @@ fn gif_skalira_samo_prevelike_frameove() {
         800,
         600,
         10,
+        80,
     )
     .expect("GIF enkoder");
     small.finish().ok();
     let _ = std::fs::remove_file(std::env::temp_dir().join("snapvere-gif-small.gif"));
 
     let path = std::env::temp_dir().join("snapvere-gif-big.gif");
-    let mut big = gifenc::GifEncoder::new(&path, 2560, 1440, 10).expect("GIF enkoder");
+    let mut big = gifenc::GifEncoder::new(&path, 2560, 1440, 10, 80).expect("GIF enkoder");
     let frame = vec![120u8; (2560 * 1440 * 4) as usize];
     big.write(&frame).expect("GIF frame");
     big.finish().expect("GIF finish");
@@ -316,6 +317,41 @@ fn gif_skalira_samo_prevelike_frameove() {
     let width = u16::from_le_bytes([bytes[6], bytes[7]]);
     let height = u16::from_le_bytes([bytes[8], bytes[9]]);
     assert_eq!((width, height), (960, 540));
+    let _ = std::fs::remove_file(&path);
+}
+
+/// GIF kvaliteta mora utjecati na stvarni izlazni fajl, ne samo na UI postavku.
+#[test]
+fn gif_niza_kvaliteta_smanjuje_izlaznu_rezoluciju() {
+    let path = std::env::temp_dir().join(format!(
+        "snapvere-gif-quality-{}.gif",
+        std::process::id()
+    ));
+    let (w, h) = (1280u32, 720u32);
+    {
+        let mut low = gifenc::GifEncoder::new(&path, w, h, 10, 30)
+            .expect("GIF low-quality encoder");
+        // Valid frame with a gradient, so the encoder must process actual pixels.
+        let mut frame = vec![0u8; (w * h * 4) as usize];
+        for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
+            pixel[0] = (i % 256) as u8;
+            pixel[1] = ((i / w as usize) % 256) as u8;
+            pixel[2] = 100;
+            pixel[3] = 255;
+        }
+        low.write(&frame).expect("GIF frame");
+        low.finish().expect("GIF finish");
+    }
+    let data = std::fs::read(&path).expect("GIF output");
+    assert_eq!(&data[..6], b"GIF89a");
+    assert_eq!(
+        (
+            u16::from_le_bytes([data[6], data[7]]),
+            u16::from_le_bytes([data[8], data[9]])
+        ),
+        (480, 270),
+        "quality 30 must create a 480x270 GIF, not the quality-80 default"
+    );
     let _ = std::fs::remove_file(&path);
 }
 
