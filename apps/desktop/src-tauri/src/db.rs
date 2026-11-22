@@ -437,6 +437,46 @@ mod gallery_tests {
     }
 
     #[test]
+    fn existing_gallery_data_survives_timestamp_index_upgrade() -> anyhow::Result<()> {
+        let folder = std::env::temp_dir().join(format!(
+            "snapvere-index-upgrade-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&folder)?;
+        let path = folder.join("gallery.sqlite");
+        {
+            let db = Db::open(&path)?;
+            db.insert(&shot("persisted-capture", 200))?;
+        }
+        {
+            let connection = Connection::open(&path)?;
+            // Reproduce the pre-upgrade index layout on an existing DB file.
+            connection.execute_batch(
+                "DROP INDEX idx_screenshots_order;
+                 CREATE INDEX idx_screenshots_created ON screenshots(created_at DESC);",
+            )?;
+        }
+        {
+            let db = Db::open(&path)?;
+            assert!(db.get("persisted-capture")?.is_some());
+            assert_eq!(db.gallery_page("", "all", 10, 0)?.len(), 1);
+            let new_index: i64 = db.conn.query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name = 'idx_screenshots_order'",
+                [],
+                |row| row.get(0),
+            )?;
+            let old_index: i64 = db.conn.query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name = 'idx_screenshots_created'",
+                [],
+                |row| row.get(0),
+            )?;
+            assert_eq!((new_index, old_index), (1, 0));
+        }
+        std::fs::remove_dir_all(&folder)?;
+        Ok(())
+    }
+
+    #[test]
     fn stable_pagination_across_matching_timestamps() -> anyhow::Result<()> {
         let db = Db::open_in_memory()?;
         db.insert(&shot("same_a", 100))?;
