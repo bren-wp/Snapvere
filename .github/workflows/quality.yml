@@ -94,11 +94,12 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
+          from tools.build_browser_extensions import VERSION as extension_version
           path = Path("extension-package-validation/Snapvere-update-stable.json")
           data = json.loads(path.read_text(encoding="utf-8"))
           assert data["product"] == "snapvere-tauri-windows"
           assert data["download_url"] == "https://snapvere.com/download/"
-          assert len(list(path.parent.glob("Snapvere-*-extension-0.2.1.zip"))) == 7
+          assert len(list(path.parent.glob(f"Snapvere-*-extension-{extension_version}.zip"))) == 7
           print("All seven browser ZIPs and version-only update feed passed release rehearsal")
           PY
       - name: Reject duplicate release version before merging application changes

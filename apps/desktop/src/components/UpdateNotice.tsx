@@ -135,7 +135,10 @@ export default function UpdateNotice({
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
-      if (event.key === AUTO_KEY) setAutoEnabled(event.newValue !== "false");
+      if (event.key === AUTO_KEY) {
+        setAutoEnabled(event.newValue !== "false");
+        if (event.newValue === "false") setAvailable(null);
+      }
       if (event.key === DISMISS_KEY) setDismissedVersion(event.newValue);
     };
     window.addEventListener("storage", onStorage);
@@ -155,6 +158,7 @@ export default function UpdateNotice({
     catch { /* A blocked store must not break Settings. */ }
     if (!enabled) {
       controller.current?.abort();
+      setAvailable(null);
       setState("idle");
     }
   };
