@@ -79,3 +79,14 @@ test("capture failure is visible, bounded and restores actions", async () => {
   assert.match(popup.note.textContent, /denied/);
   assert.ok(popup.buttons.every(x => !x.disabled));
 });
+
+test("popup actions expose readable labels and a stable intrinsic width", () => {
+  const html = readFileSync(new URL("../source/popup.html", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../source/popup.css", import.meta.url), "utf8");
+  assert.equal((html.match(/class="action-label"/g) || []).length, 4);
+  assert.equal((html.match(/class="action-icon"/g) || []).length, 4);
+  assert.match(css, /html\s*\{[^}]*width:\s*376px/);
+  assert.match(css, /grid-template-columns:\s*24px minmax\(0, 1fr\)/);
+  assert.doesNotMatch(css, /width:\s*355px/);
+  assert.match(html, /content="light dark"/);
+});
