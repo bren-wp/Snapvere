@@ -214,7 +214,7 @@ export default function Viewer({ items, id, onNavigate, onClose, onDelete, onToa
           event.preventDefault();
           controls[wrap].focus({ preventScroll: true });
         }
-      }
+      }}
     >
       {/* gornja traka */}
       <header
