@@ -70,7 +70,9 @@ function makePage() {
       });
     },
     eventNames() {
-      return window.dataLayer.filter((args) => args[0] === "event").map((args) => args[1]);
+      // vm.Context arrays have a different realm/prototype; materialize in
+      // the Node test realm before using deepStrictEqual.
+      return Array.from(window.dataLayer).filter((args) => args[0] === "event").map((args) => args[1]);
     },
   };
 }
