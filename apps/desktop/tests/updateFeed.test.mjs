@@ -67,3 +67,11 @@ test('rejects HTML, failures and oversized response without changing product sta
     globalThis.fetch = prior;
   }
 });
+
+test('dismissed update banner stays closed for the same version and returns on a new release', async () => {
+  const { shouldShowReleaseNotice } = await import('../src/lib/updateFeed.ts');
+  assert.equal(shouldShowReleaseNotice(null, null), false);
+  assert.equal(shouldShowReleaseNotice({version:'0.2.25', notes:''}, null), true);
+  assert.equal(shouldShowReleaseNotice({version:'0.2.25', notes:''}, '0.2.25'), false);
+  assert.equal(shouldShowReleaseNotice({version:'0.2.26', notes:''}, '0.2.25'), true);
+});

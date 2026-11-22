@@ -115,3 +115,11 @@ export async function checkForUpdates(
     cancelSignal?.removeEventListener("abort", abort);
   }
 }
+
+/** Only a different, newer release may re-open a dismissed corner notice. */
+export function shouldShowReleaseNotice(
+  available: AvailableUpdate | null,
+  dismissedVersion: string | null,
+): boolean {
+  return available !== null && available.version !== dismissedVersion;
+}

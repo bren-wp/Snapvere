@@ -70,3 +70,23 @@ The current release packages' SHA-256 sums are useful integrity checks but are *
 3. Stop the server or block networking: the app should keep working, and Settings should show a retryable status.
 4. Check the site link, optional startup-check toggle and localizations in all twelve languages.
 5. Test on physical Windows 10/11 with 100%, 125%, 150%, 200% scaling and confirm no dialog is cropped.
+
+## 5. Corner notification after a new website release
+
+Version 0.2.25 moves the existing Home update notice to the **bottom-right
+of the app window** (not a system-wide Windows toast while Snapvere is hidden
+in the tray). When the user closes a notice, that exact version is remembered
+locally; a later published version can notify again. The Settings toggle and
+Home now synchronize through browser storage events. Users can still check
+manually from Settings and open the same official download page.
+
+**Deployment is a two-step publication**, never inferred from a changed web page:
+(1) publish and verify the signed/trusted Windows installer(s) and site links;
+(2) generate `stable.json` with `python tools/generate_update_manifest.py
+--version <published-version> --out stable.json`, then upload that file
+atomically to `https://update.snapvere.com/stable.json` with JSON MIME and
+CORS. Until step 2, existing installations do not know a new version exists.
+A version-only manifest never authorizes executing remote installers.
+
+This in-app notice is opt-out: disable automatic checks under Settings → About.
+It performs no tracking, telemetry, screenshot upload or unattended install.

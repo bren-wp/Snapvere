@@ -411,7 +411,6 @@ export default function Home() {
             <ArrowUpRight className="snapvere-action-arrow" size={17} aria-hidden="true" />
           </button>
         </div>
-        <div className="mt-3"><UpdateNotice mode="home" onAction={openSettings} /></div>
       </header>
 
       <section className="snapvere-gallery-controls shrink-0 px-5 py-4" aria-label={t("Gallery controls")}>
@@ -572,6 +571,8 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      <UpdateNotice mode="home" onAction={openSettings} />
 
       {viewId && (
         <Viewer
