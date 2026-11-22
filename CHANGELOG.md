@@ -1,5 +1,14 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.26 — Windows/Linux parity work and release-channel hardening (unreleased, pending CI/QA)
+
+- Avoid duplicate full Windows/Linux CI builds for one commit by running quality on PRs and post-merge main, with manual branch dispatch preserved.
+- Fail safely when a selected monitor is disconnected instead of silently capturing a different monitor; reject mismatched region and monitor IDs, with unit regression tests.
+- Clamp recorder HUD and annotation overlay positions across mixed-DPI and extreme virtual desktop coordinates.
+- Make GIF recording quality meaningful on both Windows and Linux: adjustable 480/720/960-pixel output cap and palette sampling effort, keeping quality 80 at the familiar 960-pixel maximum.
+- Keep GIF quality available in shared Settings, with browser regression checks for both platforms.
+- Full Windows/Linux physical QA, authenticated signing and publication remain pending.
+
 ## v0.2.26 — Windows edition channel isolation (unreleased, pending CI/QA)
 
 - Route Tauri/Rust updates to a dedicated download guide, never to incompatible WinUI/.NET installers.

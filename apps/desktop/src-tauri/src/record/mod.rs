@@ -529,7 +529,7 @@ fn open_encoder(
     with_audio: bool,
 ) -> Result<Encoder, String> {
     #[cfg(not(windows))]
-    let _ = (with_audio, quality);
+    let _ = with_audio;
     match format {
         #[cfg(windows)]
         RecordFormat::Mp4 => Ok(Encoder::Mp4(Box::new(mp4::Mp4Encoder::new(
@@ -546,7 +546,7 @@ fn open_encoder(
         #[cfg(not(windows))]
         RecordFormat::Mp4 => Err("MP4 snimanje je zasad dostupno samo na Windowsu".into()),
         RecordFormat::Gif => Ok(Encoder::Gif(Box::new(gifenc::GifEncoder::new(
-            path, w, h, fps,
+            path, w, h, fps, quality,
         )?))),
     }
 }

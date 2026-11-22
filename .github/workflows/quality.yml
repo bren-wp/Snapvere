@@ -1,10 +1,12 @@
 name: Snapvere build and quality checks
 on:
+  # Feature branches are verified by pull_request; triggering on both
+  # push and pull_request scheduled two full native builds for one commit,
+  # exhausting Windows/Linux runners and repeatedly cancelling useful CI.
+  # Keep mandatory post-merge main checks and manual branch dispatch.
   push:
     branches:
       - main
-      - "feature/**"
-      - "fix/**"
   pull_request:
     branches:
       - main

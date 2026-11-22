@@ -179,6 +179,7 @@ with sync_playwright() as p:
     ).click()
     linux_settings.get_by_text("Linux preview: GIF only", exact=False).wait_for(timeout=10000)
     assert linux_settings.get_by_role("button", name="MP4", exact=True).is_disabled()
+    assert linux_settings.get_by_role("slider", name="Quality", exact=True).is_enabled()
     assert linux_settings.get_by_role("switch", name="Record microphone").is_disabled()
     assert linux_settings.get_by_role("switch", name="Record system audio").is_disabled()
     assert linux_settings.get_by_role("switch", name="Include the mouse cursor").is_disabled()
@@ -255,6 +256,9 @@ with sync_playwright() as p:
     # rather than merely drawing grey-looking controls.
     settings.get_by_role("navigation").get_by_role("button", name="Recording settings", exact=True).click()
     settings.get_by_role("button", name="GIF", exact=True).click()
+    assert settings.get_by_role("slider", name="Quality", exact=True).is_enabled(), (
+        "GIF quality slider must control real native GIF output"
+    )
     assert settings.get_by_role("switch", name="Record microphone").is_disabled()
     assert settings.get_by_role("switch", name="Record system audio").is_disabled()
     settings.screenshot(path=str(OUTPUT / "settings-recording-gif-disabled.png"))

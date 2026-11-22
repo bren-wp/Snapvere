@@ -395,13 +395,18 @@ export default function Settings() {
                 onChange={(v) => set("recordFps", Number(v))}
               />
             </Row>
-            <Row label={`${t("Quality")} (${s.recordQuality})`} hint={t("Controls the video bitrate.")}>
+            <Row
+              label={`${t("Quality")} (${s.recordQuality})`}
+              hint={t(linuxGifOnly || s.recordFormat === "gif"
+                ? "GIF exports are limited to 960 px and 256 colors per frame."
+                : "Controls the video bitrate.")}
+            >
               <input
                 type="range"
                 min={30}
                 max={100}
                 value={s.recordQuality}
-                disabled={linuxGifOnly || s.recordFormat === "gif"}
+                aria-label={t("Quality")}
                 onChange={(e) => set("recordQuality", +e.target.value)}
                 className="w-48"
               />
