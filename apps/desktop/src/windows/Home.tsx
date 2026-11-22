@@ -19,7 +19,8 @@ import {
 import { ipc } from "../lib/ipc";
 import { useLanguage } from "../lib/LanguageProvider";
 import { isVideo } from "../lib/types";
-import { mergeUniqueById } from "../lib/galleryPaging";
+import { mergeUniqueById, offsetAfterDeletingLoadedCapture } from "../lib/galleryPaging";
+import { galleryStatusCopy } from "../lib/galleryStatusCopy";
 import type { RecordDone, Screenshot } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
 import Viewer from "../components/Viewer";
@@ -33,10 +34,12 @@ const PAGE_SIZE = 120;
 export default function Home() {
   const { t, language } = useLanguage();
   const clipboardText = clipboardImportCopy(language);
+  const galleryText = galleryStatusCopy(language);
   const [items, setItems] = useState<Screenshot[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [galleryError, setGalleryError] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [toast, setToast] = useState<string | null>(null);
@@ -46,10 +49,15 @@ export default function Home() {
   const galleryRequest = useRef(0);
   const pagingBusy = useRef(false);
   const pageOffset = useRef(0);
+  const loadedItems = useRef<Screenshot[]>([]);
+  useEffect(() => {
+    loadedItems.current = items;
+  }, [items]);
 
   const load = useCallback(async (q: string) => {
     const request = ++galleryRequest.current;
     setLoading(true);
+    setGalleryError(false);
     try {
       const res = q.trim()
         ? await ipc.searchScreenshots(q, PAGE_SIZE, 0, filter)
@@ -61,7 +69,10 @@ export default function Home() {
       }
     } catch (e) {
       console.error(e);
-      if (request === galleryRequest.current) setToast(t("Could not load the gallery"));
+      if (request === galleryRequest.current) {
+        setGalleryError(true);
+        setToast(t("Could not load the gallery"));
+      }
     } finally {
       if (request === galleryRequest.current) setLoading(false);
     }
@@ -146,7 +157,19 @@ export default function Home() {
     if (!ok) return false;
     try {
       await ipc.deleteScreenshot(s.id);
-      setItems((prev) => prev.filter((x) => x.id !== s.id));
+      const currentlyLoaded = loadedItems.current;
+      if (currentlyLoaded.some((item) => item.id === s.id)) {
+        // Discard in-flight pages; their SQL offsets predate the deletion.
+        galleryRequest.current += 1;
+        pageOffset.current = offsetAfterDeletingLoadedCapture(
+          currentlyLoaded,
+          s.id,
+          pageOffset.current,
+        );
+        setItems((prev) => prev.filter((x) => x.id !== s.id));
+        setLoading(false);
+        setLoadingMore(false);
+      }
       return true;
     } catch (e) {
       setToast(`${t("Could not delete capture:")} ${String(e)}`);
@@ -340,6 +363,7 @@ export default function Home() {
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
+                setGalleryError(false);
                 setItems([]);
                 setLoading(true);
                 setHasMore(false);
@@ -359,6 +383,7 @@ export default function Home() {
                 onClick={() => {
                   if (filter === f) return;
                   setFilter(f);
+                  setGalleryError(false);
                   setItems([]);
                   setLoading(true);
                   setHasMore(false);
@@ -401,6 +426,19 @@ export default function Home() {
       <main className="min-h-0 flex-1 overflow-auto px-5 pb-5">
         {loading && items.length === 0 ? (
           <div className="grid h-full place-items-center text-muted">{t("Loading…")}</div>
+        ) : galleryError && visible.length === 0 ? (
+          <div role="alert" className="grid h-full place-items-center text-center">
+            <div className="max-w-sm">
+              <p className="mb-4 text-sm text-muted">{t("Could not load the gallery")}</p>
+              <button
+                type="button"
+                onClick={() => void load(query)}
+                className="snapvere-btn-secondary rounded-full px-5 py-2.5 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                {galleryText.retry}
+              </button>
+            </div>
+          </div>
         ) : visible.length === 0 ? (
           <EmptyGallery onCapture={captureRegion} hasQuery={!!query.trim() || filter !== "all"} />
         ) : (

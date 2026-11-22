@@ -55,3 +55,15 @@ The Home toolbar keeps the two file actions (open captures folder and import
 from clipboard) in one wrapping flex group. Compact viewports move the whole
 group to the next row rather than leaving a lone button. The design remains
 keyboard-navigable and uses the existing responsive layout and native IPC.
+
+## Gallery deletion consistency and recovery
+
+Deleting a currently displayed capture now adjusts the next SQL OFFSET and
+invalidates in-flight list requests. This avoids skipping an older item when
+the user next requests more results. The already loaded cards and viewer are
+preserved, rather than resetting the whole gallery to the first page.
+
+If the initial gallery read fails, the empty-state surface shows a persistent
+error and a localized **Try again** action in all 12 interface languages.
+Existing captures are not misrepresented as an empty gallery. Tests cover
+offset adjustment, missing IDs, and all retry translations.
