@@ -54,3 +54,25 @@
 - Svi obavezni build/test/security checkovi prolaze na stvarnom merge commitu i pravila repozitorija sprječavaju zaobilaženje.
 - QA matrica stvarnog Windows rada i pregledničkih izdanja ima zapisane dokaze i jasne blokere.
 - Nema otvorenih P1 stavki; P2 stavke su praćene s vlasnikom i kriterijem prihvaćanja.
+
+## Dopuna audita nakon stvarnih GitHub Actions neuspjeha (2026-11-22)
+
+### Potvrđene greške i uzroci
+
+1. **CI regression testovi na PR #43:** workflow `45068451849`, frontend job `137351194641`, pao je u `tools/tests/analyticsConsent.test.mjs`. Test čita `window.dataLayer` iz zasebnog `node:vm` JavaScript konteksta; `assert.deepStrictEqual` uspoređuje prototipove, pa niz iz drugog realma ne prolazi čak ni kada sadrži iste elemente. Na grani PR #43 dodana je normalizacija `Array.from(window.dataLayer)` u test realm, commit `9f05fbc6463a63208d12851f3191dfe175516619`. Ponovljeni frontend job `137352790014` na commitu prošao je; RustSec i nativne provjere imaju zasebne statusne uvjete.
+2. **RustSec, stvarno potvrđena ranjivost:** workflow `45068451849`, security job `137351194750`: `RUSTSEC-2026-0592`, `url 2.5.8` i stack overflow u `Url::origin()` s ugniježđenim `blob:` URL-ovima. RustSec navodi zakrpanu verziju `url >=2.5.9`. Ovisnost je revidirana na odvojenoj grani `fix/tauri-winui-release-channel-0.2.26` (PR #48) s regresijskim pravilom u `tools/check_sqlite_security.py`; zaključani `form_urlencoded` mora biti >=1.2.3 po zahtjevu nove verzije. Na PR #43 ranjiva ovisnost ostaje prisutna dok se sigurnosna promjena iz PR #48 ne uključi; zato je status PR #43 sigurnosno blokiran, bez ikakvog gašenja RustSec skenera.
+3. **Neusklađenost Cargo lockfilea:** Windows jobovi `137352974521` i `137352980858` na PR #48 padali su na `cargo test --locked` nakon prve promjene `url` jer novi `url 2.5.9` zahtijeva `form_urlencoded 1.2.3`, a lockfile je još sadržavao `1.2.2`. Commit `56e0d685075852f4956dfd6bcbb44eab8c7e93ee` usklađuje novu transitive verziju i službeni registracijski checksum. **Ponovni zaključani Rust build mora potvrditi popravak.**
+
+### Odvojene provedene cjeline (nije dokaz potpunog audita)
+
+- **PR #48**, https://github.com/bren-wp/Snapvere/pull/48 — Tauri v0.2.26 (izvorni kod, nije izdano), zasebna Tauri download stranica `/download/tauri/` i strogo odvajanje stare web WinUI/.NET v0.2.4 distribucije, regresija update URL-ova, RustSec dependency fix. Nema zamjene postojećih WinUI EXE/MSI paketa ni njihovih SHA-256.
+- **PR #49**, https://github.com/bren-wp/Snapvere/pull/49 — stroži CSP s dopuštenim SHA-256 inline skriptama i `tools/check_site_csp.py` regresijom. Početni frontend CI prolazi, ali stvarni preglednici, produkcijski CDN zaglavlja i consent nisu ovdje potvrđeni.
+
+### Neispunjeni release kriteriji
+
+- **Issue #45:** GitHub Release `v0.2.25` još je prema zadnjoj provjeri označen stabilnim, premda u tekstu stoje unsigned preview i nepotpun Windows QA. To nije sukladan release kanal. Promjenu release metapodataka treba provesti autoriziranim GitHub release editom i provjeriti. Nikakvi release asseti nisu zamijenjeni u ovom auditu.
+- **Issue #46:** `main` nema potvrđen ruleset/branch protection; bez postavki repozitorija CI se može zaobići. Provjere moraju ostati obavezne na GitHub strani.
+- **Issue #47:** hosted CSP, svi browseri, consent accept/decline/revoke i pristupačnost zahtijevaju QA na stvarnim preglednicima.
+- **Windows i 7 browser proširenja:** GitHub Actions statički testovi i preview snimke nisu isto što i stvarni Windows 10/11 screenshot/recording/audio/multi-DPI testovi te potpisivanje/odobrenje paketa u trgovinama. Nema vjerodostojnog 1:1 mjerenja referentnih screenshotova ili CPU/RAM/performance before/after mjerenja.
+
+**Status:** PR #43, #48 i #49 su pregledni razvojni zahvati; stabilno izdanje i zatvaranje P1 Issues nisu opravdani sve dok su gore navedeni kriteriji otvoreni.
