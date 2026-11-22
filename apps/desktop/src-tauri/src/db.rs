@@ -392,7 +392,10 @@ mod gallery_tests {
         assert_eq!(all[0].id, "two");
         assert_eq!(all[0].tags, vec!["team"]);
         assert_eq!(all[1].tags, vec!["design", "team"]);
-        assert_eq!(db.gallery_page("design", "all", 200, 0)?[0].tags, vec!["design", "team"]);
+        assert_eq!(
+            db.gallery_page("design", "all", 200, 0)?[0].tags,
+            vec!["design", "team"]
+        );
         assert_eq!(db.gallery_page("", "all", 1, 1)?[0].id, "one");
         assert!(db.gallery_page("", "all", 1, 10)?.is_empty());
         assert!(db.gallery_page("", "all", 0, 0)?.is_empty());
@@ -452,7 +455,10 @@ mod gallery_tests {
         assert_eq!(db.gallery_page("", "images", 120, 0)?.len(), 120);
         assert_eq!(db.gallery_page("", "images", 120, 120)?.len(), 15);
         assert_eq!(db.gallery_page("", "all", 120, 120)?.len(), 17);
-        assert_eq!(db.gallery_page("training", "videos", 10, 0)?[0].id, "older-gif");
+        assert_eq!(
+            db.gallery_page("training", "videos", 10, 0)?[0].id,
+            "older-gif"
+        );
         assert!(db.gallery_page("training", "images", 10, 0)?.is_empty());
         assert!(db.gallery_page("", "unexpected", 10, 0).is_err());
         assert!(db.gallery_page(&"x".repeat(129), "all", 10, 0).is_err());
