@@ -11,7 +11,13 @@
    Mobitel / OS bez builda → bez auto-downloada, jasna poruka.
    ───────────────────────────────────────────────────────────── */
 const CFG = window.SNAPVERE || { version: "", downloads: {} };
-const OS_LABEL = { windows: "Windows", mac: "macOS" };
+const OS_LABEL = Object.freeze({ windows: "Windows", mac: "macOS" });
+
+// URL parameters must match explicit keys: objects also inherit names such as
+// "constructor", "toString" and "__proto__", which are not operating systems.
+function supportedOS(value) {
+  return typeof value === "string" && Object.hasOwn(OS_LABEL, value) ? value : null;
+}
 const track = (name, params) => window.snapvereTrack && window.snapvereTrack(name, params);
 const AUTO_DELAY_MS = 900;
 
@@ -71,7 +77,7 @@ function wireEditionLinks() {
 function render() {
   wireEditionLinks();
   const q = new URLSearchParams(location.search);
-  const wanted = OS_LABEL[q.get("os")] ? q.get("os") : null;
+  const wanted = supportedOS(q.get("os"));
   const from = (q.get("from") || "direct").slice(0, 24);
   const device = detectOS();
   const v = CFG.version ? `v${CFG.version} ` : "";
