@@ -222,7 +222,11 @@ pub fn get_overlay_recording_preferences(
         Some("gif") => RecordFormat::Gif,
         _ => RecordFormat::Mp4,
     };
-    let record_format = if cfg!(windows) { record_format } else { RecordFormat::Gif };
+    let record_format = if cfg!(windows) {
+        record_format
+    } else {
+        RecordFormat::Gif
+    };
     let supports_audio = cfg!(windows) && matches!(record_format, RecordFormat::Mp4);
     Ok(OverlayRecordingPreferences {
         record_mic: supports_audio && get_flag("recordMic"),

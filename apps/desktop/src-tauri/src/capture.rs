@@ -38,9 +38,7 @@ pub fn list_monitors() -> Result<Vec<MonitorInfo>> {
 /// report u32 dimensions too large to fit in i32.
 fn contains_desktop_point(x: i32, y: i32, mx: i32, my: i32, w: u32, h: u32) -> bool {
     let (x, y, mx, my) = (i64::from(x), i64::from(y), i64::from(mx), i64::from(my));
-    w > 0 && h > 0
-        && x >= mx && x < mx + i64::from(w)
-        && y >= my && y < my + i64::from(h)
+    w > 0 && h > 0 && x >= mx && x < mx + i64::from(w) && y >= my && y < my + i64::from(h)
 }
 
 #[cfg(test)]
@@ -48,8 +46,22 @@ fn contains_desktop_point(x: i32, y: i32, mx: i32, my: i32, w: u32, h: u32) -> b
 fn monitor_contains_negative_coordinates_without_overflow() {
     assert!(contains_desktop_point(-1900, 200, -1920, 0, 1920, 1080));
     assert!(!contains_desktop_point(0, 200, -1920, 0, 1920, 1080));
-    assert!(contains_desktop_point(i32::MAX, 0, i32::MAX, 0, u32::MAX, 100));
-    assert!(!contains_desktop_point(i32::MIN, 0, i32::MAX, 0, u32::MAX, 100));
+    assert!(contains_desktop_point(
+        i32::MAX,
+        0,
+        i32::MAX,
+        0,
+        u32::MAX,
+        100
+    ));
+    assert!(!contains_desktop_point(
+        i32::MIN,
+        0,
+        i32::MAX,
+        0,
+        u32::MAX,
+        100
+    ));
     assert!(!contains_desktop_point(0, 0, 0, 0, 0, 0));
 }
 
