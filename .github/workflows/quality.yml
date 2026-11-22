@@ -303,7 +303,11 @@ jobs:
             build-essential pkg-config libssl-dev libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev \
             libclang-dev libxcb1-dev libxrandr-dev libdbus-1-dev \
-            libpipewire-0.3-dev libwayland-dev libegl-dev libfuse2t64
+            libpipewire-0.3-dev libwayland-dev libegl-dev libgbm-dev libfuse2t64
+      - name: Verify required GBM development linker library
+        run: |
+          pkg-config --exists gbm
+          pkg-config --modversion gbm
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
