@@ -88,14 +88,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Snapvere-Extension-Layout-v0.2.1
+          name: Snapvere-Extension-Layout-v0.2.2
           path: docs/extension-layout-previews/*.png
           if-no-files-found: warn
           retention-days: 30
       - name: Upload seven extension ZIPs for manual browser QA
         uses: actions/upload-artifact@v4
         with:
-          name: Snapvere-Browser-Extensions-v0.2.1
+          name: Snapvere-Browser-Extensions-v0.2.2
           path: browser-extension-dist/*.zip
           if-no-files-found: error
           retention-days: 30

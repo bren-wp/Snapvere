@@ -14,7 +14,7 @@ ASSETS = (
     "popup.js", "popup.html", "popup.css",
     "editor.js", "editor.html", "editor.css",
 )
-VERSION = "0.2.1"
+VERSION = "0.2.2"
 
 
 def canonical_text_bytes(value: bytes) -> bytes:

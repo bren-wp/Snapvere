@@ -1,4 +1,4 @@
-# SNAPVERE browser extensions — v0.2.1 (development)
+# SNAPVERE browser extensions — v0.2.2 (development)
 
 Seven independently installable-source WebExtensions in the repository root:
 
@@ -6,7 +6,14 @@ Seven independently installable-source WebExtensions in the repository root:
 
 Every directory contains its own manifest and all required assets. Shared canonical source lives in `extensions/source/`, and `tools/build_browser_extensions.py` verifies that each browser copy exactly matches it. No extension runtime depends on GitHub or a remote script.
 
-## Reliability improvements in v0.2.1
+## Responzivni popup v0.2.2
+
+- A stable preferred 376 px popup document width prevents the Chromium shrink-to-fit feedback loop seen in narrow browser toolbar popups.
+- Each capture action has a dedicated icon column and readable left-aligned text; action labels remain on one line at regular popup widths while smaller windows are supported.
+- Two themes and Chromium geometry checks cover widths 280, 320, 355, 376 and 420 pixels, including clipping, heading and button-label checks.
+- No new browser permissions, account, upload or remote code. All seven folders remain deterministic copies of extensions/source.
+
+## Reliability improvements in v0.2.2
 
 - The crop selection outline and unfinished pointer strokes remain **visual guides only**. Saved PNGs and images copied to Windows now render from the clean annotation state, without accidentally baking the dotted crop box into the screenshot.
 - **Select area / Edit visible tab** also validate the original active browser tab immediately before and after capture, refusing an accidental screenshot of another tab when the user switches windows.
@@ -43,7 +50,7 @@ node --test extensions/tests/*.test.mjs
 python tools/build_browser_extensions.py --build --zip-dir browser-extension-dist
 ```
 
-GitHub Actions produces seven self-contained `Snapvere-<browser>-extension-0.2.0.zip` source archives and runs JS syntax, manifest, capture, geometry, popup and security checks.
+GitHub Actions produces seven self-contained `Snapvere-<browser>-extension-0.2.2.zip` source archives and runs JS syntax, manifest, capture, geometry, popup and security checks.
 
 Install Chrome, Edge, Brave, Opera or Vivaldi in Developer Mode using **Load unpacked** and its corresponding directory. For Firefox use `about:debugging#/runtime/this-firefox` and its `firefox/manifest.json`; production Firefox installs require Mozilla's signing/distribution rules. **Safari** requires packaging the source with Xcode/Apple Web Extension Packager into a native macOS/iOS container, signing and testing. The Safari folder is not a signed installable .app.
 
