@@ -53,9 +53,9 @@ assert "'unsafe-inline'" in directives["style-src"], (
 inline_sources = {}
 for page in sorted(SITE.rglob("*.html")):
     html = page.read_text(encoding="utf-8")
-    for match in re.finditer(r"<script\\b([^>]*)>(.*?)</script>", html, re.IGNORECASE | re.DOTALL):
+    for match in re.finditer(r"<script\b([^>]*)>(.*?)</script>", html, re.IGNORECASE | re.DOTALL):
         attrs, body = match.groups()
-        if re.search(r"\\bsrc\\s*=", attrs, re.IGNORECASE):
+        if re.search(r"\bsrc\s*=", attrs, re.IGNORECASE):
             continue
         digest = base64.b64encode(hashlib.sha256(body.encode("utf-8")).digest()).decode("ascii")
         token = "'sha256-" + digest + "'"
