@@ -166,3 +166,13 @@ recovery refuses to install the replacement as gallery content and preserves
 the SQLite journal so the operation can be retried safely. A restart test
 simulates a staged directory and verifies the original file and thumbnail are
 fully restored once the valid stage is back.
+
+## Modal Viewer focus and navigation
+
+On opening an image or video, the Viewer now focuses its dialog root, uses
+`aria-modal`, and wraps Tab/Shift+Tab within its own focusable controls.
+After close it restores the previously focused Home control if still mounted.
+The modal Escape shortcut remains usable while an input or video scrubber is
+focused; normal arrows remain owned by those interactive controls. A pure
+focus-boundary helper has dedicated regression coverage. No visual layout or
+native Tauri capability changes are involved.

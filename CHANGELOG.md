@@ -250,3 +250,5 @@ The separately deployed public snapvere.com currently serves a different impleme
 - Harden media Viewer keyboard shortcuts: plain F, Delete and arrows no longer react to Ctrl/Cmd/Shift/Alt-modified combinations; Ctrl+F/Cmd+F cannot unexpectedly toggle fullscreen, Ctrl+Delete cannot initiate deletion, and video Ctrl+C no longer hijacks text clipboard. Keep explicit Ctrl/Cmd+Shift+C for copying the registered file path with localized error messages; add regression tests.
 
 - Harden crash-recovery of deleted media: reject a staged file replaced with a directory or symlink before restoring it into the gallery, leave the durable journal pending, and recover normally once the valid staged file returns. Add a portable restart/recovery regression test.
+
+- Polish Viewer accessibility: modal overlay now receives initial keyboard focus, keeps Tab/Shift+Tab inside its controls, restores focus to the launching gallery card after close, and honors Escape even while the recording scrubber is focused. This changes no visible layout; add focused-dialog boundary regression tests.

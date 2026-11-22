@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fitImageScale } from '../src/lib/imageViewerGeometry.ts';
-import { viewerKeyboardShortcut } from '../src/lib/viewerKeyboard.ts';
+import { modalFocusWrapIndex, viewerKeyboardShortcut } from '../src/lib/viewerKeyboard.ts';
 
 test('large image fits within the available viewport even below 10% zoom', () => {
   const scale = fitImageScale(1120, 740, 10000, 10000);
@@ -57,4 +57,15 @@ test('viewer hotkeys do not hijack modified search, fullscreen or delete command
   assert.equal(hotkey('f', false, false, false, true), null);
   assert.equal(hotkey('c', true, false, true), null);
   assert.equal(hotkey('c', true, true), null);
+});
+
+test('modal viewer traps Tab at dialog boundaries without hijacking inner controls', () => {
+  assert.equal(modalFocusWrapIndex(-1, 3, false), 0);
+  assert.equal(modalFocusWrapIndex(-1, 3, true), 2);
+  assert.equal(modalFocusWrapIndex(0, 3, true), 2);
+  assert.equal(modalFocusWrapIndex(2, 3, false), 0);
+  assert.equal(modalFocusWrapIndex(1, 3, false), null);
+  assert.equal(modalFocusWrapIndex(1, 3, true), null);
+  assert.equal(modalFocusWrapIndex(0, 0, false), null);
+  assert.equal(modalFocusWrapIndex(0, -1, false), null);
 });

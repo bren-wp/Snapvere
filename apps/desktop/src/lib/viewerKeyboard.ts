@@ -36,3 +36,16 @@ export function viewerKeyboardShortcut(
     default: return null;
   }
 }
+
+/** Return a focus target only at dialog boundaries, otherwise use native Tab. */
+export function modalFocusWrapIndex(
+  activeIndex: number,
+  focusableCount: number,
+  backwards: boolean,
+): number | null {
+  if (!Number.isSafeInteger(focusableCount) || focusableCount <= 0) return null;
+  if (activeIndex < 0) return backwards ? focusableCount - 1 : 0;
+  if (backwards && activeIndex === 0) return focusableCount - 1;
+  if (!backwards && activeIndex === focusableCount - 1) return 0;
+  return null;
+}
