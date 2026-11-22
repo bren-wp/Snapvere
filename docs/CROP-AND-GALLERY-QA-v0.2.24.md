@@ -67,3 +67,11 @@ If the initial gallery read fails, the empty-state surface shows a persistent
 error and a localized **Try again** action in all 12 interface languages.
 Existing captures are not misrepresented as an empty gallery. Tests cover
 offset adjustment, missing IDs, and all retry translations.
+
+## Touch and keyboard accessibility
+
+Capture-card file/deletion controls must be reachable without pointer hover.
+Under `(hover: none)` or `(pointer: coarse)`, the controls are visible
+with 40 px minimum targets. Desktop hover behavior and keyboard focus remain
+unchanged. Verify on Windows touch or device-emulated mobile input separately
+before claiming physical device parity.

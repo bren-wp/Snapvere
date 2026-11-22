@@ -69,10 +69,11 @@ export default function CaptureCard({
         </div>
       </div>
       <div
-        className="absolute right-2 top-2 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+        className="snapvere-gallery-card-actions absolute right-2 top-2 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
         onKeyDown={(e) => e.stopPropagation()}
       >
         <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation();
             onReveal();
@@ -84,6 +85,7 @@ export default function CaptureCard({
           <FolderOpen size={15} />
         </button>
         <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation();
             onDelete();

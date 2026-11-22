@@ -503,6 +503,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .snapvere-gallery-card:hover,.snapvere-gallery-card:focus-visible { border-color: rgba(167,139,250,.55); }
 .snapvere-gallery-card button { opacity: 1; }
+@media (hover: none), (pointer: coarse) {
+  /* Touch devices cannot reveal the per-capture actions by hovering. */
+  .snapvere-gallery-card-actions { opacity: 1; }
+  .snapvere-gallery-card-actions button { min-width: 40px; min-height: 40px; }
+}
 .snapvere-settings-sidebar button[aria-current="page"] { box-shadow: inset 3px 0 0 rgb(var(--snapvere-accent)); }
 .snapvere-editor-toolbar { background: rgba(20,20,22,.68); border-bottom: 1px solid var(--brand-border); }
 [data-theme="light"] .snapvere-editor-toolbar { background: rgba(248,248,250,.95); }
