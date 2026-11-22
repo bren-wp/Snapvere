@@ -80,7 +80,9 @@ impl Db {
                 remote_expires_at INTEGER,
                 is_uploaded   INTEGER NOT NULL DEFAULT 0
             );
-            CREATE INDEX IF NOT EXISTS idx_screenshots_created ON screenshots(created_at DESC);
+            -- Match deterministic gallery ORDER BY created_at DESC, id DESC.
+            CREATE INDEX IF NOT EXISTS idx_screenshots_order ON screenshots(created_at DESC, id DESC);
+            DROP INDEX IF EXISTS idx_screenshots_created;
             CREATE INDEX IF NOT EXISTS idx_screenshots_name ON screenshots(name);
 
             CREATE TABLE IF NOT EXISTS tags (
@@ -133,19 +135,55 @@ impl Db {
         Ok(())
     }
 
-    /// Dohvati zadnjih `limit` screenshotova (najnoviji prvi).
-    pub fn list(&self, limit: u32, offset: u32) -> anyhow::Result<Vec<Screenshot>> {
-        let mut stmt = self.conn.prepare(
-            r#"SELECT id, file_path, thumb_path, name, format, width, height, size_bytes,
-                      source, created_at, is_uploaded
-               FROM screenshots
-               ORDER BY created_at DESC, id DESC
-               LIMIT ?1 OFFSET ?2"#,
-        )?;
-        let rows = stmt.query_map(params![limit.min(500), offset], Self::map_row)?;
+    /// The same paginated SQL result set powers All, Images, Videos and text search.
+    /// Category fragments are selected from fixed literals, never user-supplied SQL.
+    pub fn gallery_page(
+        &self,
+        query: &str,
+        category: &str,
+        limit: u32,
+        offset: u32,
+    ) -> anyhow::Result<Vec<Screenshot>> {
+        anyhow::ensure!(
+            query.chars().count() <= 128,
+            "Search query exceeds 128 characters"
+        );
+        let category_sql = match category {
+            "all" => "1",
+            "images" => "NOT (s.source = 'recording' OR s.format = 'mp4')",
+            "videos" => "(s.source = 'recording' OR s.format = 'mp4')",
+            _ => anyhow::bail!("Invalid gallery category"),
+        };
+        // Literal wildcard behavior must stay identical to legacy gallery search.
+        let escaped = query
+            .trim()
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        let pattern = if escaped.is_empty() {
+            String::new()
+        } else {
+            format!("%{escaped}%")
+        };
+        let sql = format!(
+            r#"SELECT s.id, s.file_path, s.thumb_path, s.name, s.format, s.width,
+                      s.height, s.size_bytes, s.source, s.created_at, s.is_uploaded
+               FROM screenshots s
+               WHERE {category_sql}
+                 AND (?1 = '' OR s.name LIKE ?1 ESCAPE '\'
+                      OR EXISTS (
+                          SELECT 1 FROM screenshot_tags st
+                          JOIN tags t ON t.id = st.tag_id
+                          WHERE st.screenshot_id = s.id AND t.name LIKE ?1 ESCAPE '\'
+                      ))
+               ORDER BY s.created_at DESC, s.id DESC
+               LIMIT ?2 OFFSET ?3"#
+        );
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_map(params![pattern, limit.min(500), offset], Self::map_row)?;
         let mut out = Vec::new();
-        for r in rows {
-            out.push(r?);
+        for row in rows {
+            out.push(row?);
         }
         self.attach_tags(&mut out)?;
         Ok(out)
@@ -168,40 +206,6 @@ impl Db {
             }
             None => Ok(None),
         }
-    }
-
-    /// Bounded substring search without multiplying results for matching tags.
-    pub fn search(&self, query: &str, limit: u32, offset: u32) -> anyhow::Result<Vec<Screenshot>> {
-        anyhow::ensure!(
-            query.chars().count() <= 128,
-            "Search query exceeds 128 characters"
-        );
-        // A user's % and _ are literal search terms, not SQLite wildcards.
-        let escaped = query
-            .replace('\\', "\\\\")
-            .replace('%', "\\%")
-            .replace('_', "\\_");
-        let like = format!("%{escaped}%");
-        let mut stmt = self.conn.prepare(
-            r#"SELECT s.id, s.file_path, s.thumb_path, s.name, s.format, s.width, s.height,
-                      s.size_bytes, s.source, s.created_at, s.is_uploaded
-               FROM screenshots s
-               WHERE s.name LIKE ?1 ESCAPE '\'
-                  OR EXISTS (
-                      SELECT 1 FROM screenshot_tags st
-                      JOIN tags t ON t.id = st.tag_id
-                      WHERE st.screenshot_id = s.id AND t.name LIKE ?1 ESCAPE '\'
-                  )
-               ORDER BY s.created_at DESC, s.id DESC
-               LIMIT ?2 OFFSET ?3"#,
-        )?;
-        let rows = stmt.query_map(params![like, limit.min(500), offset], Self::map_row)?;
-        let mut out = Vec::new();
-        for r in rows {
-            out.push(r?);
-        }
-        self.attach_tags(&mut out)?;
-        Ok(out)
     }
 
     /// Write durable intent before the filesystem is touched.
@@ -385,15 +389,18 @@ mod gallery_tests {
         db.add_tag("one", "design")?;
         db.add_tag("one", "team")?;
         db.add_tag("two", "team")?;
-        let all = db.list(200, 0)?;
+        let all = db.gallery_page("", "all", 200, 0)?;
         assert_eq!(all.len(), 2);
         assert_eq!(all[0].id, "two");
         assert_eq!(all[0].tags, vec!["team"]);
         assert_eq!(all[1].tags, vec!["design", "team"]);
-        assert_eq!(db.search("design", 200, 0)?[0].tags, vec!["design", "team"]);
-        assert_eq!(db.list(1, 1)?[0].id, "one");
-        assert!(db.list(1, 10)?.is_empty());
-        assert!(db.list(0, 0)?.is_empty());
+        assert_eq!(
+            db.gallery_page("design", "all", 200, 0)?[0].tags,
+            vec!["design", "team"]
+        );
+        assert_eq!(db.gallery_page("", "all", 1, 1)?[0].id, "one");
+        assert!(db.gallery_page("", "all", 1, 10)?.is_empty());
+        assert!(db.gallery_page("", "all", 0, 0)?.is_empty());
         Ok(())
     }
 
@@ -403,11 +410,67 @@ mod gallery_tests {
         db.insert(&shot("one%two", 100))?;
         db.insert(&shot("one_two", 200))?;
         db.insert(&shot("oneXtwo", 300))?;
-        assert_eq!(db.search("%", 200, 0)?[0].id, "one%two");
-        assert_eq!(db.search("%", 200, 0)?.len(), 1);
-        assert_eq!(db.search("_", 200, 0)?[0].id, "one_two");
-        assert_eq!(db.search("_", 200, 0)?.len(), 1);
-        assert_eq!(db.search("one", 200, 0)?.len(), 3);
+        assert_eq!(db.gallery_page("%", "all", 200, 0)?[0].id, "one%two");
+        assert_eq!(db.gallery_page("%", "all", 200, 0)?.len(), 1);
+        assert_eq!(db.gallery_page("_", "all", 200, 0)?[0].id, "one_two");
+        assert_eq!(db.gallery_page("_", "all", 200, 0)?.len(), 1);
+        assert_eq!(db.gallery_page("one", "all", 200, 0)?.len(), 3);
+        Ok(())
+    }
+
+    #[test]
+    fn gallery_order_index_replaces_legacy_timestamp_index() -> anyhow::Result<()> {
+        let db = Db::open_in_memory()?;
+        let index: String = db.conn.query_row(
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'idx_screenshots_order'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert!(index.contains("(created_at DESC, id DESC)"));
+        let legacy: i64 = db.conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_screenshots_created'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(legacy, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn existing_gallery_data_survives_timestamp_index_upgrade() -> anyhow::Result<()> {
+        let folder =
+            std::env::temp_dir().join(format!("snapvere-index-upgrade-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&folder)?;
+        let path = folder.join("gallery.sqlite");
+        {
+            let db = Db::open(&path)?;
+            db.insert(&shot("persisted-capture", 200))?;
+        }
+        {
+            let connection = Connection::open(&path)?;
+            // Reproduce the pre-upgrade index layout on an existing DB file.
+            connection.execute_batch(
+                "DROP INDEX idx_screenshots_order;
+                 CREATE INDEX idx_screenshots_created ON screenshots(created_at DESC);",
+            )?;
+        }
+        {
+            let db = Db::open(&path)?;
+            assert!(db.get("persisted-capture")?.is_some());
+            assert_eq!(db.gallery_page("", "all", 10, 0)?.len(), 1);
+            let new_index: i64 = db.conn.query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name = 'idx_screenshots_order'",
+                [],
+                |row| row.get(0),
+            )?;
+            let old_index: i64 = db.conn.query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name = 'idx_screenshots_created'",
+                [],
+                |row| row.get(0),
+            )?;
+            assert_eq!((new_index, old_index), (1, 0));
+        }
+        std::fs::remove_dir_all(&folder)?;
         Ok(())
     }
 
@@ -417,12 +480,46 @@ mod gallery_tests {
         db.insert(&shot("same_a", 100))?;
         db.insert(&shot("same_b", 100))?;
         db.insert(&shot("older", 90))?;
-        assert_eq!(db.list(1, 0)?[0].id, "same_b");
-        assert_eq!(db.list(1, 1)?[0].id, "same_a");
-        assert_eq!(db.list(1, 2)?[0].id, "older");
-        assert_eq!(db.search("same", 1, 0)?[0].id, "same_b");
-        assert_eq!(db.search("same", 1, 1)?[0].id, "same_a");
-        assert!(db.search("same", 1, 2)?.is_empty());
+        assert_eq!(db.gallery_page("", "all", 1, 0)?[0].id, "same_b");
+        assert_eq!(db.gallery_page("", "all", 1, 1)?[0].id, "same_a");
+        assert_eq!(db.gallery_page("", "all", 1, 2)?[0].id, "older");
+        assert_eq!(db.gallery_page("same", "all", 1, 0)?[0].id, "same_b");
+        assert_eq!(db.gallery_page("same", "all", 1, 1)?[0].id, "same_a");
+        assert!(db.gallery_page("same", "all", 1, 2)?.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn category_filter_pages_entire_gallery_before_limiting() -> anyhow::Result<()> {
+        let db = Db::open_in_memory()?;
+        for i in 0..135 {
+            db.insert(&shot(&format!("image-{i:03}"), i + 100))?;
+        }
+        let mut older_video = shot("older-gif", 2);
+        older_video.format = "gif".into();
+        older_video.source = "recording".into();
+        db.insert(&older_video)?;
+        db.add_tag("older-gif", "training")?;
+        let mut mp4 = shot("older-mp4", 3);
+        mp4.format = "mp4".into();
+        mp4.source = "fullscreen".into();
+        db.insert(&mp4)?;
+
+        let videos = db.gallery_page("", "videos", 120, 0)?;
+        assert_eq!(videos.len(), 2);
+        assert_eq!(videos[0].id, "older-mp4");
+        assert_eq!(videos[1].id, "older-gif");
+        assert_eq!(videos[1].tags, vec!["training"]);
+        assert_eq!(db.gallery_page("", "images", 120, 0)?.len(), 120);
+        assert_eq!(db.gallery_page("", "images", 120, 120)?.len(), 15);
+        assert_eq!(db.gallery_page("", "all", 120, 120)?.len(), 17);
+        assert_eq!(
+            db.gallery_page("training", "videos", 10, 0)?[0].id,
+            "older-gif"
+        );
+        assert!(db.gallery_page("training", "images", 10, 0)?.is_empty());
+        assert!(db.gallery_page("", "unexpected", 10, 0).is_err());
+        assert!(db.gallery_page(&"x".repeat(129), "all", 10, 0).is_err());
         Ok(())
     }
 
@@ -436,7 +533,7 @@ mod gallery_tests {
         assert!(db.add_tag("missing", "valid").is_err());
         db.add_tag("one", "  useful  ")?;
         assert_eq!(db.get("one")?.expect("record").tags, vec!["useful"]);
-        assert!(db.search(&"x".repeat(129), 10, 0).is_err());
+        assert!(db.gallery_page(&"x".repeat(129), "all", 10, 0).is_err());
         Ok(())
     }
 
@@ -446,7 +543,7 @@ mod gallery_tests {
         db.insert(&shot("one", 100))?;
         db.add_tag("one", "meeting")?;
         db.add_tag("one", "meet-up")?;
-        assert_eq!(db.search("meet", 10, 0)?.len(), 1);
+        assert_eq!(db.gallery_page("meet", "all", 10, 0)?.len(), 1);
         Ok(())
     }
 
@@ -484,7 +581,7 @@ mod gallery_tests {
                 assert_eq!(version, 1);
                 let record = upgraded.get("saved-before-upgrade")?.expect("saved record");
                 assert_eq!(record.tags, vec!["keep-me"]);
-                assert_eq!(upgraded.list(10, 0)?.len(), 1);
+                assert_eq!(upgraded.gallery_page("", "all", 10, 0)?.len(), 1);
                 let (id, url): (String, String) = upgraded.conn.query_row(
                     "SELECT remote_id, remote_url FROM screenshots WHERE id = ?1",
                     params!["saved-before-upgrade"],

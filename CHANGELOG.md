@@ -1,5 +1,23 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.24 — secure crop boundary and gallery workflow (development)
+
+- Fix scanline bleed at the right monitor boundary: the BGRA recorder now clips every row independently and fills out-of-bounds pixels with black instead of copying from the next row.
+- Validate output size and frame offsets before accessing native buffers, with regression tests for truncated driver data, oversized coordinates, and short destination buffers.
+- Fail closed when a frame cannot be safely redacted: zero incomplete pixel buffers instead of silently leaving sensitive unpixelated content.
+- Add **Open capture folder** directly to the gallery toolbar using existing translations for all 12 languages.
+- Keep the gallery's folder and clipboard actions together as a responsive group instead of orphaning the clipboard action on a separate row at compact window widths.
+- Keep the per-capture **Show in folder** and **Delete** buttons visible on touch devices (no hover required) with larger touch targets; preserve keyboard focus and desktop hover behavior.
+- Add one-click **Copy file path** to every gallery card, using the existing Home-only native IPC clipboard command and localized feedback (no new webview permissions).
+- Look ahead by one SQLite result when loading each page, so **Load more** appears only if another older capture actually exists. The look-ahead row is neither rendered nor counted as loaded.
+- Apply **All / Images / Videos** in the SQLite query before pagination, instead of filtering only the first 120 loaded items.
+- Prevent missing older captures after deletion from a paginated gallery by adjusting the SQL offset and invalidating pre-deletion requests.
+- Harden asynchronous gallery loading: newer searches and refreshes invalidate older paging tasks immediately, and stale completion handlers cannot cancel the busy state of a newer request.
+- Fix a review-identified stale-closure bug: a clipboard import or recording completing after a filter change must refresh using the **current** gallery query and category, not the earlier callback's captured values. Persist a retry banner when a refresh fails but cached gallery cards remain visible. Show a localized retry action instead of a misleading empty-gallery state when loading fails. Search, tags, and older capture paging now share the same bounded query. The native IPC permits only Home and Settings, never overlay, editor, or recorder views.
+- Synchronize Cargo, Tauri and npm manifests/lockfiles to development version v0.2.24.
+- Keep v0.2.23 installers published until all new CI and physical Windows checks complete.
+
+
 ## v0.2.23 — protected recording shutdown (development)
 
 - Defer application exit during an active MP4/GIF recording to a single worker thread, keeping the GUI event loop responsive.
@@ -221,3 +239,16 @@ SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO
 ## Note on the public website
 
 The separately deployed public snapvere.com currently serves a different implementation and its routing/assets are managed independently. Repository screenshots do not certify 1:1 identity with the deployed live site.
+
+- Optimize large galleries with a composite SQLite ordering index on `(created_at DESC, id DESC)` and retire the redundant timestamp-only index through the transactional migration; add regression coverage.
+- Add an accessible **Refresh gallery** action with labels in all 12 languages; it respects the current search/filter and prevents duplicate refreshes while loading.
+
+- Improve keyboard productivity without changing the gallery layout: **Ctrl+F / Cmd+F** focuses and selects the gallery search field; **F5** refreshes the selected category and query (only while the gallery, not the viewer, owns the keyboard). Added shortcut collision regression coverage.
+
+- Fix Codex-reported P2 keyboard propagation bug: register Home's shortcut handler in the capture phase, so Ctrl/Cmd+F and F5 work even when a capture-card Reveal/Copy/Delete button has focus; stop native WebView hard reload in that state. Advertise both shortcuts via `aria-keyshortcuts` and regression-test capture-phase registration.
+
+- Harden media Viewer keyboard shortcuts: plain F, Delete and arrows no longer react to Ctrl/Cmd/Shift/Alt-modified combinations; Ctrl+F/Cmd+F cannot unexpectedly toggle fullscreen, Ctrl+Delete cannot initiate deletion, and video Ctrl+C no longer hijacks text clipboard. Keep explicit Ctrl/Cmd+Shift+C for copying the registered file path with localized error messages; add regression tests.
+
+- Harden crash-recovery of deleted media: reject a staged file replaced with a directory or symlink before restoring it into the gallery, leave the durable journal pending, and recover normally once the valid staged file returns. Add a portable restart/recovery regression test.
+
+- Polish Viewer accessibility: modal overlay now receives initial keyboard focus, keeps Tab/Shift+Tab inside its controls, restores focus to the launching gallery card after close, and honors Escape even while the recording scrubber is focused. This changes no visible layout; add focused-dialog boundary regression tests.

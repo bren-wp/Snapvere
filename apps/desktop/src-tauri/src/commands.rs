@@ -1439,10 +1439,16 @@ pub fn list_screenshots(
     state: State<AppState>,
     limit: Option<u32>,
     offset: Option<u32>,
+    kind: Option<String>,
 ) -> Result<Vec<Screenshot>, String> {
     require_window_label(window.label(), &["home"])?;
     let items = lock(&state.db)
-        .list(limit.unwrap_or(200), offset.unwrap_or(0))
+        .gallery_page(
+            "",
+            kind.as_deref().unwrap_or("all"),
+            limit.unwrap_or(200),
+            offset.unwrap_or(0),
+        )
         .map_err(estr)?;
     allow_media_dirs(&app, &items);
     Ok(items)
@@ -1456,18 +1462,17 @@ pub fn search_screenshots(
     query: String,
     limit: Option<u32>,
     offset: Option<u32>,
+    kind: Option<String>,
 ) -> Result<Vec<Screenshot>, String> {
     require_window_label(window.label(), &["home"])?;
-    let items = {
-        let db = lock(&state.db);
-        let limit = limit.unwrap_or(120).min(500);
-        let offset = offset.unwrap_or(0);
-        if query.trim().is_empty() {
-            db.list(limit, offset).map_err(estr)?
-        } else {
-            db.search(query.trim(), limit, offset).map_err(estr)?
-        }
-    };
+    let items = lock(&state.db)
+        .gallery_page(
+            query.trim(),
+            kind.as_deref().unwrap_or("all"),
+            limit.unwrap_or(120),
+            offset.unwrap_or(0),
+        )
+        .map_err(estr)?;
     allow_media_dirs(&app, &items);
     Ok(items)
 }
@@ -1612,7 +1617,7 @@ pub(crate) fn show_capture_folder(app: &AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn open_capture_folder(window: tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
-    require_window_label(window.label(), &["settings"])?;
+    require_window_label(window.label(), &["home", "settings"])?;
     show_capture_folder(&app)
 }
 
@@ -1724,6 +1729,9 @@ mod ipc_origin_tests {
         }
         assert!(require_window_label("overlay", &["overlay"]).is_ok());
         assert!(require_window_label("home", &["settings"]).is_err());
+        assert!(require_window_label("home", &["home", "settings"]).is_ok());
+        assert!(require_window_label("settings", &["home", "settings"]).is_ok());
+        assert!(require_window_label("overlay", &["home", "settings"]).is_err());
         assert!(require_window_label("overlay", &["home"]).is_err());
     }
 }

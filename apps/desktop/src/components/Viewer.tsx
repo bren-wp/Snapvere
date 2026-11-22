@@ -16,6 +16,7 @@ import {
 import { ipc } from "../lib/ipc";
 import { useLanguage } from "../lib/LanguageProvider";
 import { formatMediaSize, formatMediaDate } from "../lib/mediaFormatting";
+import { modalFocusWrapIndex, viewerKeyboardShortcut } from "../lib/viewerKeyboard";
 import type { Screenshot } from "../lib/types";
 import ImageStage from "./viewer/ImageStage";
 import VideoStage from "./viewer/VideoStage";
@@ -56,6 +57,19 @@ export default function Viewer({ items, id, onNavigate, onClose, onDelete, onToa
   const [playing, setPlaying] = useState(false);
   const [idle, setIdle] = useState(false);
   const idleTimer = useRef<number | undefined>(undefined);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // A modal must own keyboard focus while open; restore the triggering
+  // capture card on close if React has not removed that card meanwhile.
+  useEffect(() => {
+    const previous = document.activeElement;
+    dialogRef.current?.focus({ preventScroll: true });
+    return () => {
+      if (previous instanceof HTMLElement && previous.isConnected) {
+        previous.focus({ preventScroll: true });
+      }
+    };
+  }, []);
 
   // Zapis je nestao (obrisan izvana, novi filter) → nema se što pokazati.
   useEffect(() => {
@@ -114,7 +128,7 @@ export default function Viewer({ items, id, onNavigate, onClose, onDelete, onToa
       await ipc.copyMediaPath(shot.id);
       onToast(t("File path copied"));
     } catch (error) {
-      onToast(`Could not copy file path: ${String(error)}`);
+      onToast(`${t("Copy file path")}: ${String(error)}`);
     }
   }, [shot, onToast, t]);
 
@@ -134,39 +148,37 @@ export default function Viewer({ items, id, onNavigate, onClose, onDelete, onToa
     const onKey = (e: KeyboardEvent) => {
       // Focused sliders own their arrow/home/end keys; never navigate away
       // from a recording while the user is scrubbing its timeline.
-      if (e.target instanceof HTMLInputElement
+      if (e.key !== "Escape" && (e.target instanceof HTMLInputElement
         || e.target instanceof HTMLTextAreaElement
         || (e.target instanceof HTMLElement
-          && e.target.closest('[role="slider"], [contenteditable="true"]'))
+          && e.target.closest('[role="slider"], [contenteditable="true"]')))
       ) return;
-      if (e.key === "Escape") {
-        e.preventDefault();
-        if (fullscreen) void setWindowFullscreen(false);
-        else onClose();
-      } else if (e.key === "ArrowLeft" && prev) {
-        e.preventDefault();
-        onNavigate(prev.id);
-      } else if (e.key === "ArrowRight" && next) {
-        e.preventDefault();
-        onNavigate(next.id);
-      } else if (e.key === "f" || e.key === "F") {
-        void setWindowFullscreen(!fullscreen);
-      } else if (e.key === "Delete") {
-        void remove();
-      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "c") {
-        e.preventDefault();
-        void copyPath();
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
-        e.preventDefault();
-        void copy();
-      } else {
-        return;
+      if (e.defaultPrevented) return;
+      const action = viewerKeyboardShortcut(
+        e.key, e.ctrlKey, e.metaKey, e.altKey, e.shiftKey,
+        shot?.format === "mp4",
+      );
+      if (!action) return;
+      if (action === "previous" && !prev) return;
+      if (action === "next" && !next) return;
+      e.preventDefault();
+      switch (action) {
+        case "escape":
+          if (fullscreen) void setWindowFullscreen(false);
+          else onClose();
+          break;
+        case "previous": if (prev) onNavigate(prev.id); break;
+        case "next": if (next) onNavigate(next.id); break;
+        case "fullscreen": void setWindowFullscreen(!fullscreen); break;
+        case "delete": void remove(); break;
+        case "copy-path": void copyPath(); break;
+        case "copy-image": void copy(); break;
       }
       wake();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [prev, next, fullscreen, onClose, onNavigate, setWindowFullscreen, remove, copy, copyPath, wake]);
+  }, [prev, next, shot?.format, fullscreen, onClose, onNavigate, setWindowFullscreen, remove, copy, copyPath, wake]);
 
   if (!shot) return null;
   const video = playsAsVideo(shot);
@@ -178,8 +190,31 @@ export default function Viewer({ items, id, onNavigate, onClose, onDelete, onToa
       onMouseDown={(e) => {
         if ((e.target as HTMLElement).closest("button")) e.preventDefault();
       }}
+      ref={dialogRef}
       role="dialog"
+      aria-modal="true"
       aria-label={shot.name}
+      tabIndex={-1}
+      onKeyDownCapture={(event) => {
+        if (event.key !== "Tab") return;
+        wake();
+        const root = dialogRef.current;
+        if (!root) return;
+        const controls = Array.from(root.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+        )).filter((element) => element.getClientRects().length > 0);
+        if (controls.length === 0) {
+          event.preventDefault();
+          root.focus({ preventScroll: true });
+          return;
+        }
+        const current = controls.indexOf(document.activeElement as HTMLElement);
+        const wrap = modalFocusWrapIndex(current, controls.length, event.shiftKey);
+        if (wrap !== null) {
+          event.preventDefault();
+          controls[wrap].focus({ preventScroll: true });
+        }
+      }}
     >
       {/* gornja traka */}
       <header

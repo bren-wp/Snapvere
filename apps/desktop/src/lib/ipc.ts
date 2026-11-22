@@ -93,10 +93,10 @@ export const ipc = {
     invoke<Screenshot>("import_clipboard_image"),
 
   // ── galerija ──
-  listScreenshots: (limit?: number, offset?: number) =>
-    invoke<Screenshot[]>("list_screenshots", { limit, offset }),
-  searchScreenshots: (query: string, limit?: number, offset?: number) =>
-    invoke<Screenshot[]>("search_screenshots", { query, limit, offset }),
+  listScreenshots: (limit?: number, offset?: number, kind?: "all" | "images" | "videos") =>
+    invoke<Screenshot[]>("list_screenshots", { limit, offset, kind }),
+  searchScreenshots: (query: string, limit?: number, offset?: number, kind?: "all" | "images" | "videos") =>
+    invoke<Screenshot[]>("search_screenshots", { query, limit, offset, kind }),
   deleteScreenshot: (id: string) =>
     invoke<void>("delete_screenshot", { id }),
   addTag: (id: string, tag: string) => invoke<void>("add_tag", { id, tag }),

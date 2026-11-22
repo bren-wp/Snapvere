@@ -132,6 +132,44 @@ fn crop_bgra_izvan_granica_daje_crno_umjesto_panica() {
 }
 
 #[test]
+fn crop_bgra_right_edge_does_not_copy_next_scanline() {
+    let (sw, sh) = (4u32, 3u32);
+    let mut src = vec![0u8; (sw * sh * 4) as usize];
+    for (i, pixel) in src.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+        pixel[0] = (i + 1) as u8;
+        pixel[3] = 255;
+    }
+    let mut dst = vec![99u8; 3 * 2 * 4];
+    crop_bgra(&src, sw, sh, 3, 0, 3, 2, &mut dst);
+    let blue: Vec<u8> = dst
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|pixel| pixel[0])
+        .collect();
+    assert_eq!(blue, [4, 0, 0, 8, 0, 0]);
+    assert_eq!(&dst[4..12], &[0u8; 8]);
+    assert_eq!(&dst[16..24], &[0u8; 8]);
+}
+
+#[test]
+fn crop_bgra_handles_truncated_source_and_output_without_panic() {
+    let source = vec![41u8; 4 * 2 * 4];
+    let mut dest = vec![77u8; 2 * 2 * 4];
+    crop_bgra(&source, 4, 3, 0, 1, 2, 2, &mut dest);
+    assert_eq!(&dest[..8], &[41u8; 8]);
+    assert_eq!(&dest[8..], &[0u8; 8]);
+
+    let mut undersized = vec![17u8; 2];
+    crop_bgra(&source, 4, 3, 0, 0, 2, 2, &mut undersized);
+    assert_eq!(undersized, vec![0u8; 2]);
+
+    let mut out_of_range = vec![13u8; 4 * 2 * 4];
+    crop_bgra(&source, 4, 3, u32::MAX, 0, 4, 2, &mut out_of_range);
+    assert!(out_of_range.iter().all(|value| *value == 0));
+}
+
+#[test]
 fn pixelate_izravnava_blokove_i_ne_dira_okolinu() {
     // 32x32 BGRA, svaki piksel drugačiji (B = x, G = y) — nakon redacta unutar
     // pravokutnika svi pikseli jednog bloka moraju biti identični.
@@ -169,6 +207,23 @@ fn pixelate_izravnava_blokove_i_ne_dira_okolinu() {
     assert_eq!(px(&buf, 8, 8), px(&buf, 9, 9));
     // …i sadržaj je stvarno promijenjen (nije samo prekopiran).
     assert_ne!(px(&buf, 8, 8), px(&before, 8, 8));
+}
+
+#[test]
+fn privacy_pixelation_fails_closed_on_incomplete_frame() {
+    let mut truncated = vec![231u8; 8];
+    pixelate_bgra(
+        &mut truncated,
+        1920,
+        1080,
+        &PixelRect {
+            x: 0,
+            y: 0,
+            width: 32,
+            height: 32,
+        },
+    );
+    assert!(truncated.iter().all(|byte| *byte == 0));
 }
 
 #[test]

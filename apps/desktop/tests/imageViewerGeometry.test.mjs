@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fitImageScale } from '../src/lib/imageViewerGeometry.ts';
+import { modalFocusWrapIndex, viewerKeyboardShortcut } from '../src/lib/viewerKeyboard.ts';
 
 test('large image fits within the available viewport even below 10% zoom', () => {
   const scale = fitImageScale(1120, 740, 10000, 10000);
@@ -32,4 +33,39 @@ test('unknown intrinsic and viewport dimensions use safe loading fallback', () =
   assert.equal(fitImageScale(0, 740, 1920, 1080), 1);
   assert.equal(fitImageScale(1120, 740, 0, 1080), 1);
   assert.equal(fitImageScale(Infinity, 740, 1920, 1080), 1);
+});
+
+test('viewer hotkeys do not hijack modified search, fullscreen or delete commands', () => {
+  const hotkey = (key, ctrl = false, meta = false, alt = false, shift = false, video = false) =>
+    viewerKeyboardShortcut(key, ctrl, meta, alt, shift, video);
+  assert.equal(hotkey('f'), 'fullscreen');
+  assert.equal(hotkey('F'), 'fullscreen');
+  assert.equal(hotkey('f', true), null, 'Ctrl+F must not toggle fullscreen');
+  assert.equal(hotkey('f', false, true), null, 'Cmd+F must not toggle fullscreen');
+  assert.equal(hotkey('Delete'), 'delete');
+  assert.equal(hotkey('Delete', true), null, 'Ctrl+Delete must not destroy a capture');
+  assert.equal(hotkey('ArrowLeft'), 'previous');
+  assert.equal(hotkey('ArrowLeft', true), null);
+  assert.equal(hotkey('Escape'), 'escape');
+  assert.equal(hotkey('F5'), null);
+  assert.equal(hotkey('c', true), 'copy-image');
+  assert.equal(hotkey('c', true, false, false, true), 'copy-path');
+  assert.equal(hotkey('c', false, true, false, true), 'copy-path');
+  assert.equal(hotkey('c', true, false, false, false, true), null,
+    'Video Ctrl+C must not steal normal clipboard copy');
+  assert.equal(hotkey('c', true, false, false, true, true), 'copy-path');
+  assert.equal(hotkey('f', false, false, false, true), null);
+  assert.equal(hotkey('c', true, false, true), null);
+  assert.equal(hotkey('c', true, true), null);
+});
+
+test('modal viewer traps Tab at dialog boundaries without hijacking inner controls', () => {
+  assert.equal(modalFocusWrapIndex(-1, 3, false), 0);
+  assert.equal(modalFocusWrapIndex(-1, 3, true), 2);
+  assert.equal(modalFocusWrapIndex(0, 3, true), 2);
+  assert.equal(modalFocusWrapIndex(2, 3, false), 0);
+  assert.equal(modalFocusWrapIndex(1, 3, false), null);
+  assert.equal(modalFocusWrapIndex(1, 3, true), null);
+  assert.equal(modalFocusWrapIndex(0, 0, false), null);
+  assert.equal(modalFocusWrapIndex(0, -1, false), null);
 });

@@ -74,21 +74,57 @@ pub(super) fn crop_bgra(
     h: u32,
     dst: &mut [u8],
 ) {
-    let sw = sw as usize;
-    let (x, y, w, h) = (x as usize, y as usize, w as usize, h as usize);
-    let row = w * 4;
-    for r in 0..h {
-        let sy = y + r;
-        let d = r * row;
-        if sy >= sh as usize {
-            dst[d..d + row].fill(0);
+    let (sw, sh, x, y, w, h) = (
+        sw as usize,
+        sh as usize,
+        x as usize,
+        y as usize,
+        w as usize,
+        h as usize,
+    );
+    let Some(row_bytes) = w.checked_mul(4) else {
+        return;
+    };
+    let Some(total_bytes) = row_bytes.checked_mul(h) else {
+        return;
+    };
+    if row_bytes == 0 {
+        return;
+    }
+    if dst.len() < total_bytes {
+        dst.fill(0);
+        return;
+    }
+    let Some(source_stride) = sw.checked_mul(4) else {
+        dst[..total_bytes].fill(0);
+        return;
+    };
+    // Clip each row independently: never copy trailing bytes from the next
+    // source scanline when a region overlaps the monitor's right edge.
+    let copy_bytes = sw.saturating_sub(x).min(w) * 4;
+    for (r, output) in dst[..total_bytes].chunks_exact_mut(row_bytes).enumerate() {
+        let Some(sy) = y.checked_add(r) else {
+            output.fill(0);
+            continue;
+        };
+        if sy >= sh || copy_bytes == 0 {
+            output.fill(0);
             continue;
         }
-        let s = (sy * sw + x) * 4;
-        if s + row <= src.len() {
-            dst[d..d + row].copy_from_slice(&src[s..s + row]);
+        let source_start = sy.checked_mul(source_stride).and_then(|base| {
+            let column = x.checked_mul(4)?;
+            base.checked_add(column)
+        });
+        let bytes = source_start.and_then(|start| {
+            let end = start.checked_add(copy_bytes)?;
+            src.get(start..end)
+        });
+        if let Some(bytes) = bytes {
+            output[..copy_bytes].copy_from_slice(bytes);
+            output[copy_bytes..].fill(0);
         } else {
-            dst[d..d + row].fill(0);
+            // Incomplete driver buffers must never leave stale pixels on screen.
+            output.fill(0);
         }
     }
 }
@@ -109,9 +145,11 @@ pub(super) fn pixelate_bgra(buf: &mut [u8], w: u32, h: u32, r: &PixelRect) {
         .checked_mul(h as usize)
         .and_then(|pixels| pixels.checked_mul(4))
     else {
+        buf.fill(0);
         return;
     };
     if buf.len() < expected {
+        buf.fill(0);
         return;
     }
     let stride = w as usize * 4;

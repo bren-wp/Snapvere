@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve, dirname } from "node:path";
+import { galleryStatusCopy } from "../src/lib/galleryStatusCopy.ts";
 import {
   ACTION_STRINGS,
   CORE_STRINGS,
@@ -146,4 +147,16 @@ test("Unreviewed strings fall back to clear English, never placeholders or keys"
     assert.equal(translate(code, "Audio device not available"), "Audio device not available");
   }
   assert.equal(translate("en", "Settings"), "Settings");
+});
+
+test("gallery load failures have a localized retry action in all twelve languages", () => {
+  for (const { code } of LANGUAGES) {
+    const { retry, refresh } = galleryStatusCopy(code);
+    assert.ok(retry.trim(), `Missing gallery retry copy in ${code}`);
+    assert.ok(refresh.trim(), `Missing gallery refresh copy in ${code}`);
+    if (code !== "en") {
+      assert.notEqual(retry, galleryStatusCopy("en").retry);
+      assert.notEqual(refresh, galleryStatusCopy("en").refresh);
+    }
+  }
 });

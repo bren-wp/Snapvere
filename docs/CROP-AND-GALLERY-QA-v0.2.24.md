@@ -1,0 +1,178 @@
+# Snapvere by Brendigo — v0.2.24 recording safety and gallery workflow
+
+## Frame boundary protection
+
+The recorder consumes BGRA frames from DXGI or xcap. Previously, a crop
+whose right edge crossed a source scanline could copy the first pixels of
+the next scanline, because the code validated only the total source length.
+The fixed crop clips **each source row** independently; missing pixels become
+black, including when native frame data is truncated.
+
+The implementation checks destination capacity and multiplication/offset
+overflow before creating slices. Normal fully in-bounds crops still use a
+single row-copy operation, avoiding full-frame clears on each frame.
+
+## Gallery workflow and caller authorization
+
+The Home gallery now offers **Open capture folder** alongside the existing
+clipboard import. This calls the same native folder opener used by Settings
+and the tray; no path is accepted from frontend inputs.
+The command's native caller allowlist is `home` and `settings`.
+The existing capability gate and a dedicated Rust test reject capture overlays,
+recording HUD, and editor WebViews.
+
+## Required validation before merge
+
+- [ ] Windows Rust unit tests, Clippy, rustfmt, and three Windows packages
+- [ ] IPC caller security regression gate, TypeScript, frontend tests
+- [ ] RustSec dependency audit and browser extension security gate
+- [ ] Native Windows 10/11 recorder crop at the right and bottom monitor edges
+- [ ] Home/gallery small window, 125%-200% DPI, both themes, all 12 languages
+- [ ] Reference-based visual difference tests before claiming 1:1 accuracy
+
+## Filtering and pagination correctness
+
+The library category (`All`, `Images`, `Videos`) is now passed to the
+SQLite query before applying `LIMIT` and `OFFSET`. Previously, filtering
+only the first 120 fetched captures could make older recordings invisible.
+The native query preserves literal %, _ and backslash search behavior and
+deduplicates tag matches. An unrecognized kind is rejected, with no raw SQL
+interpolation. Existing code may omit the kind and receives `all`.
+
+Regression tests cover more than 120 images followed by older MP4 and GIF
+recordings, tag-only search, paging and invalid filter values.
+
+## Redaction fail-closed behavior
+
+If recording-frame dimensions and memory contents disagree, privacy redaction
+blacks out the available buffer instead of returning without masking.
+The crop helper likewise clears a truncated destination. Unit tests verify
+that invalid lengths never leave old pixels or unredacted frame data visible.
+
+## Responsive gallery action grouping
+
+The Home toolbar keeps the two file actions (open captures folder and import
+from clipboard) in one wrapping flex group. Compact viewports move the whole
+group to the next row rather than leaving a lone button. The design remains
+keyboard-navigable and uses the existing responsive layout and native IPC.
+
+## Gallery deletion consistency and recovery
+
+Deleting a currently displayed capture now adjusts the next SQL OFFSET and
+invalidates in-flight list requests. This avoids skipping an older item when
+the user next requests more results. The already loaded cards and viewer are
+preserved, rather than resetting the whole gallery to the first page.
+
+If the initial gallery read fails, the empty-state surface shows a persistent
+error and a localized **Try again** action in all 12 interface languages.
+Existing captures are not misrepresented as an empty gallery. Tests cover
+offset adjustment, missing IDs, and all retry translations.
+
+## Touch and keyboard accessibility
+
+Capture-card file/deletion controls must be reachable without pointer hover.
+Under `(hover: none)` or `(pointer: coarse)`, the controls are visible
+with 40 px minimum targets. Desktop hover behavior and keyboard focus remain
+unchanged. Verify on Windows touch or device-emulated mobile input separately
+before claiming physical device parity.
+
+## Gallery convenience and precise pagination
+
+Every gallery card now exposes a native **Copy file path** button alongside
+**Show in folder** and **Delete**, with localized labels and success feedback.
+The action uses the existing origin-checked Rust command and does not expose
+arbitrary path writes or clipboard APIs to the WebView.
+
+Gallery reads request `PAGE_SIZE + 1` records to detect additional media.
+Only the first `PAGE_SIZE` records enter React state or advance the SQL
+offset; the extra row is used solely to determine whether the Load more
+button should be shown. Unit tests cover exactly full, short, and overfull
+result pages as well as invalid page sizes.
+
+## Concurrent reload and page safety
+
+On every new query, category change, refresh and successful deletion the
+frontend invalidates older paging generations. The generation is checked before
+using any fetched results **and** before clearing the pending request's
+spinner in `finally`; older promises cannot reset the state of a newer request.
+A synchronous ref to loaded cards prevents stale deletion-offset calculations
+when React schedules several state updates close together.
+
+An initial gallery failure retains the centered retry option; a failed
+refresh with existing cards now keeps the cards but also shows a persistent
+retry banner so the user is not misled into thinking the results are current.
+
+## Delayed asynchronous actions and active filters
+
+The selected gallery search/query now lives in a stable selection store. Every
+refresh reads its current snapshot **when the command starts**, not the React
+render closure that created the callback. This closes the race where a slow
+clipboard import or capture could refresh **All** after the user switched to
+**Videos**, leaving mis-filtered cards and an inconsistent pagination offset.
+The same rule covers native capture-completion events, window-focus refreshes,
+manual retries and delayed pagination calls. Query/filter handlers update the
+store synchronously before scheduling React state and the 200 ms debounce.
+
+Regression test: retain a delayed callback created while the category is
+`all`; switch to `videos` plus an active search, then invoke the old callback.
+It must read the latest filter and query while the earlier snapshot remains
+unchanged.
+
+## Gallery indexing and manual refresh
+
+The transactional SQLite migration creates `idx_screenshots_order` on
+`(created_at DESC, id DESC)` and retires the redundant timestamp-only index.
+This matches the deterministic gallery sorting and avoids maintaining two
+indexes with the same leading column. A Rust test verifies the migration.
+
+Home now provides an accessible manual gallery refresh control with localized
+tooltip/screen-reader text in all 12 languages. It uses the existing
+current-selection-safe command and does not expand native permissions.
+
+## Gallery keyboard productivity
+
+Home handles **Ctrl+F** (Windows/Linux) or **Cmd+F** (macOS) to focus and select
+the gallery search field and **F5** to refresh the currently selected query
+and media type. The handler is disabled while the modal Viewer is active, and
+rejects Shift/Alt combinations and key repeats. The logic is unit tested for
+shortcut combinations and collision prevention. No additional Tauri capability
+is granted, and the existing pixel layout is preserved.
+
+## Capture-card keyboard propagation
+
+Card utility buttons deliberately stop bubbling keydown events. The Home
+Ctrl/Cmd+F and F5 handlers therefore must register in the **capture phase**
+(`addEventListener('keydown', listener, true)`) to receive shortcuts before
+the focused card action blocks propagation. The removal uses the same capture
+option. Search and refresh expose `aria-keyshortcuts` for assistive tech. A
+regression test asserts matching listener registration and removal, shortcut
+advertisement, and the card's bubbling stop.
+
+## Viewer hotkey isolation and clipboard behavior
+
+The image/video Viewer now classifies keyboard shortcuts by exact modifier
+combinations. Plain **F** still toggles fullscreen, **Delete** removes a capture
+with its existing confirmation, and arrows navigate. Modified Ctrl/Cmd+F,
+Ctrl+Delete and Shift+F no longer trigger those actions. **Ctrl/Cmd+C** copies
+the image only for image items; on MP4 it is left to normal clipboard handling.
+**Ctrl/Cmd+Shift+C** still copies the registered file path, reporting failures
+with the translated action name. Regression tests cover all combinations.
+
+## Defensive recovery after tampered staging
+
+A pending gallery deletion now restores only a **regular staged media file**.
+If a staged path becomes a directory or symlink during application downtime,
+recovery refuses to install the replacement as gallery content and preserves
+the SQLite journal so the operation can be retried safely. A restart test
+simulates a staged directory and verifies the original file and thumbnail are
+fully restored once the valid stage is back.
+
+## Modal Viewer focus and navigation
+
+On opening an image or video, the Viewer now focuses its dialog root, uses
+`aria-modal`, and wraps Tab/Shift+Tab within its own focusable controls.
+After close it restores the previously focused Home control if still mounted.
+The modal Escape shortcut remains usable while an input or video scrubber is
+focused; normal arrows remain owned by those interactive controls. A pure
+focus-boundary helper has dedicated regression coverage. No visual layout or
+native Tauri capability changes are involved.

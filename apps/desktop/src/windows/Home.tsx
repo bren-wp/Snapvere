@@ -1,5 +1,5 @@
 // Snapvere by Brendigo
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
@@ -10,7 +10,9 @@ import {
   ArrowUpRight,
   Crop,
   ClipboardPaste,
+  FolderOpen,
   Monitor,
+  RefreshCw,
   Settings as SettingsIcon,
   Search,
   Video,
@@ -18,7 +20,15 @@ import {
 import { ipc } from "../lib/ipc";
 import { useLanguage } from "../lib/LanguageProvider";
 import { isVideo } from "../lib/types";
-import { mergeUniqueById } from "../lib/galleryPaging";
+import {
+  createGallerySelectionStore,
+  mergeUniqueById,
+  offsetAfterDeletingLoadedCapture,
+  splitGalleryPage,
+} from "../lib/galleryPaging";
+import type { GalleryFilter } from "../lib/galleryPaging";
+import { galleryStatusCopy } from "../lib/galleryStatusCopy";
+import { galleryKeyboardShortcut } from "../lib/galleryKeyboard";
 import type { RecordDone, Screenshot } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
 import Viewer from "../components/Viewer";
@@ -26,85 +36,143 @@ import CaptureCard from "../components/home/CaptureCard";
 import EmptyGallery from "../components/home/EmptyGallery";
 import UpdateNotice from "../components/UpdateNotice";
 
-type Filter = "all" | "images" | "videos";
+type Filter = GalleryFilter;
 const PAGE_SIZE = 120;
 
 export default function Home() {
   const { t, language } = useLanguage();
   const clipboardText = clipboardImportCopy(language);
+  const galleryText = galleryStatusCopy(language);
   const [items, setItems] = useState<Screenshot[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [galleryError, setGalleryError] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
+  const [activeSelection] = useState(createGallerySelectionStore);
   const [toast, setToast] = useState<string | null>(null);
   const [captureBusy, setCaptureBusy] = useState(false);
   /** Otvoren u pregledniku (id, ne indeks — lista se osvježava ispod njega). */
   const [viewId, setViewId] = useState<string | null>(null);
   const galleryRequest = useRef(0);
   const pagingBusy = useRef(false);
+  const pagingToken = useRef(0);
   const pageOffset = useRef(0);
+  const loadedItems = useRef<Screenshot[]>([]);
+  const searchInput = useRef<HTMLInputElement>(null);
 
-  const load = useCallback(async (q: string) => {
+  // A new query, refresh, or deletion must supersede any older page request.
+  // Tokens also keep an obsolete promise's finally block from clearing the
+  // busy indicator of a newer request.
+  const invalidatePaging = useCallback(() => {
+    pagingToken.current += 1;
+    pagingBusy.current = false;
+    setLoadingMore(false);
+  }, []);
+
+  const load = useCallback(async () => {
+    // Always read the latest selection: captures, clipboard imports and native
+    // events can finish after a user changes the gallery category or query.
+    const { query: currentQuery, filter: currentFilter } = activeSelection.snapshot();
     const request = ++galleryRequest.current;
+    invalidatePaging();
     setLoading(true);
+    setGalleryError(false);
     try {
-      const res = q.trim()
-        ? await ipc.searchScreenshots(q, PAGE_SIZE, 0)
-        : await ipc.listScreenshots(PAGE_SIZE, 0);
+      const res = currentQuery.trim()
+        ? await ipc.searchScreenshots(currentQuery, PAGE_SIZE + 1, 0, currentFilter)
+        : await ipc.listScreenshots(PAGE_SIZE + 1, 0, currentFilter);
       if (request === galleryRequest.current) {
-        pageOffset.current = res.length;
-        setItems(res);
-        setHasMore(res.length === PAGE_SIZE);
+        const { page, hasMore: more } = splitGalleryPage(res, PAGE_SIZE);
+        pageOffset.current = page.length;
+        loadedItems.current = page;
+        setItems(page);
+        setHasMore(more);
       }
     } catch (e) {
       console.error(e);
-      if (request === galleryRequest.current) setToast(t("Could not load the gallery"));
+      if (request === galleryRequest.current) {
+        setGalleryError(true);
+        setToast(t("Could not load the gallery"));
+      }
     } finally {
       if (request === galleryRequest.current) setLoading(false);
     }
-  }, [t]);
+  }, [t, invalidatePaging, activeSelection]);
 
   const loadMore = useCallback(async () => {
     if (pagingBusy.current || loading || !hasMore) return;
     pagingBusy.current = true;
+    const pageToken = ++pagingToken.current;
     const request = galleryRequest.current;
     const offset = pageOffset.current;
+    const { query: currentQuery, filter: currentFilter } = activeSelection.snapshot();
     setLoadingMore(true);
     try {
-      const res = query.trim()
-        ? await ipc.searchScreenshots(query, PAGE_SIZE, offset)
-        : await ipc.listScreenshots(PAGE_SIZE, offset);
+      const res = currentQuery.trim()
+        ? await ipc.searchScreenshots(currentQuery, PAGE_SIZE + 1, offset, currentFilter)
+        : await ipc.listScreenshots(PAGE_SIZE + 1, offset, currentFilter);
       if (request !== galleryRequest.current) return;
-      pageOffset.current = offset + res.length;
-      setItems((previous) => mergeUniqueById(previous, res));
-      setHasMore(res.length === PAGE_SIZE);
+      const { page, hasMore: more } = splitGalleryPage(res, PAGE_SIZE);
+      pageOffset.current = offset + page.length;
+      const merged = mergeUniqueById(loadedItems.current, page);
+      loadedItems.current = merged;
+      setItems(merged);
+      setHasMore(more);
     } catch (error) {
       if (request === galleryRequest.current) {
         setToast(`${t("Could not load older captures:")} ${String(error)}`);
       }
     } finally {
-      pagingBusy.current = false;
-      setLoadingMore(false);
+      if (pageToken === pagingToken.current) {
+        pagingBusy.current = false;
+        setLoadingMore(false);
+      }
     }
-  }, [hasMore, loading, query]);
+  }, [hasMore, loading, activeSelection, t]);
 
   useEffect(() => {
-    const t = setTimeout(() => void load(query), 200);
+    const t = setTimeout(() => void load(), 200);
     return () => {
       clearTimeout(t);
       galleryRequest.current += 1;
     };
-  }, [query, load]);
+  }, [query, filter, load]);
+
+  useEffect(() => {
+    const onShortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      const action = galleryKeyboardShortcut(
+        event.key, event.ctrlKey, event.metaKey, event.altKey, event.shiftKey,
+      );
+      if (action === "refresh") {
+        // F5 must never hard-reload the WebView and disrupt unsaved work.
+        // While Viewer is open or a refresh is pending, consume but do not run.
+        event.preventDefault();
+        if (!viewId && !loading && !event.repeat) void load();
+      } else if (action === "search" && !viewId && searchInput.current) {
+        event.preventDefault();
+        if (!event.repeat) {
+          searchInput.current.focus();
+          searchInput.current.select();
+        }
+      }
+    };
+    // Capture phase is essential: CaptureCard's action row intentionally
+    // stops bubbling key events. F5 must still be prevented from hard-reloading
+    // the WebView when a card's Delete/Copy/Reveal button owns focus.
+    window.addEventListener("keydown", onShortcut, true);
+    return () => window.removeEventListener("keydown", onShortcut, true);
+  }, [load, loading, viewId]);
 
   useEffect(() => {
     const w = getCurrentWindow();
     const un = w.onFocusChanged(({ payload }) => {
-      if (payload) void load(query);
+      if (payload) void load();
     });
     return () => void un.then((f) => f());
-  }, [load, query]);
+  }, [load]);
 
   // Snimanje i tray-capture zavrsavaju izvan ovog prozora — event je jedini signal.
   useEffect(() => {
@@ -114,16 +182,16 @@ export default function Home() {
         if (error) setToast(`${t("Recording failed:")} ${error}`);
         else if (!cancelled) {
           setToast(t("Recording saved"));
-          void load(query);
+          void load();
         }
       }),
-      listen<Screenshot>("snapvere:shot-saved", () => void load(query)),
+      listen<Screenshot>("snapvere:shot-saved", () => void load()),
       listen<string>("snapvere:toast", (e) => setToast(e.payload)),
     ];
     return () => {
       subs.forEach((x) => void x.then((un) => un()));
     };
-  }, [load, query, t]);
+  }, [load, t]);
 
   useEffect(() => {
     if (!toast) return;
@@ -131,11 +199,9 @@ export default function Home() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const visible = useMemo(() => {
-    if (filter === "all") return items;
-    const wantVideo = filter === "videos";
-    return items.filter((s) => isVideo(s) === wantVideo);
-  }, [items, filter]);
+  // SQL applies the selected category before LIMIT/OFFSET, so older media
+  // cannot disappear merely because recent captures belong to another kind.
+  const visible = items;
 
   const onDelete = useCallback(async (s: Screenshot) => {
     const ok = await ask(`"${s.name}" — ${t("This item will be removed from the gallery and deleted from disk.")}`, {
@@ -147,11 +213,34 @@ export default function Home() {
     if (!ok) return false;
     try {
       await ipc.deleteScreenshot(s.id);
-      setItems((prev) => prev.filter((x) => x.id !== s.id));
+      const currentlyLoaded = loadedItems.current;
+      if (currentlyLoaded.some((item) => item.id === s.id)) {
+        // Discard in-flight pages; their SQL offsets predate the deletion.
+        galleryRequest.current += 1;
+        invalidatePaging();
+        pageOffset.current = offsetAfterDeletingLoadedCapture(
+          currentlyLoaded,
+          s.id,
+          pageOffset.current,
+        );
+        const remaining = currentlyLoaded.filter((item) => item.id !== s.id);
+        loadedItems.current = remaining;
+        setItems(remaining);
+        setLoading(false);
+      }
       return true;
     } catch (e) {
       setToast(`${t("Could not delete capture:")} ${String(e)}`);
       return false;
+    }
+  }, [t, invalidatePaging]);
+
+  const copyPath = useCallback(async (s: Screenshot) => {
+    try {
+      await ipc.copyMediaPath(s.id);
+      setToast(t("File path copied"));
+    } catch (error) {
+      setToast(`${t("Copy file path")}: ${String(error)}`);
     }
   }, [t]);
 
@@ -186,7 +275,7 @@ export default function Home() {
       await new Promise<void>((resolve) => setTimeout(resolve, 180));
       const { format, quality } = await readCapturePreferences();
       await ipc.captureFullscreen(format, quality);
-      await load(query);
+      await load();
       setToast(t("Full-screen screenshot saved."));
     } catch (e) {
       setToast(`${t("Screenshot failed:")} ${String(e)}`);
@@ -201,7 +290,7 @@ export default function Home() {
     setCaptureBusy(true);
     try {
       await ipc.importClipboardImage();
-      await load(query);
+      await load();
       setToast(clipboardText.saved);
     } catch (error) {
       console.error("User-initiated clipboard import failed", error);
@@ -218,6 +307,13 @@ export default function Home() {
     } catch (e) {
       await getCurrentWindow().show().catch(console.error);
       setToast(`${t("Recording could not start:")} ${String(e)}`);
+    }
+  };
+  const openCaptureFolder = async () => {
+    try {
+      await ipc.openCaptureFolder();
+    } catch (error) {
+      setToast(`${t("Open capture folder")}: ${String(error)}`);
     }
   };
   const openSettings = async () => {
@@ -330,10 +426,20 @@ export default function Home() {
           <div className="snapvere-gallery-search relative">
             <Search size={16} aria-hidden="true" className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
             <input
+              ref={searchInput}
               type="search"
+              aria-keyshortcuts="Control+F Meta+F"
               value={query}
               onChange={(e) => {
+                // Invalidate synchronously, before the 200 ms query debounce.
+                galleryRequest.current += 1;
+                invalidatePaging();
+                loadedItems.current = [];
+                activeSelection.setQuery(e.target.value);
                 setQuery(e.target.value);
+                setGalleryError(false);
+                setItems([]);
+                setLoading(true);
                 setHasMore(false);
                 pageOffset.current = 0;
               }}
@@ -348,7 +454,19 @@ export default function Home() {
               <button
                 key={f}
                 type="button"
-                onClick={() => setFilter(f)}
+                onClick={() => {
+                  if (activeSelection.snapshot().filter === f) return;
+                  galleryRequest.current += 1;
+                  invalidatePaging();
+                  loadedItems.current = [];
+                  activeSelection.setFilter(f);
+                  setFilter(f);
+                  setGalleryError(false);
+                  setItems([]);
+                  setLoading(true);
+                  setHasMore(false);
+                  pageOffset.current = 0;
+                }}
                 aria-pressed={filter === f}
                 className={`snapvere-gallery-filter ${filter === f ? "is-active" : ""}`}
               >
@@ -356,24 +474,74 @@ export default function Home() {
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => void importFromClipboard()}
-            disabled={captureBusy}
-            aria-label={clipboardText.action}
-            title={clipboardText.action}
-            className="snapvere-btn-secondary inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm disabled:opacity-50"
-          >
-            <ClipboardPaste size={16} aria-hidden="true" />
-            <span>{clipboardText.action}</span>
-          </button>
+          <div className="snapvere-gallery-actions">
+            <button
+              type="button"
+              onClick={() => void load()}
+              disabled={loading}
+              aria-label={galleryText.refresh}
+              aria-keyshortcuts="F5"
+              title={galleryText.refresh}
+              className="snapvere-btn-secondary inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <RefreshCw size={16} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => void openCaptureFolder()}
+              aria-label={t("Open capture folder")}
+              title={t("Open capture folder")}
+              className="snapvere-btn-secondary inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm"
+            >
+              <FolderOpen size={16} aria-hidden="true" />
+              <span>{t("Open capture folder")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void importFromClipboard()}
+              disabled={captureBusy}
+              aria-label={clipboardText.action}
+              title={clipboardText.action}
+              className="snapvere-btn-secondary inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm disabled:opacity-50"
+            >
+              <ClipboardPaste size={16} aria-hidden="true" />
+              <span>{clipboardText.action}</span>
+            </button>
+          </div>
         </div>
       </section>
 
+      {/* Keep older results visible after a failed refresh, but clearly label
+          them as stale and provide an explicit retry action. */}
+      {galleryError && visible.length > 0 && (
+        <div role="alert" className="mx-5 mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-elevated/85 px-4 py-3 text-sm">
+          <span>{t("Could not load the gallery")}</span>
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="snapvere-btn-secondary rounded-full px-4 py-2 text-sm font-medium focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            {galleryText.retry}
+          </button>
+        </div>
+      )}
       {/* galerija */}
       <main className="min-h-0 flex-1 overflow-auto px-5 pb-5">
         {loading && items.length === 0 ? (
           <div className="grid h-full place-items-center text-muted">{t("Loading…")}</div>
+        ) : galleryError && visible.length === 0 ? (
+          <div role="alert" className="grid h-full place-items-center text-center">
+            <div className="max-w-sm">
+              <p className="mb-4 text-sm text-muted">{t("Could not load the gallery")}</p>
+              <button
+                type="button"
+                onClick={() => void load()}
+                className="snapvere-btn-secondary rounded-full px-5 py-2.5 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                {galleryText.retry}
+              </button>
+            </div>
+          </div>
         ) : visible.length === 0 ? (
           <EmptyGallery onCapture={captureRegion} hasQuery={!!query.trim() || filter !== "all"} />
         ) : (
@@ -384,6 +552,7 @@ export default function Home() {
                 shot={s}
                 onOpen={() => setViewId(s.id)}
                 onReveal={() => void reveal(s)}
+                onCopyPath={() => void copyPath(s)}
                 onDelete={() => void onDelete(s)}
               />
             ))}
