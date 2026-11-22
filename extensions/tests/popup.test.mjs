@@ -77,7 +77,20 @@ test("capture failure is visible, bounded and restores actions", async () => {
   popup.click("visible");
   await tick();
   assert.equal(popup.status.dataset.state, "error");
-  assert.match(popup.note.textContent, /denied/);
+  assert.match(popup.note.textContent, /check site permissions/i);
+  assert.doesNotMatch(popup.note.textContent, /denied by browser/i);
+  assert.ok(popup.buttons.every(x => !x.disabled));
+});
+
+test("untrusted browser error messages cannot expose capture URLs or local paths", async () => {
+  const sensitive = "Cannot read https://example.com/private?id=123 from C:\\Users\\Alice\\secret.png";
+  const popup = make(async () => { throw new Error(sensitive); }, {});
+  popup.click("visible");
+  await tick();
+  assert.equal(popup.status.dataset.state, "error");
+  assert.match(popup.status.textContent, /could not capture this page/i);
+  assert.match(popup.note.textContent, /permissions/i);
+  assert.doesNotMatch(popup.note.textContent, /example\.com|private\?id=|secret\.png|Alice/i);
   assert.ok(popup.buttons.every(x => !x.disabled));
 });
 

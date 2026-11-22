@@ -30,6 +30,15 @@ for browser in BROWSERS:
             assert "https://" not in value and "unsafe-eval" not in value
     print(f"{browser}: local-only, minimal-permission WebExtension manifest")
 
+# JavaScript identifiers are case-sensitive: "Function(...)" constructs code,
+# whereas the common "(function () { ... })()" is harmless syntax. A
+# case-insensitive match conflated the two and broke every extension build.
+EVAL_PATTERN = r"\b(?:eval|Function)\s*\("
+for safe in ("(function () { return 1; })()", "function (value) { return value; }"):
+    assert re.search(EVAL_PATTERN, safe) is None, "The code-execution guard must avoid false positives"
+for unsafe in ("eval(source)", "Function(source)", "new Function(source)"):
+    assert re.search(EVAL_PATTERN, unsafe) is not None, "The code-execution guard must reject execution APIs"
+
 for path in sorted(SOURCE.iterdir()):
     if path.suffix not in {".js", ".html", ".css"}:
         continue
@@ -39,11 +48,15 @@ for path in sorted(SOURCE.iterdir()):
         for label, pattern in {
             "outbound network": r"\b(?:fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(",
             "telemetry": r"\b(?:sendBeacon|gtag|sentry|analytics)\s*\(",
-            "arbitrary JS evaluation": r"\b(?:eval|Function)\s*\(",
+            "arbitrary JS evaluation": EVAL_PATTERN,
             "remote URL": r"https?://",
             "HTML injection": r"(?:\.innerHTML|document\.write)\s*(?:=|\()",
         }.items():
-            assert re.search(pattern, text, re.IGNORECASE) is None, (
+            # JavaScript is case-sensitive; the evaluation primitive check
+            # must not interpret ordinary lowercase function declarations as
+            # calls to the uppercase Function constructor.
+            flags = 0 if label == "arbitrary JS evaluation" else re.IGNORECASE
+            assert re.search(pattern, text, flags) is None, (
                 f"{path.name}: forbidden {label}"
             )
     elif path.suffix == ".html":

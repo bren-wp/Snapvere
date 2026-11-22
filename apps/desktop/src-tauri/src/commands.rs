@@ -1438,7 +1438,10 @@ pub fn dispatch_record_fullscreen(app: &AppHandle) {
             }
             let opts = record_options(&app);
             if let Err(e) = start_recording_inner(&app, None, None, opts) {
-                let _ = app.emit("snapvere:toast", "Recording could not start. Open Diagnostics for details.");
+                let _ = app.emit(
+                    "snapvere:toast",
+                    "Recording could not start. Open Diagnostics for details.",
+                );
                 log(&format!("dispatch_record_fullscreen: {e}"));
             }
         });
