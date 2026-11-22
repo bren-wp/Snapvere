@@ -89,6 +89,12 @@ fn restore_one(source: &str, staged: &str) -> Result<()> {
     let source = Path::new(source);
     let staged = Path::new(staged);
     if exists(staged)? {
+        // An unexpected directory or symlink may have replaced a staged file
+        // while the process was not running. Never restore it as gallery media.
+        ensure!(
+            fs::symlink_metadata(staged)?.file_type().is_file(),
+            "Gallery recovery requires a regular staged media file"
+        );
         ensure!(
             !exists(source)?,
             "Original gallery path already exists; refusing overwrite"
@@ -271,6 +277,37 @@ mod tests {
         drop(db);
         let db = Db::open(&folder.join("gallery.sqlite"))?;
         assert!(db.get(&shot.id)?.is_some());
+        assert_eq!(fs::read(&shot.file_path)?, b"original");
+        assert_eq!(fs::read(shot.thumb_path.as_deref().unwrap())?, b"thumbnail");
+        assert!(db.pending_deletions()?.is_empty());
+        drop(db);
+        fs::remove_dir_all(folder)?;
+        Ok(())
+    }
+
+    #[test]
+    fn staged_directory_cannot_replace_media_during_recovery() -> Result<()> {
+        let (folder, db, shot) = fixture()?;
+        let job = intent(&shot)?;
+        db.prepare_delete(&job)?;
+        stage_files(&job)?;
+
+        let staged = PathBuf::from(&job.staged_file_path);
+        let backup = folder.join("staged-media-backup.tmp");
+        fs::rename(&staged, &backup)?;
+        fs::create_dir(&staged)?;
+        drop(db);
+
+        let db = Db::open(&folder.join("gallery.sqlite"))?;
+        assert!(db.get(&shot.id)?.is_some());
+        assert!(db.pending_delete(&shot.id)?.is_some());
+        assert!(staged.is_dir());
+        assert!(!Path::new(&shot.file_path).exists());
+        drop(db);
+
+        fs::remove_dir(&staged)?;
+        fs::rename(&backup, &staged)?;
+        let db = Db::open(&folder.join("gallery.sqlite"))?;
         assert_eq!(fs::read(&shot.file_path)?, b"original");
         assert_eq!(fs::read(shot.thumb_path.as_deref().unwrap())?, b"thumbnail");
         assert!(db.pending_deletions()?.is_empty());

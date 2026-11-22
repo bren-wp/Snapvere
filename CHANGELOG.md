@@ -248,3 +248,5 @@ The separately deployed public snapvere.com currently serves a different impleme
 - Fix Codex-reported P2 keyboard propagation bug: register Home's shortcut handler in the capture phase, so Ctrl/Cmd+F and F5 work even when a capture-card Reveal/Copy/Delete button has focus; stop native WebView hard reload in that state. Advertise both shortcuts via `aria-keyshortcuts` and regression-test capture-phase registration.
 
 - Harden media Viewer keyboard shortcuts: plain F, Delete and arrows no longer react to Ctrl/Cmd/Shift/Alt-modified combinations; Ctrl+F/Cmd+F cannot unexpectedly toggle fullscreen, Ctrl+Delete cannot initiate deletion, and video Ctrl+C no longer hijacks text clipboard. Keep explicit Ctrl/Cmd+Shift+C for copying the registered file path with localized error messages; add regression tests.
+
+- Harden crash-recovery of deleted media: reject a staged file replaced with a directory or symlink before restoring it into the gallery, leave the durable journal pending, and recover normally once the valid staged file returns. Add a portable restart/recovery regression test.

@@ -157,3 +157,12 @@ Ctrl+Delete and Shift+F no longer trigger those actions. **Ctrl/Cmd+C** copies
 the image only for image items; on MP4 it is left to normal clipboard handling.
 **Ctrl/Cmd+Shift+C** still copies the registered file path, reporting failures
 with the translated action name. Regression tests cover all combinations.
+
+## Defensive recovery after tampered staging
+
+A pending gallery deletion now restores only a **regular staged media file**.
+If a staged path becomes a directory or symlink during application downtime,
+recovery refuses to install the replacement as gallery content and preserves
+the SQLite journal so the operation can be retried safely. A restart test
+simulates a staged directory and verifies the original file and thumbnail are
+fully restored once the valid stage is back.
