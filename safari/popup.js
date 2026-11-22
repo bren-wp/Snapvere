@@ -36,7 +36,8 @@ async function act(mode) {
   } catch (error) {
     console.error("SNAPVERE screenshot failed:", error);
     setStatus("Could not capture this page. Try another page.", "error");
-    note.textContent = String(error?.message || error).slice(0, 220);
+    // Do not reveal active-tab URL or local filesystem paths in popup text.
+    note.textContent = "Check site permissions or try another webpage.";
   } finally {
     busy = false;
     buttons.forEach(button => { button.disabled = false; });
