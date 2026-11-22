@@ -101,3 +101,19 @@ when React schedules several state updates close together.
 An initial gallery failure retains the centered retry option; a failed
 refresh with existing cards now keeps the cards but also shows a persistent
 retry banner so the user is not misled into thinking the results are current.
+
+## Delayed asynchronous actions and active filters
+
+The selected gallery search/query now lives in a stable selection store. Every
+refresh reads its current snapshot **when the command starts**, not the React
+render closure that created the callback. This closes the race where a slow
+clipboard import or capture could refresh **All** after the user switched to
+**Videos**, leaving mis-filtered cards and an inconsistent pagination offset.
+The same rule covers native capture-completion events, window-focus refreshes,
+manual retries and delayed pagination calls. Query/filter handlers update the
+store synchronously before scheduling React state and the 200 ms debounce.
+
+Regression test: retain a delayed callback created while the category is
+`all`; switch to `videos` plus an active search, then invoke the old callback.
+It must read the latest filter and query while the earlier snapshot remains
+unchanged.

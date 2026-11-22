@@ -19,7 +19,13 @@ import {
 import { ipc } from "../lib/ipc";
 import { useLanguage } from "../lib/LanguageProvider";
 import { isVideo } from "../lib/types";
-import { mergeUniqueById, offsetAfterDeletingLoadedCapture, splitGalleryPage } from "../lib/galleryPaging";
+import {
+  createGallerySelectionStore,
+  mergeUniqueById,
+  offsetAfterDeletingLoadedCapture,
+  splitGalleryPage,
+} from "../lib/galleryPaging";
+import type { GalleryFilter } from "../lib/galleryPaging";
 import { galleryStatusCopy } from "../lib/galleryStatusCopy";
 import type { RecordDone, Screenshot } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
@@ -28,7 +34,7 @@ import CaptureCard from "../components/home/CaptureCard";
 import EmptyGallery from "../components/home/EmptyGallery";
 import UpdateNotice from "../components/UpdateNotice";
 
-type Filter = "all" | "images" | "videos";
+type Filter = GalleryFilter;
 const PAGE_SIZE = 120;
 
 export default function Home() {
@@ -42,6 +48,7 @@ export default function Home() {
   const [galleryError, setGalleryError] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
+  const [activeSelection] = useState(createGallerySelectionStore);
   const [toast, setToast] = useState<string | null>(null);
   const [captureBusy, setCaptureBusy] = useState(false);
   /** Otvoren u pregledniku (id, ne indeks — lista se osvježava ispod njega). */
@@ -61,15 +68,18 @@ export default function Home() {
     setLoadingMore(false);
   }, []);
 
-  const load = useCallback(async (q: string) => {
+  const load = useCallback(async () => {
+    // Always read the latest selection: captures, clipboard imports and native
+    // events can finish after a user changes the gallery category or query.
+    const { query: currentQuery, filter: currentFilter } = activeSelection.snapshot();
     const request = ++galleryRequest.current;
     invalidatePaging();
     setLoading(true);
     setGalleryError(false);
     try {
-      const res = q.trim()
-        ? await ipc.searchScreenshots(q, PAGE_SIZE + 1, 0, filter)
-        : await ipc.listScreenshots(PAGE_SIZE + 1, 0, filter);
+      const res = currentQuery.trim()
+        ? await ipc.searchScreenshots(currentQuery, PAGE_SIZE + 1, 0, currentFilter)
+        : await ipc.listScreenshots(PAGE_SIZE + 1, 0, currentFilter);
       if (request === galleryRequest.current) {
         const { page, hasMore: more } = splitGalleryPage(res, PAGE_SIZE);
         pageOffset.current = page.length;
@@ -86,7 +96,7 @@ export default function Home() {
     } finally {
       if (request === galleryRequest.current) setLoading(false);
     }
-  }, [t, filter, invalidatePaging]);
+  }, [t, invalidatePaging, activeSelection]);
 
   const loadMore = useCallback(async () => {
     if (pagingBusy.current || loading || !hasMore) return;
@@ -94,11 +104,12 @@ export default function Home() {
     const pageToken = ++pagingToken.current;
     const request = galleryRequest.current;
     const offset = pageOffset.current;
+    const { query: currentQuery, filter: currentFilter } = activeSelection.snapshot();
     setLoadingMore(true);
     try {
-      const res = query.trim()
-        ? await ipc.searchScreenshots(query, PAGE_SIZE + 1, offset, filter)
-        : await ipc.listScreenshots(PAGE_SIZE + 1, offset, filter);
+      const res = currentQuery.trim()
+        ? await ipc.searchScreenshots(currentQuery, PAGE_SIZE + 1, offset, currentFilter)
+        : await ipc.listScreenshots(PAGE_SIZE + 1, offset, currentFilter);
       if (request !== galleryRequest.current) return;
       const { page, hasMore: more } = splitGalleryPage(res, PAGE_SIZE);
       pageOffset.current = offset + page.length;
@@ -116,23 +127,23 @@ export default function Home() {
         setLoadingMore(false);
       }
     }
-  }, [hasMore, loading, query, filter, t]);
+  }, [hasMore, loading, activeSelection, t]);
 
   useEffect(() => {
-    const t = setTimeout(() => void load(query), 200);
+    const t = setTimeout(() => void load(), 200);
     return () => {
       clearTimeout(t);
       galleryRequest.current += 1;
     };
-  }, [query, load]);
+  }, [query, filter, load]);
 
   useEffect(() => {
     const w = getCurrentWindow();
     const un = w.onFocusChanged(({ payload }) => {
-      if (payload) void load(query);
+      if (payload) void load();
     });
     return () => void un.then((f) => f());
-  }, [load, query]);
+  }, [load]);
 
   // Snimanje i tray-capture zavrsavaju izvan ovog prozora — event je jedini signal.
   useEffect(() => {
@@ -142,16 +153,16 @@ export default function Home() {
         if (error) setToast(`${t("Recording failed:")} ${error}`);
         else if (!cancelled) {
           setToast(t("Recording saved"));
-          void load(query);
+          void load();
         }
       }),
-      listen<Screenshot>("snapvere:shot-saved", () => void load(query)),
+      listen<Screenshot>("snapvere:shot-saved", () => void load()),
       listen<string>("snapvere:toast", (e) => setToast(e.payload)),
     ];
     return () => {
       subs.forEach((x) => void x.then((un) => un()));
     };
-  }, [load, query, t]);
+  }, [load, t]);
 
   useEffect(() => {
     if (!toast) return;
@@ -235,7 +246,7 @@ export default function Home() {
       await new Promise<void>((resolve) => setTimeout(resolve, 180));
       const { format, quality } = await readCapturePreferences();
       await ipc.captureFullscreen(format, quality);
-      await load(query);
+      await load();
       setToast(t("Full-screen screenshot saved."));
     } catch (e) {
       setToast(`${t("Screenshot failed:")} ${String(e)}`);
@@ -250,7 +261,7 @@ export default function Home() {
     setCaptureBusy(true);
     try {
       await ipc.importClipboardImage();
-      await load(query);
+      await load();
       setToast(clipboardText.saved);
     } catch (error) {
       console.error("User-initiated clipboard import failed", error);
@@ -393,6 +404,7 @@ export default function Home() {
                 galleryRequest.current += 1;
                 invalidatePaging();
                 loadedItems.current = [];
+                activeSelection.setQuery(e.target.value);
                 setQuery(e.target.value);
                 setGalleryError(false);
                 setItems([]);
@@ -412,10 +424,11 @@ export default function Home() {
                 key={f}
                 type="button"
                 onClick={() => {
-                  if (filter === f) return;
+                  if (activeSelection.snapshot().filter === f) return;
                   galleryRequest.current += 1;
                   invalidatePaging();
                   loadedItems.current = [];
+                  activeSelection.setFilter(f);
                   setFilter(f);
                   setGalleryError(false);
                   setItems([]);
@@ -463,7 +476,7 @@ export default function Home() {
           <span>{t("Could not load the gallery")}</span>
           <button
             type="button"
-            onClick={() => void load(query)}
+            onClick={() => void load()}
             className="snapvere-btn-secondary rounded-full px-4 py-2 text-sm font-medium focus-visible:ring-2 focus-visible:ring-accent"
           >
             {galleryText.retry}
@@ -480,7 +493,7 @@ export default function Home() {
               <p className="mb-4 text-sm text-muted">{t("Could not load the gallery")}</p>
               <button
                 type="button"
-                onClick={() => void load(query)}
+                onClick={() => void load()}
                 className="snapvere-btn-secondary rounded-full px-5 py-2.5 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-accent"
               >
                 {galleryText.retry}

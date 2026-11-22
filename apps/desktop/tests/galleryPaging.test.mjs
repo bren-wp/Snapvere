@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  createGallerySelectionStore,
   mergeUniqueById,
   offsetAfterDeletingLoadedCapture,
   splitGalleryPage,
@@ -41,4 +42,17 @@ test("look-ahead pagination shows Load more only when an older row exists", () =
   assert.equal(splitGalleryPage(exactlyFull.slice(0, 15), 120).hasMore, false);
   assert.throws(() => splitGalleryPage(exactlyFull, 0));
   assert.throws(() => splitGalleryPage(exactlyFull, 1.5));
+});
+
+test("delayed clipboard and recording callbacks use the latest gallery selection", () => {
+  const selection = createGallerySelectionStore();
+  const oldSnapshot = selection.snapshot();
+  // Simulate a callback created before the user changed the filter.
+  const delayedRefreshSelection = () => selection.snapshot();
+  selection.setFilter("videos");
+  selection.setQuery("meeting");
+  assert.deepEqual(delayedRefreshSelection(), { query: "meeting", filter: "videos" });
+  assert.deepEqual(oldSnapshot, { query: "", filter: "all" });
+  selection.setFilter("images");
+  assert.deepEqual(delayedRefreshSelection(), { query: "meeting", filter: "images" });
 });

@@ -1,4 +1,26 @@
 // Snapvere by Brendigo
+export type GalleryFilter = "all" | "images" | "videos";
+export type GallerySelection = Readonly<{ query: string; filter: GalleryFilter }>;
+
+/**
+ * Stable gallery selection shared by event callbacks and async continuations.
+ * Delayed clipboard imports and recording completions must query the CURRENT
+ * selected category, not the category captured when a callback was created.
+ * Snapshots are independent so pending SQL requests keep their own criteria.
+ */
+export function createGallerySelectionStore() {
+  let selection: GallerySelection = { query: "", filter: "all" };
+  return {
+    snapshot: (): GallerySelection => selection,
+    setQuery: (query: string): void => {
+      selection = { ...selection, query };
+    },
+    setFilter: (filter: GalleryFilter): void => {
+      selection = { ...selection, filter };
+    },
+  };
+}
+
 /** Keep pagination aligned when a loaded capture is deleted.
  * OFFSET counts rows previously fetched, not the number of pages displayed.
  * Deleting a visible row shifts every older row one position toward the front.
