@@ -147,3 +147,13 @@ the focused card action blocks propagation. The removal uses the same capture
 option. Search and refresh expose `aria-keyshortcuts` for assistive tech. A
 regression test asserts matching listener registration and removal, shortcut
 advertisement, and the card's bubbling stop.
+
+## Viewer hotkey isolation and clipboard behavior
+
+The image/video Viewer now classifies keyboard shortcuts by exact modifier
+combinations. Plain **F** still toggles fullscreen, **Delete** removes a capture
+with its existing confirmation, and arrows navigate. Modified Ctrl/Cmd+F,
+Ctrl+Delete and Shift+F no longer trigger those actions. **Ctrl/Cmd+C** copies
+the image only for image items; on MP4 it is left to normal clipboard handling.
+**Ctrl/Cmd+Shift+C** still copies the registered file path, reporting failures
+with the translated action name. Regression tests cover all combinations.

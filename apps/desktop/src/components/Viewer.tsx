@@ -16,6 +16,7 @@ import {
 import { ipc } from "../lib/ipc";
 import { useLanguage } from "../lib/LanguageProvider";
 import { formatMediaSize, formatMediaDate } from "../lib/mediaFormatting";
+import { viewerKeyboardShortcut } from "../lib/viewerKeyboard";
 import type { Screenshot } from "../lib/types";
 import ImageStage from "./viewer/ImageStage";
 import VideoStage from "./viewer/VideoStage";
@@ -114,7 +115,7 @@ export default function Viewer({ items, id, onNavigate, onClose, onDelete, onToa
       await ipc.copyMediaPath(shot.id);
       onToast(t("File path copied"));
     } catch (error) {
-      onToast(`Could not copy file path: ${String(error)}`);
+      onToast(`${t("Copy file path")}: ${String(error)}`);
     }
   }, [shot, onToast, t]);
 
@@ -139,34 +140,32 @@ export default function Viewer({ items, id, onNavigate, onClose, onDelete, onToa
         || (e.target instanceof HTMLElement
           && e.target.closest('[role="slider"], [contenteditable="true"]'))
       ) return;
-      if (e.key === "Escape") {
-        e.preventDefault();
-        if (fullscreen) void setWindowFullscreen(false);
-        else onClose();
-      } else if (e.key === "ArrowLeft" && prev) {
-        e.preventDefault();
-        onNavigate(prev.id);
-      } else if (e.key === "ArrowRight" && next) {
-        e.preventDefault();
-        onNavigate(next.id);
-      } else if (e.key === "f" || e.key === "F") {
-        void setWindowFullscreen(!fullscreen);
-      } else if (e.key === "Delete") {
-        void remove();
-      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "c") {
-        e.preventDefault();
-        void copyPath();
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
-        e.preventDefault();
-        void copy();
-      } else {
-        return;
+      if (e.defaultPrevented) return;
+      const action = viewerKeyboardShortcut(
+        e.key, e.ctrlKey, e.metaKey, e.altKey, e.shiftKey,
+        shot?.format === "mp4",
+      );
+      if (!action) return;
+      if (action === "previous" && !prev) return;
+      if (action === "next" && !next) return;
+      e.preventDefault();
+      switch (action) {
+        case "escape":
+          if (fullscreen) void setWindowFullscreen(false);
+          else onClose();
+          break;
+        case "previous": if (prev) onNavigate(prev.id); break;
+        case "next": if (next) onNavigate(next.id); break;
+        case "fullscreen": void setWindowFullscreen(!fullscreen); break;
+        case "delete": void remove(); break;
+        case "copy-path": void copyPath(); break;
+        case "copy-image": void copy(); break;
       }
       wake();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [prev, next, fullscreen, onClose, onNavigate, setWindowFullscreen, remove, copy, copyPath, wake]);
+  }, [prev, next, shot?.format, fullscreen, onClose, onNavigate, setWindowFullscreen, remove, copy, copyPath, wake]);
 
   if (!shot) return null;
   const video = playsAsVideo(shot);
