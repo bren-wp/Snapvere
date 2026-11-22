@@ -114,3 +114,12 @@ and separately validates all ten updater messages in each of eleven
 non-English language tables. Native Rust messages remain a separate
 localization QA boundary. These are source-level gates, not runtime
 exfiltration or binary-dependency proofs.
+
+## 22 November 2026 — localized errors and no technical exception strings in end-user UI
+
+Native capture errors use stable translated message IDs, with detailed OS
+errors retained locally. Home and Overlay no longer display raw native
+exception strings that may contain sensitive paths, and the browser popup
+provides a generic actionable error rather than echoing a tab URL. These
+changes do not introduce a remote logging endpoint. Some other native dialogs
+and browser editor text still require localization/UX verification.

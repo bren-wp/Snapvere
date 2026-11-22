@@ -251,9 +251,10 @@ export default function Home() {
     try {
       await ipc.revealMedia(s.id);
     } catch (e) {
-      setToast(String(e));
+      console.error("Cannot reveal local gallery file", e);
+      setToast(t("Could not open the image. Invalid capture reference."));
     }
-  }, []);
+  }, [t]);
 
   const closeViewer = useCallback(() => setViewId(null), []);
 
@@ -263,7 +264,8 @@ export default function Home() {
       await ipc.beginRegionCapture();
     } catch (e) {
       await getCurrentWindow().show().catch(console.error);
-      setToast(`${t("Capture could not start:")} ${String(e)}`);
+      console.error("Local capture error", e);
+      setToast(t("Screen capture failed. Open Diagnostics for details."));
     }
   };
   const captureFull = async () => {
@@ -281,7 +283,8 @@ export default function Home() {
       await load();
       setToast(t("Full-screen screenshot saved."));
     } catch (e) {
-      setToast(`${t("Screenshot failed:")} ${String(e)}`);
+      console.error("Local full-screen capture error", e);
+      setToast(t("Screen capture failed. Open Diagnostics for details."));
     } finally {
       await win.show().catch(console.error);
       await win.setFocus().catch(console.error);
@@ -309,14 +312,16 @@ export default function Home() {
       await ipc.beginRegionCapture("record");
     } catch (e) {
       await getCurrentWindow().show().catch(console.error);
-      setToast(`${t("Recording could not start:")} ${String(e)}`);
+      console.error("Local recording error", e);
+      setToast(t("Recording could not start. Open Diagnostics for details."));
     }
   };
   const openCaptureFolder = async () => {
     try {
       await ipc.openCaptureFolder();
     } catch (error) {
-      setToast(`${t("Open capture folder")}: ${String(error)}`);
+      console.error("Local capture folder open error", error);
+      setToast(t("Cannot open capture folder:"));
     }
   };
   const openSettings = async () => {
@@ -338,13 +343,13 @@ export default function Home() {
       // event registration or a silent failure after clicking Settings.
       void settingsWindow.once("tauri://error", (event) => {
         console.error("Could not open Settings", event.payload);
-        setToast(`${t("Settings")}: ${String(event.payload)}`);
+        setToast(t("Could not load settings:"));
       }).catch((error) => {
         console.error("Settings window error listener failed", error);
       });
     } catch (error) {
       console.error("Cannot open Settings", error);
-      setToast(`${t("Settings")}: ${String(error)}`);
+      setToast(t("Could not load settings:"));
     }
   };
 

@@ -836,7 +836,11 @@ pub fn dispatch_region_capture(app: &AppHandle, mode: CaptureMode) {
                         "could not restore gallery after failed capture: {restore_error}"
                     ));
                 }
-                let _ = app.emit("snapvere:toast", "Screen capture failed. Open Diagnostics for details.");
+                log(&format!("Capture failed locally: {e}"));
+                let _ = app.emit(
+                    "snapvere:toast",
+                    "Screen capture failed. Open Diagnostics for details.",
+                );
             }
         });
 
@@ -1112,7 +1116,11 @@ pub fn dispatch_capture_fullscreen(app: &AppHandle) {
                     let _ = app.emit("snapvere:shot-saved", shot);
                 }
                 Err(e) => {
-                    let _ = app.emit("snapvere:toast", "Screen capture failed. Open Diagnostics for details.");
+                    log(&format!("Capture failed locally: {e}"));
+                let _ = app.emit(
+                    "snapvere:toast",
+                    "Screen capture failed. Open Diagnostics for details.",
+                );
                 }
             }
         });
