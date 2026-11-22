@@ -61,3 +61,5 @@ This version is not published in browser stores and has **no physical-browser ac
 The Windows app's global PrintScreen key is a separate feature; browser extensions cannot intercept a global key when the browser is closed. Physical device QA and design 1:1 comparisons are not claimed by synthetic CI.
 
 - v0.2.2 hardening: a captured browser tab that **navigates without changing its tab ID** is now rejected before/after visible-tab capture whenever activeTab exposes its URL, preventing pixels from the next page from being accepted. Full-page captures refresh the in-page scroll-restoration watchdog for every frame, preventing a slow stitch from restoring scroll mid-capture. Added navigation race regression cases.
+
+- Full-page restoration now checks the original page URL before restoring scroll, refusing to scroll an unrelated replacement document after same-tab navigation. The active URL is also verified before arming each watchdog renewal; this behavior has a dedicated regression test.
