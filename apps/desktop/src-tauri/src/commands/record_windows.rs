@@ -21,9 +21,9 @@ pub(super) fn resolve_target(
         .and_then(|id| monitors.iter().find(|m| m.id == id))
         .or_else(|| {
             let (cx, cy) = cursor_pos(app);
-            monitors.iter().find(|m| {
-                capture::contains_desktop_point(cx, cy, m.x, m.y, m.width, m.height)
-            })
+            monitors
+                .iter()
+                .find(|m| capture::contains_desktop_point(cx, cy, m.x, m.y, m.width, m.height))
         })
         .or_else(|| monitors.iter().find(|m| m.is_primary))
         .or_else(|| monitors.first())

@@ -6,6 +6,7 @@ from base64 import b64encode
 import json
 from shutil import copyfile
 from playwright.sync_api import sync_playwright
+from PIL import Image, ImageChops
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "docs" / "screenshots"
@@ -579,6 +580,23 @@ with sync_playwright() as p:
         }, indent=2) + "\\n", encoding="utf-8"
     )
     browser.close()
+
+# Synthetic UI layout parity: Linux and Windows share exact component geometry.
+# Differences are expected only inside recording controls (disabled vs enabled).
+# The layout/header/sidebar and unchanged text must remain identical, pixel-for-pixel.
+# This is a deterministic Chromium frontend comparison, NOT native Linux/Windows QA.
+with Image.open(OUTPUT / "settings-recording.png") as windows_image, Image.open(
+    OUTPUT / "settings-linux-preview.png"
+) as linux_image:
+    assert windows_image.size == linux_image.size == (1120, 740), (
+        "Linux/Windows Settings previews must use identical viewport geometry"
+    )
+    for unchanged in ((0, 0, 690, 740), (900, 0, 1120, 740)):
+        left = windows_image.convert("RGB").crop(unchanged)
+        right = linux_image.convert("RGB").crop(unchanged)
+        assert ImageChops.difference(left, right).getbbox() is None, (
+            f"Shared Windows/Linux Settings layout regressed at {unchanged}"
+        )
 
 for path in OUTPUT.glob("*.png"):
     if path.stat().st_size < 5000:

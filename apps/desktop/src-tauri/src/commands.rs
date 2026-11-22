@@ -469,9 +469,7 @@ fn copy_rgba_to_clipboard(app: &AppHandle, img: &image::RgbaImage) -> Result<(),
 fn checked_cursor_position(x: f64, y: f64) -> Option<(i32, i32)> {
     let (x, y) = (x.round(), y.round());
     let valid = |value: f64| {
-        value.is_finite()
-            && value >= f64::from(i32::MIN)
-            && value <= f64::from(i32::MAX)
+        value.is_finite() && (f64::from(i32::MIN)..=f64::from(i32::MAX)).contains(&value)
     };
     (valid(x) && valid(y)).then_some((x as i32, y as i32))
 }
@@ -506,7 +504,11 @@ fn cursor_pos(app: &AppHandle) -> (i32, i32) {
             }
         }
         if let Ok(monitors) = capture::list_monitors() {
-            if let Some(primary) = monitors.iter().find(|m| m.is_primary).or_else(|| monitors.first()) {
+            if let Some(primary) = monitors
+                .iter()
+                .find(|m| m.is_primary)
+                .or_else(|| monitors.first())
+            {
                 let center = |origin: i32, extent: u32| {
                     (i64::from(origin) + i64::from(extent) / 2)
                         .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
