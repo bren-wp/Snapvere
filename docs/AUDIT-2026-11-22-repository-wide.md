@@ -88,3 +88,15 @@ privacy policy updated. Site source/CI guards now reject regression. This
 is a source-level hardening result, not proof of hosted network behavior or
 third-party hosting log deletion. Desktop native update checks and full i18n
 coverage are separate ongoing audit tasks.
+
+## 22 November 2026 — offline update checks and customer-facing localization
+
+The Windows updater initially checked the first-party version endpoint on
+startup by default; this leaked a connection/IP even if capture data remained
+local. The default is now **off** until the user manually checks or explicitly
+opts in to scheduled checks in Settings. Legacy absent/invalid flags are
+interpreted as off. No installers execute automatically. Linux does not
+request a Windows version feed. The Linux recording limitation is now a
+customer-facing explanatory notice translated in all 12 UI languages, not a
+"preview"/developer label; native IPC error details are not shown verbatim.
+Hosted-site privacy claims remain separate from hosting connection logs.

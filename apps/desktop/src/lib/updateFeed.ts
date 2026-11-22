@@ -2,7 +2,8 @@
 /**
  * Public, privacy-preserving update *notification* for the Tauri/Rust edition.
  * No installers are downloaded or executed by the WebView. The only permitted
- * network request is a GET for a version manifest at update.snapvere.com.
+ * network request is a user-triggered or explicitly opted-in GET for a version
+ * manifest at update.snapvere.com; startup is offline by default.
  */
 export const UPDATE_FEED_URL = "https://update.snapvere.com/stable.json";
 export const OFFICIAL_DOWNLOAD_URL = "https://snapvere.com/download/tauri/";
@@ -128,7 +129,7 @@ export function shouldShowReleaseNotice(
   return available !== null && available.version !== dismissedVersion;
 }
 
-/** Missing or invalid old preferences keep update checks enabled by default. */
+/** Update checks are strictly opt-in, even for missing/invalid legacy preferences. */
 export function autoUpdateChecksEnabled(value: string | null): boolean {
-  return value !== "false";
+  return value === "true";
 }

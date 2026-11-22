@@ -79,12 +79,14 @@ test('dismissed update banner stays closed for the same version and returns on a
   assert.equal(shouldShowReleaseNotice({version:'0.2.26', notes:''}, '0.2.25'), true);
 });
 
-test("manual update check preference supports opt-out and default-on migration", async () => {
+test("update feed is offline until the user explicitly opts in", async () => {
   const { autoUpdateChecksEnabled } = await import('../src/lib/updateFeed.ts');
-  assert.equal(autoUpdateChecksEnabled(null), true);
+  assert.equal(autoUpdateChecksEnabled(null), false);
   assert.equal(autoUpdateChecksEnabled('true'), true);
   assert.equal(autoUpdateChecksEnabled('false'), false);
-  assert.equal(autoUpdateChecksEnabled('old-preference'), true);
+  assert.equal(autoUpdateChecksEnabled('old-preference'), false);
+  assert.equal(autoUpdateChecksEnabled('TRUE'), false);
+  assert.equal(autoUpdateChecksEnabled(''), false);
 });
 
 test('native update channel rejects Linux and unknown OS before any Windows feed request', () => {

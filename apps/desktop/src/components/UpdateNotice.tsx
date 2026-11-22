@@ -80,7 +80,7 @@ export default function UpdateNotice({
   const { language } = useLanguage();
   const w = words[language] ?? en;
   const [available, setAvailable] = useState<AvailableUpdate | null>(null);
-  const [state, setState] = useState<"idle" | "checking" | "current" | "error">("checking");
+  const [state, setState] = useState<"idle" | "checking" | "current" | "error">("idle");
   // Closing one release should not reopen its banner on every window focus
   // or hourly fetch; a newly published version is shown again.
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(() => {
@@ -89,7 +89,7 @@ export default function UpdateNotice({
   });
   const [autoEnabled, setAutoEnabled] = useState(() => {
     try { return autoUpdateChecksEnabled(localStorage.getItem(AUTO_KEY)); }
-    catch { return true; }
+    catch { return false; }
   });
   const [platformOs, setPlatformOs] = useState<string | null>(null);
   useEffect(() => {
@@ -98,7 +98,8 @@ export default function UpdateNotice({
     void ipc.getPlatformCapabilities().then((caps) => {
       if (mounted) setPlatformOs(caps.os);
     }).catch((error) => {
-      console.warn("Cannot determine native update channel", error);
+      // A missing native bridge must not initiate networking or leak diagnostic details.
+      void error;
     });
     return () => { mounted = false; };
   }, []);
@@ -126,7 +127,8 @@ export default function UpdateNotice({
     } catch (error) {
       if (!active.signal.aborted) {
         // Network errors must never interrupt capture, recording or Settings.
-        console.warn("Snapvere update feed unavailable", error);
+        // Network failures are displayed locally without forwarding logs.
+        void error;
         setAvailable(null);
         setState("error");
       }

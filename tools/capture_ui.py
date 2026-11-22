@@ -177,7 +177,7 @@ with sync_playwright() as p:
     linux_settings.get_by_role("navigation").get_by_role(
         "button", name="Recording settings", exact=True
     ).click()
-    linux_settings.get_by_text("Linux preview: GIF only", exact=False).wait_for(timeout=10000)
+    linux_settings.get_by_text("On Linux, silent GIF recording is available.", exact=False).wait_for(timeout=10000)
     assert linux_settings.get_by_role("button", name="MP4", exact=True).is_disabled()
     assert linux_settings.get_by_role("slider", name="Quality", exact=True).is_enabled()
     assert linux_settings.get_by_role("switch", name="Record microphone").is_disabled()

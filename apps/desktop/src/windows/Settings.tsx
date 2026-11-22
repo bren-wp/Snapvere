@@ -65,7 +65,8 @@ export default function Settings() {
 
   useEffect(() => {
     void ipc.getPlatformCapabilities().then(setPlatform).catch((error) => {
-      setNotice(`Platform capability check failed: ${String(error)}`);
+      void error;
+      setNotice(t("Could not load settings:"));
     });
   }, []);
 
@@ -286,7 +287,7 @@ export default function Settings() {
             </Row>
             <Row
               label={t("Launch on startup")}
-              hint={t(linuxGifOnly ? "Launch on startup" : "Start Snapvere when you sign in (on by default).")}
+              hint={linuxGifOnly ? undefined : t("Start Snapvere when you sign in (on by default).")}
             >
               <Toggle label={t("Launch on startup")} checked={autostart} onChange={toggleAutostart} disabled={!store || autostartBusy} />
             </Row>
@@ -458,7 +459,7 @@ export default function Settings() {
             </Row>
             {linuxGifOnly && (
               <p className="text-xs text-muted" role="status">
-                {t("Linux preview: GIF only; MP4, audio and recorded cursor are not available.")}
+                {t("On Linux, silent GIF recording is available. MP4, audio and recorded cursor are not supported.")}
               </p>
             )}
             {(linuxGifOnly || s.recordFormat === "gif") && (
