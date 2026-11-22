@@ -16,10 +16,9 @@ fn select_record_monitor(
     cursor: (i32, i32),
 ) -> Result<&MonitorInfo, String> {
     if let Some(id) = wanted {
-        return monitors
-            .iter()
-            .find(|m| m.id == id)
-            .ok_or_else(|| format!("Selected monitor {id} is no longer available. Refresh monitors."));
+        return monitors.iter().find(|m| m.id == id).ok_or_else(|| {
+            format!("Selected monitor {id} is no longer available. Refresh monitors.")
+        });
     }
     let (cx, cy) = cursor;
     monitors
@@ -66,9 +65,24 @@ mod selection_tests {
     fn explicit_missing_monitor_never_falls_back_to_another_screen() {
         let monitors = [monitor(1, 0, true), monitor(2, -1920, false)];
         assert!(select_record_monitor(&monitors, Some(3), (10, 10)).is_err());
-        assert_eq!(select_record_monitor(&monitors, Some(2), (10, 10)).unwrap().id, 2);
-        assert_eq!(select_record_monitor(&monitors, None, (-500, 200)).unwrap().id, 2);
-        assert_eq!(select_record_monitor(&monitors, None, (5000, 200)).unwrap().id, 1);
+        assert_eq!(
+            select_record_monitor(&monitors, Some(2), (10, 10))
+                .unwrap()
+                .id,
+            2
+        );
+        assert_eq!(
+            select_record_monitor(&monitors, None, (-500, 200))
+                .unwrap()
+                .id,
+            2
+        );
+        assert_eq!(
+            select_record_monitor(&monitors, None, (5000, 200))
+                .unwrap()
+                .id,
+            1
+        );
         assert!(select_record_monitor(&[], None, (0, 0)).is_err());
     }
 
@@ -94,7 +108,11 @@ pub(super) fn resolve_target(
         }
     }
     let wanted = monitor_id.or_else(|| region.map(|r| r.monitor_id));
-    let cursor = if wanted.is_some() { (0, 0) } else { cursor_pos(app) };
+    let cursor = if wanted.is_some() {
+        (0, 0)
+    } else {
+        cursor_pos(app)
+    };
     let m = select_record_monitor(&monitors, wanted, cursor)?;
 
     Ok(RecordTarget {
