@@ -34,6 +34,25 @@ pub fn list_monitors() -> Result<Vec<MonitorInfo>> {
     monitors.iter().map(monitor_info).collect()
 }
 
+/// Compare in i64: negative virtual origins are valid, and drivers may
+/// report u32 dimensions too large to fit in i32.
+fn contains_desktop_point(x: i32, y: i32, mx: i32, my: i32, w: u32, h: u32) -> bool {
+    let (x, y, mx, my) = (i64::from(x), i64::from(y), i64::from(mx), i64::from(my));
+    w > 0 && h > 0
+        && x >= mx && x < mx + i64::from(w)
+        && y >= my && y < my + i64::from(h)
+}
+
+#[cfg(test)]
+#[test]
+fn monitor_contains_negative_coordinates_without_overflow() {
+    assert!(contains_desktop_point(-1900, 200, -1920, 0, 1920, 1080));
+    assert!(!contains_desktop_point(0, 200, -1920, 0, 1920, 1080));
+    assert!(contains_desktop_point(i32::MAX, 0, i32::MAX, 0, u32::MAX, 100));
+    assert!(!contains_desktop_point(i32::MIN, 0, i32::MAX, 0, u32::MAX, 100));
+    assert!(!contains_desktop_point(0, 0, 0, 0, 0, 0));
+}
+
 /// Monitor koji sadrži točku (x,y) (poziciju miša). Fallback: primarni, pa prvi.
 fn monitor_containing(x: i32, y: i32) -> Result<Monitor> {
     let monitors = Monitor::all().map_err(|e| anyhow!("xcap monitors: {e}"))?;
@@ -42,9 +61,9 @@ fn monitor_containing(x: i32, y: i32) -> Result<Monitor> {
         .find(|m| {
             let mx = m.x().unwrap_or(0);
             let my = m.y().unwrap_or(0);
-            let mw = m.width().unwrap_or(0) as i32;
-            let mh = m.height().unwrap_or(0) as i32;
-            x >= mx && x < mx + mw && y >= my && y < my + mh
+            let mw = m.width().unwrap_or(0);
+            let mh = m.height().unwrap_or(0);
+            contains_desktop_point(x, y, mx, my, mw, mh)
         })
         .or_else(|| monitors.iter().find(|m| m.is_primary().unwrap_or(false)))
         .or_else(|| monitors.first())

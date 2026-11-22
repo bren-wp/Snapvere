@@ -1264,6 +1264,21 @@ fn start_recording_inner(
     Ok(status)
 }
 
+/// Clamp before narrowing: a corrupt u64 setting must never wrap to a
+/// misleading small frame rate on Windows or Linux.
+fn normalize_record_fps(raw: u64) -> u32 {
+    raw.clamp(5, 60) as u32
+}
+
+#[cfg(test)]
+#[test]
+fn extreme_persisted_fps_never_wraps() {
+    assert_eq!(normalize_record_fps(0), 5);
+    assert_eq!(normalize_record_fps(24), 24);
+    assert_eq!(normalize_record_fps(60), 60);
+    assert_eq!(normalize_record_fps(u64::MAX), 60);
+}
+
 /// Opcije snimanja iz Settings store-a; svaka greška → razumni default.
 fn record_options(app: &AppHandle) -> RecordOptions {
     let mut o = RecordOptions::default();
@@ -1271,7 +1286,7 @@ fn record_options(app: &AppHandle) -> RecordOptions {
         return o;
     };
     if let Some(v) = store.get("recordFps").and_then(|v| v.as_u64()) {
-        o.fps = (v as u32).clamp(5, 60);
+        o.fps = normalize_record_fps(v);
     }
     if let Some(v) = store.get("recordQuality").and_then(|v| v.as_u64()) {
         o.quality = v.clamp(1, 100) as u8;

@@ -286,7 +286,7 @@ export default function Settings() {
             </Row>
             <Row
               label={t("Launch on startup")}
-              hint={t("Start Snapvere when you sign in (on by default).")}
+              hint={t(linuxGifOnly ? "Launch on startup" : "Start Snapvere when you sign in (on by default).")}
             >
               <Toggle label={t("Launch on startup")} checked={autostart} onChange={toggleAutostart} disabled={!store || autostartBusy} />
             </Row>
@@ -336,7 +336,7 @@ export default function Settings() {
               {t("Click a field and press your shortcut. Changes apply immediately.")}
               <br />
               <span className="text-muted/80">
-                {t("The Fn key may be handled by your keyboard. Choose a shortcut your system can detect.")}
+                {t(linuxGifOnly ? "This shortcut was not detected. Try another key combination." : "The Fn key may be handled by your keyboard. Choose a shortcut Windows can detect.")}
               </span>
             </p>
           </Section>
@@ -453,7 +453,7 @@ export default function Settings() {
             </Row>
             {linuxGifOnly && (
               <p className="text-xs text-muted" role="status">
-                Linux preview: the same Snapvere interface, screenshots, editor, gallery and silent GIF recording. MP4, audio and recorded cursor rendering are not available in this build.
+                {t("Linux preview: GIF only; MP4, audio and recorded cursor are not available.")}
               </p>
             )}
             {(linuxGifOnly || s.recordFormat === "gif") && (
