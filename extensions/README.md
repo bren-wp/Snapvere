@@ -67,3 +67,5 @@ The Windows app's global PrintScreen key is a separate feature; browser extensio
 - Visible-tab PNG capture and the extension keyboard shortcut now target the originally active browser **window ID** and verify that its tab ID and available URL remain unchanged before and after requesting pixels. Tab/window switches and same-tab navigation cannot silently download another page's image. Added tests for both races, retaining temporary `activeTab` access with no new permissions.
 
 - Popup completion messages distinguish an accepted browser download from a completed disk write. The user now sees **Screenshot download started. Check Downloads.**, not a premature claim that PNG bytes are already saved. The ZIP and popup behavior tests cover the new status.
+
+- The actual screenshot-sized 260 px popup viewport is now included in the automated dark/light Chromium geometry suite, with a minimum 40 px height for capture action targets. Earlier tests at 280/320/355/376/420 px remain enabled.

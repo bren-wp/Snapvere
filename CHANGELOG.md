@@ -2,6 +2,8 @@
 
 ## v0.2.25 — responsive browser extensions and bottom-right update notices (development)
 
+- Extend popup Chromium regression coverage to the user's 260 px narrow browser toolbar width, including minimum 40 px capture button height and horizontal overflow checks in both themes.
+
 - Resolve Home toast collisions: the corner update notification moves up while a transient capture/action message is visible, preserving both messages without clipping or overlap.
 - Report accepted browser PNG downloads as started, rather than prematurely claiming completion before the browser finishes writing the file.
 
