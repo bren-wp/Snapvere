@@ -280,3 +280,74 @@ jobs:
           path: dist-installers/*
           if-no-files-found: error
           retention-days: 30
+
+  linux:
+    name: Linux x86_64 native tests and preview packages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install Tauri / xcap Linux system build prerequisites
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential pkg-config libssl-dev libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev \
+            libclang-dev libxcb1-dev libxrandr-dev libdbus-1-dev \
+            libpipewire-0.3-dev libwayland-dev libegl-dev libfuse2t64
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+      - name: Install locked JS dependencies without postinstall scripts
+        working-directory: apps/desktop
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typecheck shared Windows / Linux React frontend
+        working-directory: apps/desktop
+        run: npm run lint && npm run test:unit
+      - name: Verify Rust formatting
+        working-directory: apps/desktop/src-tauri
+        run: cargo fmt --all -- --check
+      - name: Linux Rust unit and integration tests (no display required)
+        working-directory: apps/desktop/src-tauri
+        run: cargo test --locked
+      - name: Linux Clippy (warnings treated as errors)
+        working-directory: apps/desktop/src-tauri
+        run: cargo clippy --all-targets --locked -- -D warnings
+      - name: Build Linux Debian and AppImage previews
+        working-directory: apps/desktop
+        run: npm run tauri -- build --bundles deb,appimage
+      - name: Verify exactly one Linux package of each type and SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist-linux
+          deb=(apps/desktop/src-tauri/target/release/bundle/deb/*.deb)
+          appimage=(apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage)
+          [[ ${#deb[@]} == 1 && -s "${deb[0]}" ]] || { echo "::error::Expected exactly one .deb"; exit 1; }
+          [[ ${#appimage[@]} == 1 && -s "${appimage[0]}" ]] || { echo "::error::Expected exactly one .AppImage"; exit 1; }
+          test "$(stat -c%s "${deb[0]}")" -gt 1000000
+          test "$(stat -c%s "${appimage[0]}")" -gt 1000000
+          cp -- "${deb[0]}" dist-linux/Snapvere-Linux-amd64.deb
+          cp -- "${appimage[0]}" dist-linux/Snapvere-Linux-x86_64.AppImage
+          chmod 755 dist-linux/Snapvere-Linux-x86_64.AppImage
+          (cd dist-linux && sha256sum Snapvere-Linux-amd64.deb Snapvere-Linux-x86_64.AppImage > SHA256SUMS-Linux.txt)
+          (cd dist-linux && sha256sum --check SHA256SUMS-Linux.txt)
+      - name: Upload PRIVATE untested Linux previews for QA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Snapvere-Linux-QA-${{ github.sha }}
+          path: dist-linux/*
+          if-no-files-found: error
+          retention-days: 30
