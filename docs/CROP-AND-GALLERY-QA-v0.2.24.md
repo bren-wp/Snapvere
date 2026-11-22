@@ -117,3 +117,14 @@ Regression test: retain a delayed callback created while the category is
 `all`; switch to `videos` plus an active search, then invoke the old callback.
 It must read the latest filter and query while the earlier snapshot remains
 unchanged.
+
+## Gallery indexing and manual refresh
+
+The transactional SQLite migration creates `idx_screenshots_order` on
+`(created_at DESC, id DESC)` and retires the redundant timestamp-only index.
+This matches the deterministic gallery sorting and avoids maintaining two
+indexes with the same leading column. A Rust test verifies the migration.
+
+Home now provides an accessible manual gallery refresh control with localized
+tooltip/screen-reader text in all 12 languages. It uses the existing
+current-selection-safe command and does not expand native permissions.

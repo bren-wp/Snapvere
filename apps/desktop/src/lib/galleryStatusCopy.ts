@@ -1,20 +1,20 @@
 // Snapvere by Brendigo
 import type { Language } from "./i18n";
 
-type GalleryStatusCopy = Readonly<{ retry: string }>;
+type GalleryStatusCopy = Readonly<{ retry: string; refresh: string }>;
 const copy: Record<Language, GalleryStatusCopy> = {
-  en: { retry: "Try again" },
-  hr: { retry: "Pokušaj ponovno" },
-  de: { retry: "Erneut versuchen" },
-  es: { retry: "Reintentar" },
-  fr: { retry: "Réessayer" },
-  it: { retry: "Riprova" },
-  pt: { retry: "Tentar novamente" },
-  nl: { retry: "Opnieuw proberen" },
-  pl: { retry: "Spróbuj ponownie" },
-  cs: { retry: "Zkusit znovu" },
-  sk: { retry: "Skúsiť znova" },
-  sl: { retry: "Poskusi znova" },
+  en: { retry: "Try again", refresh: "Refresh gallery" },
+  hr: { retry: "Pokušaj ponovno", refresh: "Osvježi galeriju" },
+  de: { retry: "Erneut versuchen", refresh: "Galerie aktualisieren" },
+  es: { retry: "Reintentar", refresh: "Actualizar galería" },
+  fr: { retry: "Réessayer", refresh: "Actualiser la galerie" },
+  it: { retry: "Riprova", refresh: "Aggiorna galleria" },
+  pt: { retry: "Tentar novamente", refresh: "Atualizar galeria" },
+  nl: { retry: "Opnieuw proberen", refresh: "Galerij vernieuwen" },
+  pl: { retry: "Spróbuj ponownie", refresh: "Odśwież galerię" },
+  cs: { retry: "Zkusit znovu", refresh: "Obnovit galerii" },
+  sk: { retry: "Skúsiť znova", refresh: "Obnoviť galériu" },
+  sl: { retry: "Poskusi znova", refresh: "Osveži galerijo" },
 };
 export function galleryStatusCopy(language: Language): GalleryStatusCopy {
   return copy[language] ?? copy.en;

@@ -151,8 +151,12 @@ test("Unreviewed strings fall back to clear English, never placeholders or keys"
 
 test("gallery load failures have a localized retry action in all twelve languages", () => {
   for (const { code } of LANGUAGES) {
-    const { retry } = galleryStatusCopy(code);
+    const { retry, refresh } = galleryStatusCopy(code);
     assert.ok(retry.trim(), `Missing gallery retry copy in ${code}`);
-    if (code !== "en") assert.notEqual(retry, galleryStatusCopy("en").retry);
+    assert.ok(refresh.trim(), `Missing gallery refresh copy in ${code}`);
+    if (code !== "en") {
+      assert.notEqual(retry, galleryStatusCopy("en").retry);
+      assert.notEqual(refresh, galleryStatusCopy("en").refresh);
+    }
   }
 });

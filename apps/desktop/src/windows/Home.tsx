@@ -12,6 +12,7 @@ import {
   ClipboardPaste,
   FolderOpen,
   Monitor,
+  RefreshCw,
   Settings as SettingsIcon,
   Search,
   Video,
@@ -444,6 +445,16 @@ export default function Home() {
             ))}
           </div>
           <div className="snapvere-gallery-actions">
+            <button
+              type="button"
+              onClick={() => void load()}
+              disabled={loading}
+              aria-label={galleryText.refresh}
+              title={galleryText.refresh}
+              className="snapvere-btn-secondary inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <RefreshCw size={16} aria-hidden="true" />
+            </button>
             <button
               type="button"
               onClick={() => void openCaptureFolder()}

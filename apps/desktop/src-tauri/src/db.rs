@@ -80,7 +80,9 @@ impl Db {
                 remote_expires_at INTEGER,
                 is_uploaded   INTEGER NOT NULL DEFAULT 0
             );
-            CREATE INDEX IF NOT EXISTS idx_screenshots_created ON screenshots(created_at DESC);
+            -- Match deterministic gallery ORDER BY created_at DESC, id DESC.
+            CREATE INDEX IF NOT EXISTS idx_screenshots_order ON screenshots(created_at DESC, id DESC);
+            DROP INDEX IF EXISTS idx_screenshots_created;
             CREATE INDEX IF NOT EXISTS idx_screenshots_name ON screenshots(name);
 
             CREATE TABLE IF NOT EXISTS tags (
@@ -413,6 +415,24 @@ mod gallery_tests {
         assert_eq!(db.gallery_page("_", "all", 200, 0)?[0].id, "one_two");
         assert_eq!(db.gallery_page("_", "all", 200, 0)?.len(), 1);
         assert_eq!(db.gallery_page("one", "all", 200, 0)?.len(), 3);
+        Ok(())
+    }
+
+    #[test]
+    fn gallery_order_index_replaces_legacy_timestamp_index() -> anyhow::Result<()> {
+        let db = Db::open_in_memory()?;
+        let index: String = db.conn.query_row(
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'idx_screenshots_order'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert!(index.contains("(created_at DESC, id DESC)"));
+        let legacy: i64 = db.conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_screenshots_created'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(legacy, 0);
         Ok(())
     }
 

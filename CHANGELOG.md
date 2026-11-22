@@ -239,3 +239,6 @@ SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO
 ## Note on the public website
 
 The separately deployed public snapvere.com currently serves a different implementation and its routing/assets are managed independently. Repository screenshots do not certify 1:1 identity with the deployed live site.
+
+- Optimize large galleries with a composite SQLite ordering index on `(created_at DESC, id DESC)` and retire the redundant timestamp-only index through the transactional migration; add regression coverage.
+- Add an accessible **Refresh gallery** action with labels in all 12 languages; it respects the current search/filter and prevents duplicate refreshes while loading.
