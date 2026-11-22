@@ -244,3 +244,5 @@ The separately deployed public snapvere.com currently serves a different impleme
 - Add an accessible **Refresh gallery** action with labels in all 12 languages; it respects the current search/filter and prevents duplicate refreshes while loading.
 
 - Improve keyboard productivity without changing the gallery layout: **Ctrl+F / Cmd+F** focuses and selects the gallery search field; **F5** refreshes the selected category and query (only while the gallery, not the viewer, owns the keyboard). Added shortcut collision regression coverage.
+
+- Fix Codex-reported P2 keyboard propagation bug: register Home's shortcut handler in the capture phase, so Ctrl/Cmd+F and F5 work even when a capture-card Reveal/Copy/Delete button has focus; stop native WebView hard reload in that state. Advertise both shortcuts via `aria-keyshortcuts` and regression-test capture-phase registration.

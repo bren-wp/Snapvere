@@ -159,8 +159,11 @@ export default function Home() {
         }
       }
     };
-    window.addEventListener("keydown", onShortcut);
-    return () => window.removeEventListener("keydown", onShortcut);
+    // Capture phase is essential: CaptureCard's action row intentionally
+    // stops bubbling key events. F5 must still be prevented from hard-reloading
+    // the WebView when a card's Delete/Copy/Reveal button owns focus.
+    window.addEventListener("keydown", onShortcut, true);
+    return () => window.removeEventListener("keydown", onShortcut, true);
   }, [load, loading, viewId]);
 
   useEffect(() => {
@@ -425,6 +428,7 @@ export default function Home() {
             <input
               ref={searchInput}
               type="search"
+              aria-keyshortcuts="Control+F Meta+F"
               value={query}
               onChange={(e) => {
                 // Invalidate synchronously, before the 200 ms query debounce.
@@ -476,6 +480,7 @@ export default function Home() {
               onClick={() => void load()}
               disabled={loading}
               aria-label={galleryText.refresh}
+              aria-keyshortcuts="F5"
               title={galleryText.refresh}
               className="snapvere-btn-secondary inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-accent"
             >

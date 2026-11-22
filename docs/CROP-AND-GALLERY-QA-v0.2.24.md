@@ -137,3 +137,13 @@ and media type. The handler is disabled while the modal Viewer is active, and
 rejects Shift/Alt combinations and key repeats. The logic is unit tested for
 shortcut combinations and collision prevention. No additional Tauri capability
 is granted, and the existing pixel layout is preserved.
+
+## Capture-card keyboard propagation
+
+Card utility buttons deliberately stop bubbling keydown events. The Home
+Ctrl/Cmd+F and F5 handlers therefore must register in the **capture phase**
+(`addEventListener('keydown', listener, true)`) to receive shortcuts before
+the focused card action blocks propagation. The removal uses the same capture
+option. Search and refresh expose `aria-keyshortcuts` for assistive tech. A
+regression test asserts matching listener registration and removal, shortcut
+advertisement, and the card's bubbling stop.

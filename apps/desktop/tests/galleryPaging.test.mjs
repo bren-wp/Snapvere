@@ -1,6 +1,7 @@
 // Snapvere by Brendigo
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { galleryKeyboardShortcut } from "../src/lib/galleryKeyboard.ts";
 import {
   createGallerySelectionStore,
@@ -70,4 +71,14 @@ test("Home keyboard shortcuts avoid browser and editor modifier conflicts", () =
   assert.equal(get("f", true, false, false, true), null);
   assert.equal(get("f"), null);
   assert.equal(get("F5", false, false, false, true), null);
+});
+
+test("Home intercepts gallery keyboard shortcuts before card controls stop bubbling", () => {
+  const home = readFileSync(new URL("../src/windows/Home.tsx", import.meta.url), "utf8");
+  const card = readFileSync(new URL("../src/components/home/CaptureCard.tsx", import.meta.url), "utf8");
+  assert.match(card, /onKeyDown=\{\(e\) => e\.stopPropagation\(\)\}/);
+  assert.match(home, /window\.addEventListener\("keydown", onShortcut, true\)/);
+  assert.match(home, /window\.removeEventListener\("keydown", onShortcut, true\)/);
+  assert.match(home, /aria-keyshortcuts="Control\+F Meta\+F"/);
+  assert.match(home, /aria-keyshortcuts="F5"/);
 });
