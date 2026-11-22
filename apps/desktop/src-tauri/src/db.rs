@@ -438,10 +438,8 @@ mod gallery_tests {
 
     #[test]
     fn existing_gallery_data_survives_timestamp_index_upgrade() -> anyhow::Result<()> {
-        let folder = std::env::temp_dir().join(format!(
-            "snapvere-index-upgrade-{}",
-            uuid::Uuid::new_v4()
-        ));
+        let folder =
+            std::env::temp_dir().join(format!("snapvere-index-upgrade-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&folder)?;
         let path = folder.join("gallery.sqlite");
         {
