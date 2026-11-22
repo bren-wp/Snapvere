@@ -323,14 +323,12 @@ fn gif_skalira_samo_prevelike_frameove() {
 /// GIF kvaliteta mora utjecati na stvarni izlazni fajl, ne samo na UI postavku.
 #[test]
 fn gif_niza_kvaliteta_smanjuje_izlaznu_rezoluciju() {
-    let path = std::env::temp_dir().join(format!(
-        "snapvere-gif-quality-{}.gif",
-        std::process::id()
-    ));
+    let path =
+        std::env::temp_dir().join(format!("snapvere-gif-quality-{}.gif", std::process::id()));
     let (w, h) = (1280u32, 720u32);
     {
-        let mut low = gifenc::GifEncoder::new(&path, w, h, 10, 30)
-            .expect("GIF low-quality encoder");
+        let mut low =
+            gifenc::GifEncoder::new(&path, w, h, 10, 30).expect("GIF low-quality encoder");
         // Valid frame with a gradient, so the encoder must process actual pixels.
         let mut frame = vec![0u8; (w * h * 4) as usize];
         for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
