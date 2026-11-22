@@ -18,6 +18,7 @@ TAURI_PREVIEW = r"""
   const realFetch = window.fetch.bind(window);
   window.fetch = (resource, options) => {
     if (resource === "https://update.snapvere.com/stable.json") {
+      window.__SNAPVERE_TEST_UPDATE_REQUESTS = (window.__SNAPVERE_TEST_UPDATE_REQUESTS || 0) + 1;
       const scenario = new URL(window.location.href).searchParams.has("previewUpdate");
       return Promise.resolve(new Response(JSON.stringify({
         product: "snapvere-tauri-windows",
@@ -62,6 +63,19 @@ TAURI_PREVIEW = r"""
       if (command === "plugin:event|listen") {
         eventCallbacks.set(args.event, args.handler);
         return 1;
+      }
+      // Native capabilities were introduced with the Linux preview. The UI
+      // must be tested against a realistic Windows contract rather than a
+      // missing command that silently disables the Windows-only update feed.
+      if (command === "get_platform_capabilities") {
+        const linux = new URL(window.location.href).searchParams.has("previewLinux");
+        return {
+          os: linux ? "linux" : "windows",
+          mp4: !linux,
+          microphone: !linux,
+          systemAudio: !linux,
+          cursorInRecordings: !linux
+        };
       }
       if (command === "get_frozen_rgba") return previewRgbaPacket();
       if (command === "get_frozen_frame") return window.__SNAPVERE_PREVIEW_FRAME_URL;
@@ -151,6 +165,28 @@ with sync_playwright() as p:
     update_preview.get_by_role("button", name="View update in Settings").wait_for(timeout=10000)
     update_preview.screenshot(path=str(OUTPUT / "home-update-available.png"))
     update_preview.close()
+
+    # Linux is rendered with the SAME components, but must not request the
+    # Windows-only update manifest or expose unsupported native recording.
+    linux_settings = app.new_page()
+    linux_settings.goto(
+        "http://127.0.0.1:1420/?previewLinux=1&previewUpdate=1#settings",
+        wait_until="networkidle",
+    )
+    linux_settings.get_by_role("navigation").get_by_role(
+        "button", name="Recording settings", exact=True
+    ).click()
+    linux_settings.get_by_text("Linux preview: GIF only", exact=False).wait_for(timeout=10000)
+    assert linux_settings.get_by_role("button", name="MP4", exact=True).is_disabled()
+    assert linux_settings.get_by_role("switch", name="Record microphone").is_disabled()
+    assert linux_settings.get_by_role("switch", name="Record system audio").is_disabled()
+    assert linux_settings.get_by_role("switch", name="Include the mouse cursor").is_disabled()
+    assert linux_settings.evaluate(
+        "() => (window.__SNAPVERE_TEST_UPDATE_REQUESTS || 0) === 0"
+    ), "Linux preview must not request the Windows-only updater manifest"
+    linux_settings.screenshot(path=str(OUTPUT / "settings-linux-preview.png"))
+    linux_settings.close()
+
     # Reproducible hover/focus captures; never assert these match native Windows
     # baselines just because the DOM state exists in headless Chromium.
     primary = page.get_by_role("group", name="Capture actions").get_by_role(
