@@ -33,7 +33,7 @@ Snapvere gives you a simple sequence: **capture → annotate → save or copy**.
 | 🎬 | **Screen recording** | Record an area or display to MP4 or silent GIF; choose cursor and audio preferences |
 | ⏸️ | **Pause and resume** | Control an active recording from its toolbar or the Windows notification-area menu |
 | 📋 | **Clipboard and export** | Copy a captured image or save a result in PNG, JPEG or WebP |
-| 🗂️ | **Local library** | Find captures by name and tags without a required online account |
+| 🗂️ | **Local library** | Find captures by name and tags, or open the capture folder directly from the gallery, without an online account |
 | 🖥️ | **Ready when you are** | Launch quietly at Windows sign-in; capture from the icon beside the clock |
 | 🔒 | **Privacy by design** | No automatic capture upload; locally stored captures and gallery data |
 

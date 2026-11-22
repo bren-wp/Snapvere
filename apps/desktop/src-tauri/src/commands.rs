@@ -1612,7 +1612,7 @@ pub(crate) fn show_capture_folder(app: &AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn open_capture_folder(window: tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
-    require_window_label(window.label(), &["settings"])?;
+    require_window_label(window.label(), &["home", "settings"])?;
     show_capture_folder(&app)
 }
 
@@ -1724,6 +1724,9 @@ mod ipc_origin_tests {
         }
         assert!(require_window_label("overlay", &["overlay"]).is_ok());
         assert!(require_window_label("home", &["settings"]).is_err());
+        assert!(require_window_label("home", &["home", "settings"]).is_ok());
+        assert!(require_window_label("settings", &["home", "settings"]).is_ok());
+        assert!(require_window_label("overlay", &["home", "settings"]).is_err());
         assert!(require_window_label("overlay", &["home"]).is_err());
     }
 }

@@ -1,5 +1,14 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.24 — secure crop boundary and gallery workflow (development)
+
+- Fix scanline bleed at the right monitor boundary: the BGRA recorder now clips every row independently and fills out-of-bounds pixels with black instead of copying from the next row.
+- Validate output size and frame offsets before accessing native buffers, with regression tests for truncated driver data, oversized coordinates, and short destination buffers.
+- Add **Open capture folder** directly to the gallery toolbar using existing translations for all 12 languages. The native IPC permits only Home and Settings, never overlay, editor, or recorder views.
+- Synchronize Cargo, Tauri and npm manifests/lockfiles to development version v0.2.24.
+- Keep v0.2.23 installers published until all new CI and physical Windows checks complete.
+
+
 ## v0.2.23 — protected recording shutdown (development)
 
 - Defer application exit during an active MP4/GIF recording to a single worker thread, keeping the GUI event loop responsive.

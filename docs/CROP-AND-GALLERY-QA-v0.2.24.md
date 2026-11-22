@@ -1,0 +1,31 @@
+# Snapvere by Brendigo — v0.2.24 recording safety and gallery workflow
+
+## Frame boundary protection
+
+The recorder consumes BGRA frames from DXGI or xcap. Previously, a crop
+whose right edge crossed a source scanline could copy the first pixels of
+the next scanline, because the code validated only the total source length.
+The fixed crop clips **each source row** independently; missing pixels become
+black, including when native frame data is truncated.
+
+The implementation checks destination capacity and multiplication/offset
+overflow before creating slices. Normal fully in-bounds crops still use a
+single row-copy operation, avoiding full-frame clears on each frame.
+
+## Gallery workflow and caller authorization
+
+The Home gallery now offers **Open capture folder** alongside the existing
+clipboard import. This calls the same native folder opener used by Settings
+and the tray; no path is accepted from frontend inputs.
+The command's native caller allowlist is `home` and `settings`.
+The existing capability gate and a dedicated Rust test reject capture overlays,
+recording HUD, and editor WebViews.
+
+## Required validation before merge
+
+- [ ] Windows Rust unit tests, Clippy, rustfmt, and three Windows packages
+- [ ] IPC caller security regression gate, TypeScript, frontend tests
+- [ ] RustSec dependency audit and browser extension security gate
+- [ ] Native Windows 10/11 recorder crop at the right and bottom monitor edges
+- [ ] Home/gallery small window, 125%-200% DPI, both themes, all 12 languages
+- [ ] Reference-based visual difference tests before claiming 1:1 accuracy

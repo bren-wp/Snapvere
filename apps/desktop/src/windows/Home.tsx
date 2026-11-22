@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   Crop,
   ClipboardPaste,
+  FolderOpen,
   Monitor,
   Settings as SettingsIcon,
   Search,
@@ -220,6 +221,13 @@ export default function Home() {
       setToast(`${t("Recording could not start:")} ${String(e)}`);
     }
   };
+  const openCaptureFolder = async () => {
+    try {
+      await ipc.openCaptureFolder();
+    } catch (error) {
+      setToast(`${t("Open capture folder")}: ${String(error)}`);
+    }
+  };
   const openSettings = async () => {
     try {
       const existing = await WebviewWindow.getByLabel("settings");
@@ -356,6 +364,16 @@ export default function Home() {
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={() => void openCaptureFolder()}
+            aria-label={t("Open capture folder")}
+            title={t("Open capture folder")}
+            className="snapvere-btn-secondary inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm"
+          >
+            <FolderOpen size={16} aria-hidden="true" />
+            <span>{t("Open capture folder")}</span>
+          </button>
           <button
             type="button"
             onClick={() => void importFromClipboard()}

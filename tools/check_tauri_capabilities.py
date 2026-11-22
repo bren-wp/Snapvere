@@ -84,7 +84,7 @@ protected_ipc = {
     "copy_media_path": ["home"],
     "copy_media_image": ["home"],
     "log_file_path": ["settings"],
-    "open_capture_folder": ["settings"],
+    "open_capture_folder": ["home", "settings"],
     "open_data_folder": ["settings"],
 }
 for name, allowed in protected_ipc.items():
