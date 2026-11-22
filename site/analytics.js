@@ -7,8 +7,8 @@
    • Oglasni signali (ad_storage / ad_user_data / ad_personalization) su
      uvijek odbijeni: sajt nema oglasa.
    • Bez `gaId` u config.js nema ni GA ni bannera.
-   • window.snapvereTrack(ime, parametri) je sigurno zvati uvijek: prije odluke
-     se eventi drže u redu, nakon „Decline" se odbacuju.
+   • window.snapvereTrack(ime, parametri) je sigurno zvati uvijek: događaji
+     prije privole se ignoriraju i nikada se naknadno ne šalju.
    • Elementi s [data-consent-open] (footer „Cookie settings") ponovno
      otvaraju banner.
    ───────────────────────────────────────────────────────────── */
@@ -18,7 +18,6 @@
   var ID = (window.SNAPVERE && window.SNAPVERE.gaId) || "";
   var KEY = "snapvere-consent"; // "granted" | "denied"
   var state = readChoice();
-  var queue = [];
   var loaded = false;
   var banner = null;
 
@@ -55,9 +54,6 @@
     document.head.appendChild(s);
     gtag("js", new Date());
     gtag("config", ID);
-    queue.splice(0).forEach(function (e) {
-      gtag("event", e[0], e[1]);
-    });
   }
 
   // Povlačenje privole: zaustavi GA i obriši njegove kolačiće (_ga, _ga_XXXX).
@@ -82,7 +78,6 @@
     if (choice === "granted") {
       load();
     } else {
-      queue.length = 0;
       if (was === "granted") revoke();
     }
   }
@@ -146,8 +141,6 @@
     if (state === "granted") {
       load();
       gtag("event", name, params || {});
-    } else if (state !== "denied") {
-      queue.push([name, params || {}]);
     }
   };
 
