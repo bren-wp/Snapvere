@@ -1601,15 +1601,19 @@ pub fn log_file_path(window: tauri::WebviewWindow) -> Result<Option<String>, Str
     Ok(logging::log_path().map(|p| p.to_string_lossy().into_owned()))
 }
 
-/** Open the configured capture directory, with no caller-controlled path. */
-#[tauri::command]
-pub fn open_capture_folder(window: tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
-    require_window_label(window.label(), &["settings"])?;
-    let dir = gallery_dir(&app)?;
+/// Native tray and authorized Settings may open only the configured capture folder.
+pub(crate) fn show_capture_folder(app: &AppHandle) -> Result<(), String> {
+    let dir = gallery_dir(app)?;
     fs::create_dir_all(&dir).map_err(estr)?;
     app.opener()
         .open_path(dir.to_string_lossy(), None::<&str>)
         .map_err(estr)
+}
+
+#[tauri::command]
+pub fn open_capture_folder(window: tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
+    require_window_label(window.label(), &["settings"])?;
+    show_capture_folder(&app)
 }
 
 /** Open Snapvere's data directory, without arbitrary filesystem IPC access. */

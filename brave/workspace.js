@@ -1,3 +1,4 @@
+/* Snapvere by Brendigo */
 /* SNAPVERE — browser-side capture workspace. All pixels remain on device.
  * A user must explicitly invoke every capture; no page is observed in the background.
  */

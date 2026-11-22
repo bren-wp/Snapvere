@@ -1,5 +1,19 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.23 — protected recording shutdown (development)
+
+- Defer application exit during an active MP4/GIF recording to a single worker thread, keeping the GUI event loop responsive.
+- Move native screen-source and encoder adapters into `record/transport.rs`, reducing the main recorder module by more than 100 lines.
+- Extract the approximately 300-line recording worker loop into `record/worker.rs` to isolate frame acquisition, audio synchronization and finalization from lifecycle controls.
+- Apply consistent publisher headers to canonical browser-extension scripts and their seven reproducibly generated sets, with a new static QA gate.
+- Use overflow-checked, fallible, bounded BGRA allocations for full-monitor fallbacks and recording frames (up to 45 million pixels, including 8K); clear short fallback frames to avoid retaining pixels from earlier frames.
+- Request recorder stop once, wait for the final media file and gallery entry, then exit the application. Do not exit silently after a finalization timeout; retain the resident process and record the problem in local diagnostics.
+- Add concurrency regression tests for shutdown worker deduplication.
+- Repair the broken `npm run format` script by pinning Prettier 3.10.1 with registry SHA-512 integrity and verifying the CLI in CI.
+- Add a localized **Open Captures Folder** tray action across all 12 supported languages, reusing the authorized Settings folder-opening path rather than duplicating filesystem logic.
+- Keep existing v0.2.22 release assets unchanged until the new build passes all quality gates and native Windows tests.
+
+
 SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO**.
 
 ## v0.2.22 — tray-first startup and preference reliability (proposed)

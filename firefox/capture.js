@@ -1,3 +1,4 @@
+/* Snapvere by Brendigo */
 /* SNAPVERE — local-only visible-tab PNG capture. */
 "use strict";
 (function installSnapvereCapture(root) {

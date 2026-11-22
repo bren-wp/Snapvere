@@ -37,6 +37,10 @@ for browser in BROWSERS:
     assert files == set(ASSETS) | {"manifest.json"}, f"{browser}: unexpected bundled files: {files}"
     for name in ASSETS:
         source = (directory / name).read_text("utf-8")
+        if name.endswith((".js", ".css")):
+            assert source.startswith("/* Snapvere by Brendigo */\n"), (
+                f"{browser}/{name}: missing publisher header"
+            )
         assert "github.com" not in source.lower() and "github.io" not in source.lower()
         assert not re.search(r"https?://(?!snapvere\.com(?:[/\"']|$))", source), (
             f"{browser}/{name}: external URL outside official snapvere.com"

@@ -1,3 +1,4 @@
+/* Snapvere by Brendigo */
 "use strict";
 (function () {
   const workspace = globalThis.SnapvereWorkspace;

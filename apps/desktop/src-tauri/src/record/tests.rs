@@ -8,6 +8,7 @@
 //! cargo test --release -- --ignored --nocapture
 //! ```
 
+use super::pixels::{crop_bgra, pixelate_bgra};
 use super::*;
 
 #[cfg(windows)]
@@ -265,7 +266,7 @@ fn gif_skalira_samo_prevelike_frameove() {
 
 #[cfg(windows)]
 mod windows_only {
-    use super::*;
+    use super::super::pixels::crop_bgra;
     use std::time::{Duration, Instant};
 
     /// BT.601 studio: puna bijela → Y 235, neutralna kroma.

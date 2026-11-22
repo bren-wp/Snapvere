@@ -53,6 +53,9 @@ jobs:
       - name: Enforce reachable TypeScript modules (dead-code graph)
         working-directory: apps/desktop
         run: node ../../tools/check_dead_code.mjs
+      - name: Verify locked Prettier CLI
+        working-directory: apps/desktop
+        run: npm exec --no -- prettier --version
       - name: Strict TypeScript static analysis
         working-directory: apps/desktop
         run: npm run lint

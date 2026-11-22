@@ -30,6 +30,7 @@ struct RecordItems {
     pause: MenuItem<Wry>,
     resume: MenuItem<Wry>,
     open_gallery: MenuItem<Wry>,
+    open_folder: MenuItem<Wry>,
     open_settings: MenuItem<Wry>,
     quit: MenuItem<Wry>,
 }
@@ -58,6 +59,7 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let sep2 = PredefinedMenuItem::separator(app)?;
 
     let open_gallery = MenuItem::with_id(app, "open_gallery", labels[5], true, None::<&str>)?;
+    let open_folder = MenuItem::with_id(app, "open_folder", labels[12], true, None::<&str>)?;
     let open_settings = MenuItem::with_id(app, "open_settings", labels[6], true, None::<&str>)?;
     let sep3 = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", labels[7], true, None::<&str>)?;
@@ -75,6 +77,7 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             &record_resume,
             &sep2,
             &open_gallery,
+            &open_folder,
             &open_settings,
             &sep3,
             &quit,
@@ -90,6 +93,7 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         pause: record_pause,
         resume: record_resume,
         open_gallery,
+        open_folder,
         open_settings,
         quit,
     });
@@ -175,6 +179,7 @@ pub fn set_language(app: &AppHandle, language: &str) {
             (&items.pause, labels[9]),
             (&items.resume, labels[10]),
             (&items.open_gallery, labels[5]),
+            (&items.open_folder, labels[12]),
             (&items.open_settings, labels[6]),
             (&items.quit, labels[7]),
         ];
@@ -209,20 +214,19 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
             }
         }
         "open_gallery" => {
-            let _ = commands::show_home(app.clone());
+            if let Err(error) = commands::show_home(app.clone()) {
+                log(&format!("tray gallery: {error}"));
+            }
+        }
+        "open_folder" => {
+            if let Err(error) = commands::show_capture_folder(app) {
+                log(&format!("tray captures folder: {error}"));
+            }
         }
         "open_settings" => {
             let _ = commands::open_settings(app);
         }
-        "quit" => {
-            // Snimanje u tijeku mora uredno zatvoriti datoteku prije izlaza.
-            if record::is_active(app) {
-                let _ = record::stop(app);
-                // ExitRequested waits for encoding and gallery registration; do
-                // not exit based on an arbitrary 600 ms delay.
-            }
-            app.exit(0);
-        }
+        "quit" => app.exit(0),
         _ => {}
     }
 }
