@@ -157,7 +157,7 @@ fn crop_bgra_handles_truncated_source_and_output_without_panic() {
 
     let mut undersized = vec![17u8; 2];
     crop_bgra(&source, 4, 3, 0, 0, 2, 2, &mut undersized);
-    assert_eq!(undersized, vec![17u8; 2]);
+    assert_eq!(undersized, vec![0u8; 2]);
 
     let mut out_of_range = vec![13u8; 4 * 2 * 4];
     crop_bgra(&source, 4, 3, u32::MAX, 0, 4, 2, &mut out_of_range);
@@ -202,6 +202,23 @@ fn pixelate_izravnava_blokove_i_ne_dira_okolinu() {
     assert_eq!(px(&buf, 8, 8), px(&buf, 9, 9));
     // …i sadržaj je stvarno promijenjen (nije samo prekopiran).
     assert_ne!(px(&buf, 8, 8), px(&before, 8, 8));
+}
+
+#[test]
+fn privacy_pixelation_fails_closed_on_incomplete_frame() {
+    let mut truncated = vec![231u8; 8];
+    pixelate_bgra(
+        &mut truncated,
+        1920,
+        1080,
+        &PixelRect {
+            x: 0,
+            y: 0,
+            width: 32,
+            height: 32,
+        },
+    );
+    assert!(truncated.iter().all(|byte| *byte == 0));
 }
 
 #[test]

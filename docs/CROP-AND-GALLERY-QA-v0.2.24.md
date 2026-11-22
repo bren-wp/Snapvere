@@ -41,3 +41,10 @@ interpolation. Existing code may omit the kind and receives `all`.
 
 Regression tests cover more than 120 images followed by older MP4 and GIF
 recordings, tag-only search, paging and invalid filter values.
+
+## Redaction fail-closed behavior
+
+If recording-frame dimensions and memory contents disagree, privacy redaction
+blacks out the available buffer instead of returning without masking.
+The crop helper likewise clears a truncated destination. Unit tests verify
+that invalid lengths never leave old pixels or unredacted frame data visible.

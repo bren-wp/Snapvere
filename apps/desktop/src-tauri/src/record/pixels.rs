@@ -88,7 +88,11 @@ pub(super) fn crop_bgra(
     let Some(total_bytes) = row_bytes.checked_mul(h) else {
         return;
     };
-    if row_bytes == 0 || dst.len() < total_bytes {
+    if row_bytes == 0 {
+        return;
+    }
+    if dst.len() < total_bytes {
+        dst.fill(0);
         return;
     }
     let Some(source_stride) = sw.checked_mul(4) else {
@@ -141,9 +145,11 @@ pub(super) fn pixelate_bgra(buf: &mut [u8], w: u32, h: u32, r: &PixelRect) {
         .checked_mul(h as usize)
         .and_then(|pixels| pixels.checked_mul(4))
     else {
+        buf.fill(0);
         return;
     };
     if buf.len() < expected {
+        buf.fill(0);
         return;
     }
     let stride = w as usize * 4;

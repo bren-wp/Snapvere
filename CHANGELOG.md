@@ -4,6 +4,7 @@
 
 - Fix scanline bleed at the right monitor boundary: the BGRA recorder now clips every row independently and fills out-of-bounds pixels with black instead of copying from the next row.
 - Validate output size and frame offsets before accessing native buffers, with regression tests for truncated driver data, oversized coordinates, and short destination buffers.
+- Fail closed when a frame cannot be safely redacted: zero incomplete pixel buffers instead of silently leaving sensitive unpixelated content.
 - Add **Open capture folder** directly to the gallery toolbar using existing translations for all 12 languages.
 - Apply **All / Images / Videos** in the SQLite query before pagination, instead of filtering only the first 120 loaded items. Search, tags, and older capture paging now share the same bounded query. The native IPC permits only Home and Settings, never overlay, editor, or recorder views.
 - Synchronize Cargo, Tauri and npm manifests/lockfiles to development version v0.2.24.
