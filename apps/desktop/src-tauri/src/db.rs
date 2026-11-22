@@ -187,11 +187,6 @@ impl Db {
         Ok(out)
     }
 
-    /// Most recent captures, with stable pagination and tag hydration.
-    pub fn list(&self, limit: u32, offset: u32) -> anyhow::Result<Vec<Screenshot>> {
-        self.gallery_page("", "all", limit, offset)
-    }
-
     /// Jedan zapis po id-u (preglednik u galeriji).
     pub fn get(&self, id: &str) -> anyhow::Result<Option<Screenshot>> {
         let mut stmt = self.conn.prepare(
@@ -209,11 +204,6 @@ impl Db {
             }
             None => Ok(None),
         }
-    }
-
-    /// Legacy unfiltered gallery search delegates to the same bounded query.
-    pub fn search(&self, query: &str, limit: u32, offset: u32) -> anyhow::Result<Vec<Screenshot>> {
-        self.gallery_page(query, "all", limit, offset)
     }
 
     /// Write durable intent before the filesystem is touched.
@@ -397,15 +387,15 @@ mod gallery_tests {
         db.add_tag("one", "design")?;
         db.add_tag("one", "team")?;
         db.add_tag("two", "team")?;
-        let all = db.list(200, 0)?;
+        let all = db.gallery_page("", "all", 200, 0)?;
         assert_eq!(all.len(), 2);
         assert_eq!(all[0].id, "two");
         assert_eq!(all[0].tags, vec!["team"]);
         assert_eq!(all[1].tags, vec!["design", "team"]);
-        assert_eq!(db.search("design", 200, 0)?[0].tags, vec!["design", "team"]);
-        assert_eq!(db.list(1, 1)?[0].id, "one");
-        assert!(db.list(1, 10)?.is_empty());
-        assert!(db.list(0, 0)?.is_empty());
+        assert_eq!(db.gallery_page("design", "all", 200, 0)?[0].tags, vec!["design", "team"]);
+        assert_eq!(db.gallery_page("", "all", 1, 1)?[0].id, "one");
+        assert!(db.gallery_page("", "all", 1, 10)?.is_empty());
+        assert!(db.gallery_page("", "all", 0, 0)?.is_empty());
         Ok(())
     }
 
@@ -415,11 +405,11 @@ mod gallery_tests {
         db.insert(&shot("one%two", 100))?;
         db.insert(&shot("one_two", 200))?;
         db.insert(&shot("oneXtwo", 300))?;
-        assert_eq!(db.search("%", 200, 0)?[0].id, "one%two");
-        assert_eq!(db.search("%", 200, 0)?.len(), 1);
-        assert_eq!(db.search("_", 200, 0)?[0].id, "one_two");
-        assert_eq!(db.search("_", 200, 0)?.len(), 1);
-        assert_eq!(db.search("one", 200, 0)?.len(), 3);
+        assert_eq!(db.gallery_page("%", "all", 200, 0)?[0].id, "one%two");
+        assert_eq!(db.gallery_page("%", "all", 200, 0)?.len(), 1);
+        assert_eq!(db.gallery_page("_", "all", 200, 0)?[0].id, "one_two");
+        assert_eq!(db.gallery_page("_", "all", 200, 0)?.len(), 1);
+        assert_eq!(db.gallery_page("one", "all", 200, 0)?.len(), 3);
         Ok(())
     }
 
@@ -429,12 +419,12 @@ mod gallery_tests {
         db.insert(&shot("same_a", 100))?;
         db.insert(&shot("same_b", 100))?;
         db.insert(&shot("older", 90))?;
-        assert_eq!(db.list(1, 0)?[0].id, "same_b");
-        assert_eq!(db.list(1, 1)?[0].id, "same_a");
-        assert_eq!(db.list(1, 2)?[0].id, "older");
-        assert_eq!(db.search("same", 1, 0)?[0].id, "same_b");
-        assert_eq!(db.search("same", 1, 1)?[0].id, "same_a");
-        assert!(db.search("same", 1, 2)?.is_empty());
+        assert_eq!(db.gallery_page("", "all", 1, 0)?[0].id, "same_b");
+        assert_eq!(db.gallery_page("", "all", 1, 1)?[0].id, "same_a");
+        assert_eq!(db.gallery_page("", "all", 1, 2)?[0].id, "older");
+        assert_eq!(db.gallery_page("same", "all", 1, 0)?[0].id, "same_b");
+        assert_eq!(db.gallery_page("same", "all", 1, 1)?[0].id, "same_a");
+        assert!(db.gallery_page("same", "all", 1, 2)?.is_empty());
         Ok(())
     }
 
@@ -479,7 +469,7 @@ mod gallery_tests {
         assert!(db.add_tag("missing", "valid").is_err());
         db.add_tag("one", "  useful  ")?;
         assert_eq!(db.get("one")?.expect("record").tags, vec!["useful"]);
-        assert!(db.search(&"x".repeat(129), 10, 0).is_err());
+        assert!(db.gallery_page(&"x".repeat(129), "all", 10, 0).is_err());
         Ok(())
     }
 
@@ -489,7 +479,7 @@ mod gallery_tests {
         db.insert(&shot("one", 100))?;
         db.add_tag("one", "meeting")?;
         db.add_tag("one", "meet-up")?;
-        assert_eq!(db.search("meet", 10, 0)?.len(), 1);
+        assert_eq!(db.gallery_page("meet", "all", 10, 0)?.len(), 1);
         Ok(())
     }
 
@@ -527,7 +517,7 @@ mod gallery_tests {
                 assert_eq!(version, 1);
                 let record = upgraded.get("saved-before-upgrade")?.expect("saved record");
                 assert_eq!(record.tags, vec!["keep-me"]);
-                assert_eq!(upgraded.list(10, 0)?.len(), 1);
+                assert_eq!(upgraded.gallery_page("", "all", 10, 0)?.len(), 1);
                 let (id, url): (String, String) = upgraded.conn.query_row(
                     "SELECT remote_id, remote_url FROM screenshots WHERE id = ?1",
                     params!["saved-before-upgrade"],
