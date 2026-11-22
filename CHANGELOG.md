@@ -1,5 +1,13 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.26 — Windows edition channel isolation (unreleased, pending CI/QA)
+
+- Route Tauri/Rust updates to a dedicated download guide, never to incompatible WinUI/.NET installers.
+- Identify existing WinUI/.NET v0.2.4 packages clearly; preserve their bytes and hashes.
+- Restrict approved release destinations and add regression checks for edition separation.
+- Synchronize Cargo, Tauri and npm manifests and lockfiles. Signing, native QA and publication remain outstanding.
+
+
 ## v0.2.25 — responsive browser extensions and bottom-right update notices (development)
 
 - Extend popup Chromium regression coverage to the user's 260 px narrow browser toolbar width, including minimum 40 px capture button height and horizontal overflow checks in both themes.

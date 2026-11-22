@@ -37,7 +37,7 @@ assert "https://snapvere.com/license/" in settings_source
 assert "https://brendigo.com" not in settings_source, "External UI links must be Snapvere links"
 feed_source = (APP / "src/lib/updateFeed.ts").read_text(encoding="utf-8")
 assert "https://update.snapvere.com/stable.json" in feed_source
-assert "https://snapvere.com/download/" in feed_source
+assert "https://snapvere.com/download/tauri/" in feed_source
 assert "https://update.snapvere.com;" in config["app"]["security"]["csp"]
 
 for base, suffixes in ((SITE, {".html", ".js", ".css"}), (APP / "src", {".html", ".ts", ".tsx", ".css"})):
@@ -46,6 +46,12 @@ for base, suffixes in ((SITE, {".html", ".js", ".css"}), (APP / "src", {".html",
             continue
         content = file.read_text(encoding="utf-8").lower()
         for domain in ("github.com", "github.io", "githubusercontent.com"):
+            if domain == "github.com" and domain in content and file == SITE / "download/tauri/index.html":
+                assert content.count(domain) == 1 and \
+                    'href="https://github.com/bren-wp/Snapvere/releases"' in file.read_text("utf-8"), (
+                        "Tauri page may link only to official repository releases"
+                    )
+                continue
             assert domain not in content, (
                 f"GitHub references must not appear in the public UI: {file.relative_to(ROOT)}"
             )
