@@ -68,6 +68,15 @@ export interface Annotation {
   text?: string; // text sadržaj ili broj koraka
 }
 
+/** Native features exposed by Rust. The React components/design tokens are shared. */
+export interface PlatformCapabilities {
+  os: "windows" | "linux" | "macos";
+  mp4: boolean;
+  microphone: boolean;
+  systemAudio: boolean;
+  cursorInRecordings: boolean;
+}
+
 // ── snimanje ekrana ──
 
 export type RecordFormat = "mp4" | "gif";
