@@ -5,7 +5,7 @@
   X-Permitted-Cross-Domain-Policies: none
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), microphone=(), camera=()
-  Content-Security-Policy: default-src 'none'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; script-src 'self' 'sha256-uajlxsPQ4Jo6W4fgW5sv+cwmjnHVwP64qHKITPLq/eU=' 'sha256-Vk4233Z0N+ELdeJN4GntaNsyZp9y2LREQRuaQx0J7W4=' 'sha256-ZnYJX5ypMaaAhxxWhSEjbMkhO2A9yPmbzEQH3LFaITA=' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.google-analytics.com https://region1.google-analytics.com; font-src 'self'; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com; frame-src 'none'; worker-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'none'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; script-src 'self' 'sha256-uajlxsPQ4Jo6W4fgW5sv+cwmjnHVwP64qHKITPLq/eU=' 'sha256-Vk4233Z0N+ELdeJN4GntaNsyZp9y2LREQRuaQx0J7W4=' 'sha256-ZnYJX5ypMaaAhxxWhSEjbMkhO2A9yPmbzEQH3LFaITA='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'none'; worker-src 'none'; upgrade-insecure-requests
 
 /*.css
   Cache-Control: public, max-age=0, must-revalidate

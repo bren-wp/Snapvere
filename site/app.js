@@ -2,14 +2,12 @@
 /* ─────────────────────────────────────────────────────────────
    Snapvere landing — interaktivnost
 
-   Download linkovi, verzija, GA i postavke žive u config.js.
-   Gumbi s [data-os] vode na /download/?os=…&from=… (thank-you stranica):
-   ona pokrene download, pošalje GA event i ponudi dodatne korake.
-   `data-from` = mjesto gumba na stranici (hero / cta / footer) za GA.
+   Download linkovi i verzija žive u config.js.
+   Gumbi s [data-os] vode na /download/?os=… (thank-you stranica).
+   Nema analitike, praćenja klikova ni slanja korisničkih podataka.
    ───────────────────────────────────────────────────────────── */
 const CFG = window.SNAPVERE || { version: "", downloads: {} };
 const OS_LABEL = { windows: "Windows", mac: "macOS" };
-const track = (name, params) => window.snapvereTrack && window.snapvereTrack(name, params);
 
 /* ── detekcija operativnog sustava posjetitelja ──────────────── */
 function detectOS() {
@@ -29,16 +27,14 @@ function wireDownloads() {
 
   document.querySelectorAll("[data-os]").forEach((el) => {
     const target = el.dataset.os;
-    const from = el.dataset.from || "page";
 
     if (ready(target)) {
-      el.setAttribute("href", `/download/?os=${target}&from=${from}`);
+      el.setAttribute("href", `/download/?os=${target}`);
     } else {
-      // build još nije objavljen → blagi feedback + mjerimo potražnju
+      // Unreleased platform: show only a local message.
       el.addEventListener("click", (e) => {
         e.preventDefault();
         flashHint(`The ${OS_LABEL[target]} build is still in testing. Windows is ready now.`);
-        track("download_unavailable", { os: target, placement: from });
       });
     }
 
@@ -113,23 +109,11 @@ function wireNav() {
   window.addEventListener("scroll", onScroll, { passive: true });
 }
 
-/* ── FAQ: koja pitanja ljudi otvaraju (signal što nije jasno) ── */
-function wireFaq() {
-  document.querySelectorAll(".faq__item").forEach((item) => {
-    item.addEventListener("toggle", () => {
-      if (!item.open) return;
-      const q = item.querySelector("summary")?.textContent.trim() || "";
-      track("faq_open", { question: q.slice(0, 100) });
-    });
-  });
-}
-
 /* ── init ────────────────────────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", () => {
   wireDownloads();
   wireReveal();
   wireNav();
-  wireFaq();
   const y = document.getElementById("year");
   if (y) y.textContent = new Date().getFullYear();
 });
