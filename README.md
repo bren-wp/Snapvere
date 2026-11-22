@@ -93,6 +93,20 @@ An optional update check retrieves version information only.
 Italiano, Português, Nederlands, Polski, Čeština, Slovenčina and Slovenščina.
 The Windows notification-area menu follows the selected language.
 
+## Linux preview (development)
+
+Snapvere now shares the same **React/Tauri UI, theme and localization** on
+Windows and Linux. The Linux Rust/xcap backend is being integrated with
+automated Ubuntu 24.04 builds producing `Snapvere-Linux-amd64.deb` and
+`Snapvere-Linux-x86_64.AppImage`. Linux previews appear with Windows
+artifacts in the same versioned GitHub **prerelease only after CI succeeds**.
+
+Current native limitations: Linux supports the shared screenshot/editor/gallery
+and a silent GIF recording path in source; **MP4, system/microphone audio
+recording and cursor compositing in recordings are not implemented**.
+Wayland portal behavior and live-device UI 1:1 comparisons are not verified.
+See [Linux acceptance checklist](docs/LINUX-PREVIEW-QA-2026-11-22.md).
+
 ## Download for Windows
 
 Get the **Tauri/Rust Windows edition** from

@@ -16,6 +16,9 @@ test("WinUI and Tauri distribution channels do not cross-install", () => {
   assert.ok(tauri.includes("Tauri/Rust edition"));
   assert.ok(tauri.includes("https://github.com/bren-wp/Snapvere/releases"));
   assert.ok(!tauri.includes("/files/Snapvere-"));
+  assert.ok(tauri.includes("Snapvere-Linux-amd64.deb"));
+  assert.ok(tauri.includes("Snapvere-Linux-x86_64.AppImage"));
+  assert.ok(tauri.includes("may not exist in older releases"));
   assert.ok(frontend.includes('https://snapvere.com/download/tauri/'));
   assert.ok(!frontend.includes('https://snapvere.com/download/"'));
   assert.ok(generator.includes('https://snapvere.com/download/tauri/'));

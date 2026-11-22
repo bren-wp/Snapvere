@@ -99,7 +99,9 @@ pub(super) fn run(
     }
     // Zvuk se vuče s ~120 ms zakašnjenja za satom videa — toliko WASAPI-ju treba da
     // paket stigne; bez margine bismo rupu popunili tišinom pa pravi zvuk gurnuli kasnije.
+    #[cfg(windows)]
     const AUDIO_LAG: Duration = Duration::from_millis(120);
+    #[cfg(windows)]
     let mut audio_written: i64 = 0; // frameova @ 48 kHz
     let mut paused_total = Duration::ZERO;
     let mut pause_started: Option<Instant> = None;

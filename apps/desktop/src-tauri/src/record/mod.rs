@@ -529,7 +529,7 @@ fn open_encoder(
     with_audio: bool,
 ) -> Result<Encoder, String> {
     #[cfg(not(windows))]
-    let _ = with_audio;
+    let _ = (with_audio, quality);
     match format {
         #[cfg(windows)]
         RecordFormat::Mp4 => Ok(Encoder::Mp4(Box::new(mp4::Mp4Encoder::new(

@@ -48,6 +48,8 @@ impl Source {
     }
 
     pub(super) fn grab(&mut self, timeout_ms: u32) -> Result<&[u8], String> {
+        #[cfg(not(windows))]
+        let _ = timeout_ms;
         match self {
             #[cfg(windows)]
             Source::Dxgi(g) => g.grab(timeout_ms),
@@ -112,6 +114,8 @@ impl Encoder {
         time_100ns: i64,
         dur_100ns: i64,
     ) -> Result<(), String> {
+        #[cfg(not(windows))]
+        let _ = (time_100ns, dur_100ns);
         match self {
             #[cfg(windows)]
             Encoder::Mp4(e) => e.write(bgra, time_100ns, dur_100ns),
@@ -119,6 +123,7 @@ impl Encoder {
         }
     }
 
+    #[cfg(windows)]
     pub(super) fn write_audio(
         &mut self,
         pcm: &[i16],
