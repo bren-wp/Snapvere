@@ -36,7 +36,7 @@ pub fn list_monitors() -> Result<Vec<MonitorInfo>> {
 
 /// Compare in i64: negative virtual origins are valid, and drivers may
 /// report u32 dimensions too large to fit in i32.
-fn contains_desktop_point(x: i32, y: i32, mx: i32, my: i32, w: u32, h: u32) -> bool {
+pub(crate) fn contains_desktop_point(x: i32, y: i32, mx: i32, my: i32, w: u32, h: u32) -> bool {
     let (x, y, mx, my) = (i64::from(x), i64::from(y), i64::from(mx), i64::from(my));
     w > 0 && h > 0 && x >= mx && x < mx + i64::from(w) && y >= my && y < my + i64::from(h)
 }

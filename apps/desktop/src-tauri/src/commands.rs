@@ -462,15 +462,60 @@ fn copy_rgba_to_clipboard(app: &AppHandle, img: &image::RgbaImage) -> Result<(),
     app.clipboard().write_image(&image).map_err(estr)
 }
 
-/// Trenutna pozicija miša u fizičkim px (Windows). Fallback (0,0).
-fn cursor_pos() -> (i32, i32) {
+/// On Linux, ask the windowing backend for the real desktop pointer position.
+/// Returning (0,0) unconditionally would capture the wrong monitor on X11
+/// setups where the primary screen is left of or below (0,0).
+#[cfg(not(windows))]
+fn checked_cursor_position(x: f64, y: f64) -> Option<(i32, i32)> {
+    let (x, y) = (x.round(), y.round());
+    let valid = |value: f64| {
+        value.is_finite()
+            && value >= f64::from(i32::MIN)
+            && value <= f64::from(i32::MAX)
+    };
+    (valid(x) && valid(y)).then_some((x as i32, y as i32))
+}
+
+#[cfg(all(test, not(windows)))]
+#[test]
+fn linux_cursor_rejects_nonfinite_and_out_of_range_positions() {
+    assert_eq!(checked_cursor_position(-1900.2, 89.6), Some((-1900, 90)));
+    assert_eq!(checked_cursor_position(f64::NAN, 0.0), None);
+    assert_eq!(checked_cursor_position(f64::INFINITY, 0.0), None);
+    assert_eq!(checked_cursor_position(2147483648.0, 0.0), None);
+}
+
+/// Physical desktop cursor point. If Wayland denies a global pointer query,
+/// capture the primary monitor instead of assuming the desktop origin is (0,0).
+fn cursor_pos(app: &AppHandle) -> (i32, i32) {
     #[cfg(windows)]
     {
+        let _ = app;
         use windows::Win32::Foundation::POINT;
         use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
         let mut p = POINT::default();
         if unsafe { GetCursorPos(&mut p) }.is_ok() {
             return (p.x, p.y);
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        if let Ok(position) = app.cursor_position() {
+            if let Some(point) = checked_cursor_position(position.x, position.y) {
+                return point;
+            }
+        }
+        if let Ok(monitors) = capture::list_monitors() {
+            if let Some(primary) = monitors.iter().find(|m| m.is_primary).or_else(|| monitors.first()) {
+                let center = |origin: i32, extent: u32| {
+                    (i64::from(origin) + i64::from(extent) / 2)
+                        .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
+                };
+                return (
+                    center(primary.x, primary.width),
+                    center(primary.y, primary.height),
+                );
+            }
         }
     }
     (0, 0)
@@ -803,7 +848,7 @@ pub fn dispatch_region_capture(app: &AppHandle, mode: CaptureMode) {
 /// Never write a transient frozen.png to disk or depend on asset:// grants:
 /// the overlay receives the pixels over a scoped Tauri IPC command.
 fn region_capture_blocking(app: &AppHandle, mode: CaptureMode) -> Result<(), String> {
-    let (cx, cy) = cursor_pos();
+    let (cx, cy) = cursor_pos(app);
     let t = std::time::Instant::now();
     let token = Utc::now().timestamp_millis();
 

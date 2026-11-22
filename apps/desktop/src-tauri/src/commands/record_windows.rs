@@ -14,16 +14,15 @@ pub(super) fn resolve_target(
     region: Option<Region>,
     monitor_id: Option<u32>,
 ) -> Result<RecordTarget, String> {
-    let _ = app;
     let monitors = capture::list_monitors().map_err(estr)?;
     let wanted = monitor_id.or_else(|| region.map(|r| r.monitor_id));
 
     let m = wanted
         .and_then(|id| monitors.iter().find(|m| m.id == id))
         .or_else(|| {
-            let (cx, cy) = cursor_pos();
+            let (cx, cy) = cursor_pos(app);
             monitors.iter().find(|m| {
-                cx >= m.x && cx < m.x + m.width as i32 && cy >= m.y && cy < m.y + m.height as i32
+                capture::contains_desktop_point(cx, cy, m.x, m.y, m.width, m.height)
             })
         })
         .or_else(|| monitors.iter().find(|m| m.is_primary))
