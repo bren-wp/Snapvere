@@ -141,7 +141,12 @@ fn crop_bgra_right_edge_does_not_copy_next_scanline() {
     }
     let mut dst = vec![99u8; 3 * 2 * 4];
     crop_bgra(&src, sw, sh, 3, 0, 3, 2, &mut dst);
-    let blue: Vec<u8> = dst.as_chunks::<4>().0.iter().map(|pixel| pixel[0]).collect();
+    let blue: Vec<u8> = dst
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|pixel| pixel[0])
+        .collect();
     assert_eq!(blue, [4, 0, 0, 8, 0, 0]);
     assert_eq!(&dst[4..12], &[0u8; 8]);
     assert_eq!(&dst[16..24], &[0u8; 8]);
