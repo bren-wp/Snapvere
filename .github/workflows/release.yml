@@ -185,7 +185,7 @@ jobs:
           $feed = Get-Content (Join-Path $dist 'Snapvere-update-stable.json') -Raw | ConvertFrom-Json
           if ($feed.product -ne 'snapvere-tauri-windows' -or
               $feed.version -ne "${{ steps.version.outputs.value }}" -or
-              $feed.download_url -ne 'https://snapvere.com/download/') {
+              $feed.download_url -ne 'https://snapvere.com/download/tauri/') {
             throw 'Invalid release version manifest; refusing publication'
           }
           $expected = @('Snapvere-Portable.exe','Snapvere-Setup.exe','Snapvere-Setup.msi')
@@ -239,6 +239,7 @@ jobs:
             All three Windows executables originate from the same Tauri build, and the seven extension ZIPs are generated from audited source at the same release commit.
 
             ### Changes in v${{ steps.version.outputs.value }}
+            - Separate Tauri/Rust update notices from incompatible WinUI/.NET website installers.
             - Fix the collapsed browser extension popup shown in compact browser
               toolbar windows: stable document sizing, readable one-line actions,
               proper icon/label alignment and responsive dark/light layout.

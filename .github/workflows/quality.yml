@@ -98,7 +98,7 @@ jobs:
           path = Path("extension-package-validation/Snapvere-update-stable.json")
           data = json.loads(path.read_text(encoding="utf-8"))
           assert data["product"] == "snapvere-tauri-windows"
-          assert data["download_url"] == "https://snapvere.com/download/"
+          assert data["download_url"] == "https://snapvere.com/download/tauri/"
           assert len(list(path.parent.glob(f"Snapvere-*-extension-{extension_version}.zip"))) == 7
           print("All seven browser ZIPs and version-only update feed passed release rehearsal")
           PY
@@ -135,6 +135,8 @@ jobs:
           node --check site/download.js
           node --check site/config.js
           python -m json.tool apps/desktop/src-tauri/tauri.conf.json > /dev/null
+      - name: Regression-test edition-isolated releases
+        run: node --test tools/tests/editionChannels.test.mjs
       - name: Verify public surfaces are Snapvere branded
         shell: bash
         run: |
