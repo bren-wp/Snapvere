@@ -141,20 +141,22 @@ export default function Home() {
   }, [query, filter, load]);
 
   useEffect(() => {
-    // Do not handle Home shortcuts while the media Viewer owns the keyboard.
-    if (viewId) return;
     const onShortcut = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.repeat) return;
+      if (event.defaultPrevented) return;
       const action = galleryKeyboardShortcut(
         event.key, event.ctrlKey, event.metaKey, event.altKey, event.shiftKey,
       );
-      if (action === "search" && searchInput.current) {
+      if (action === "refresh") {
+        // F5 must never hard-reload the WebView and disrupt unsaved work.
+        // While Viewer is open or a refresh is pending, consume but do not run.
         event.preventDefault();
-        searchInput.current.focus();
-        searchInput.current.select();
-      } else if (action === "refresh" && !loading) {
+        if (!viewId && !loading && !event.repeat) void load();
+      } else if (action === "search" && !viewId && searchInput.current) {
         event.preventDefault();
-        void load();
+        if (!event.repeat) {
+          searchInput.current.focus();
+          searchInput.current.select();
+        }
       }
     };
     window.addEventListener("keydown", onShortcut);
