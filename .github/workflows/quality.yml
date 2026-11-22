@@ -128,9 +128,10 @@ jobs:
           echo "Release tag v$version is available for this application change."
       - name: Verify matching public and desktop design tokens
         run: python tools/check_brand_tokens.py
-      - name: Audit browser extension dead-file graph and desktop design token parity
+      - name: Audit browser extension source reachability, privacy and design
         run: |
           python tools/audit_browser_extension_graph.py
+          python tools/check_extension_privacy.py
           python tools/check_extension_design_tokens.py
       - name: Check capture overlay pipeline and legacy brand references
         run: python tools/check_capture_pipeline.py
