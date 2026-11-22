@@ -1,5 +1,5 @@
 // Snapvere by Brendigo
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
@@ -52,8 +52,8 @@ export default function Home() {
     setLoading(true);
     try {
       const res = q.trim()
-        ? await ipc.searchScreenshots(q, PAGE_SIZE, 0)
-        : await ipc.listScreenshots(PAGE_SIZE, 0);
+        ? await ipc.searchScreenshots(q, PAGE_SIZE, 0, filter)
+        : await ipc.listScreenshots(PAGE_SIZE, 0, filter);
       if (request === galleryRequest.current) {
         pageOffset.current = res.length;
         setItems(res);
@@ -65,7 +65,7 @@ export default function Home() {
     } finally {
       if (request === galleryRequest.current) setLoading(false);
     }
-  }, [t]);
+  }, [t, filter]);
 
   const loadMore = useCallback(async () => {
     if (pagingBusy.current || loading || !hasMore) return;
@@ -75,8 +75,8 @@ export default function Home() {
     setLoadingMore(true);
     try {
       const res = query.trim()
-        ? await ipc.searchScreenshots(query, PAGE_SIZE, offset)
-        : await ipc.listScreenshots(PAGE_SIZE, offset);
+        ? await ipc.searchScreenshots(query, PAGE_SIZE, offset, filter)
+        : await ipc.listScreenshots(PAGE_SIZE, offset, filter);
       if (request !== galleryRequest.current) return;
       pageOffset.current = offset + res.length;
       setItems((previous) => mergeUniqueById(previous, res));
@@ -89,7 +89,7 @@ export default function Home() {
       pagingBusy.current = false;
       setLoadingMore(false);
     }
-  }, [hasMore, loading, query]);
+  }, [hasMore, loading, query, filter, t]);
 
   useEffect(() => {
     const t = setTimeout(() => void load(query), 200);
@@ -132,11 +132,9 @@ export default function Home() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const visible = useMemo(() => {
-    if (filter === "all") return items;
-    const wantVideo = filter === "videos";
-    return items.filter((s) => isVideo(s) === wantVideo);
-  }, [items, filter]);
+  // SQL applies the selected category before LIMIT/OFFSET, so older media
+  // cannot disappear merely because recent captures belong to another kind.
+  const visible = items;
 
   const onDelete = useCallback(async (s: Screenshot) => {
     const ok = await ask(`"${s.name}" — ${t("This item will be removed from the gallery and deleted from disk.")}`, {
@@ -342,6 +340,8 @@ export default function Home() {
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
+                setItems([]);
+                setLoading(true);
                 setHasMore(false);
                 pageOffset.current = 0;
               }}
@@ -356,7 +356,14 @@ export default function Home() {
               <button
                 key={f}
                 type="button"
-                onClick={() => setFilter(f)}
+                onClick={() => {
+                  if (filter === f) return;
+                  setFilter(f);
+                  setItems([]);
+                  setLoading(true);
+                  setHasMore(false);
+                  pageOffset.current = 0;
+                }}
                 aria-pressed={filter === f}
                 className={`snapvere-gallery-filter ${filter === f ? "is-active" : ""}`}
               >

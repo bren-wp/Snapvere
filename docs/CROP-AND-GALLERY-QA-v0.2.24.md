@@ -29,3 +29,15 @@ recording HUD, and editor WebViews.
 - [ ] Native Windows 10/11 recorder crop at the right and bottom monitor edges
 - [ ] Home/gallery small window, 125%-200% DPI, both themes, all 12 languages
 - [ ] Reference-based visual difference tests before claiming 1:1 accuracy
+
+## Filtering and pagination correctness
+
+The library category (`All`, `Images`, `Videos`) is now passed to the
+SQLite query before applying `LIMIT` and `OFFSET`. Previously, filtering
+only the first 120 fetched captures could make older recordings invisible.
+The native query preserves literal %, _ and backslash search behavior and
+deduplicates tag matches. An unrecognized kind is rejected, with no raw SQL
+interpolation. Existing code may omit the kind and receives `all`.
+
+Regression tests cover more than 120 images followed by older MP4 and GIF
+recordings, tag-only search, paging and invalid filter values.

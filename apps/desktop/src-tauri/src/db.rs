@@ -133,22 +133,63 @@ impl Db {
         Ok(())
     }
 
-    /// Dohvati zadnjih `limit` screenshotova (najnoviji prvi).
-    pub fn list(&self, limit: u32, offset: u32) -> anyhow::Result<Vec<Screenshot>> {
-        let mut stmt = self.conn.prepare(
-            r#"SELECT id, file_path, thumb_path, name, format, width, height, size_bytes,
-                      source, created_at, is_uploaded
-               FROM screenshots
-               ORDER BY created_at DESC, id DESC
-               LIMIT ?1 OFFSET ?2"#,
-        )?;
-        let rows = stmt.query_map(params![limit.min(500), offset], Self::map_row)?;
+    /// The same paginated SQL result set powers All, Images, Videos and text search.
+    /// Category fragments are selected from fixed literals, never user-supplied SQL.
+    pub fn gallery_page(
+        &self,
+        query: &str,
+        category: &str,
+        limit: u32,
+        offset: u32,
+    ) -> anyhow::Result<Vec<Screenshot>> {
+        anyhow::ensure!(
+            query.chars().count() <= 128,
+            "Search query exceeds 128 characters"
+        );
+        let category_sql = match category {
+            "all" => "1",
+            "images" => "NOT (s.source = 'recording' OR s.format = 'mp4')",
+            "videos" => "(s.source = 'recording' OR s.format = 'mp4')",
+            _ => anyhow::bail!("Invalid gallery category"),
+        };
+        // Literal wildcard behavior must stay identical to legacy gallery search.
+        let escaped = query
+            .trim()
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        let pattern = if escaped.is_empty() {
+            String::new()
+        } else {
+            format!("%{escaped}%")
+        };
+        let sql = format!(
+            r#"SELECT s.id, s.file_path, s.thumb_path, s.name, s.format, s.width,
+                      s.height, s.size_bytes, s.source, s.created_at, s.is_uploaded
+               FROM screenshots s
+               WHERE {category_sql}
+                 AND (?1 = '' OR s.name LIKE ?1 ESCAPE '\'
+                      OR EXISTS (
+                          SELECT 1 FROM screenshot_tags st
+                          JOIN tags t ON t.id = st.tag_id
+                          WHERE st.screenshot_id = s.id AND t.name LIKE ?1 ESCAPE '\'
+                      ))
+               ORDER BY s.created_at DESC, s.id DESC
+               LIMIT ?2 OFFSET ?3"#
+        );
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_map(params![pattern, limit.min(500), offset], Self::map_row)?;
         let mut out = Vec::new();
-        for r in rows {
-            out.push(r?);
+        for row in rows {
+            out.push(row?);
         }
         self.attach_tags(&mut out)?;
         Ok(out)
+    }
+
+    /// Most recent captures, with stable pagination and tag hydration.
+    pub fn list(&self, limit: u32, offset: u32) -> anyhow::Result<Vec<Screenshot>> {
+        self.gallery_page("", "all", limit, offset)
     }
 
     /// Jedan zapis po id-u (preglednik u galeriji).
@@ -170,38 +211,9 @@ impl Db {
         }
     }
 
-    /// Bounded substring search without multiplying results for matching tags.
+
     pub fn search(&self, query: &str, limit: u32, offset: u32) -> anyhow::Result<Vec<Screenshot>> {
-        anyhow::ensure!(
-            query.chars().count() <= 128,
-            "Search query exceeds 128 characters"
-        );
-        // A user's % and _ are literal search terms, not SQLite wildcards.
-        let escaped = query
-            .replace('\\', "\\\\")
-            .replace('%', "\\%")
-            .replace('_', "\\_");
-        let like = format!("%{escaped}%");
-        let mut stmt = self.conn.prepare(
-            r#"SELECT s.id, s.file_path, s.thumb_path, s.name, s.format, s.width, s.height,
-                      s.size_bytes, s.source, s.created_at, s.is_uploaded
-               FROM screenshots s
-               WHERE s.name LIKE ?1 ESCAPE '\'
-                  OR EXISTS (
-                      SELECT 1 FROM screenshot_tags st
-                      JOIN tags t ON t.id = st.tag_id
-                      WHERE st.screenshot_id = s.id AND t.name LIKE ?1 ESCAPE '\'
-                  )
-               ORDER BY s.created_at DESC, s.id DESC
-               LIMIT ?2 OFFSET ?3"#,
-        )?;
-        let rows = stmt.query_map(params![like, limit.min(500), offset], Self::map_row)?;
-        let mut out = Vec::new();
-        for r in rows {
-            out.push(r?);
-        }
-        self.attach_tags(&mut out)?;
-        Ok(out)
+        self.gallery_page(query, "all", limit, offset)
     }
 
     /// Write durable intent before the filesystem is touched.
@@ -423,6 +435,37 @@ mod gallery_tests {
         assert_eq!(db.search("same", 1, 0)?[0].id, "same_b");
         assert_eq!(db.search("same", 1, 1)?[0].id, "same_a");
         assert!(db.search("same", 1, 2)?.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn category_filter_pages_entire_gallery_before_limiting() -> anyhow::Result<()> {
+        let db = Db::open_in_memory()?;
+        for i in 0..135 {
+            db.insert(&shot(&format!("image-{i:03}"), i + 100))?;
+        }
+        let mut older_video = shot("older-gif", 2);
+        older_video.format = "gif".into();
+        older_video.source = "recording".into();
+        db.insert(&older_video)?;
+        db.add_tag("older-gif", "training")?;
+        let mut mp4 = shot("older-mp4", 3);
+        mp4.format = "mp4".into();
+        mp4.source = "fullscreen".into();
+        db.insert(&mp4)?;
+
+        let videos = db.gallery_page("", "videos", 120, 0)?;
+        assert_eq!(videos.len(), 2);
+        assert_eq!(videos[0].id, "older-mp4");
+        assert_eq!(videos[1].id, "older-gif");
+        assert_eq!(videos[1].tags, vec!["training"]);
+        assert_eq!(db.gallery_page("", "images", 120, 0)?.len(), 120);
+        assert_eq!(db.gallery_page("", "images", 120, 120)?.len(), 15);
+        assert_eq!(db.gallery_page("", "all", 120, 120)?.len(), 17);
+        assert_eq!(db.gallery_page("training", "videos", 10, 0)?[0].id, "older-gif");
+        assert!(db.gallery_page("training", "images", 10, 0)?.is_empty());
+        assert!(db.gallery_page("", "unexpected", 10, 0).is_err());
+        assert!(db.gallery_page(&"x".repeat(129), "all", 10, 0).is_err());
         Ok(())
     }
 
