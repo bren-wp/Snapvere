@@ -1,0 +1,36 @@
+# Snapvere by Brendigo
+# One-shot metadata repair for an unsigned preview release. Remove after verification.
+name: One-shot reconcile v0.2.25 prerelease flag
+on:
+  push:
+    branches:
+      - fix/tauri-winui-release-channel-0.2.26
+    paths:
+      - .github/workflows/maintenance-preview-flag.yml
+permissions:
+  contents: write
+jobs:
+  correct-preview:
+    if: github.event.head_commit.message == 'maintenance: reconcile preview release metadata'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Mark the exact untested v0.2.25 release prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/v0.2.25")
+          id=$(jq -er '.id' <<< "$raw")
+          current=$(jq -er '.prerelease | tostring' <<< "$raw")
+          if [[ "$(jq -r '.draft' <<< "$raw")" != "false" ]]; then
+            echo "::error::Release v0.2.25 is draft, refusing unexpected metadata mutation."
+            exit 1
+          fi
+          if [[ "$current" != "true" ]]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/$id" -F prerelease=true >/dev/null
+          fi
+          verified=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/v0.2.25")
+          jq -e '.prerelease == true and .draft == false' <<< "$verified" >/dev/null
+          echo "Verified: v0.2.25 release is a published prerelease. No assets modified."
