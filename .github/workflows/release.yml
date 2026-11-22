@@ -176,7 +176,7 @@ jobs:
           python tools/generate_update_manifest.py --version "${{ steps.version.outputs.value }}" --out "dist-installers/Snapvere-update-stable.json"
           if ($LASTEXITCODE -ne 0) { throw "Could not generate the version-only update manifest" }
           $browserArchives = @('chrome','firefox','edge','brave','opera','vivaldi','safari') |
-            ForEach-Object { "Snapvere-$_-extension-0.2.1.zip" }
+            ForEach-Object { "Snapvere-$_-extension-0.2.2.zip" }
           foreach ($name in $browserArchives) {
             $file = Join-Path $dist $name
             if (-not (Test-Path $file)) { throw "Browser extension package missing: $name" }
@@ -230,7 +230,7 @@ jobs:
             - **Snapvere-Setup.msi** — MSI installer
             - **SHA256SUMS.txt** — integrity checksums for all packages and the dependency inventory
             - **Snapvere-SBOM.cdx.json** — reproducible CycloneDX 1.6 dependency inventory from npm and Cargo lockfiles
-            - **Seven browser extension ZIP packages v0.2.1** — Chrome, Firefox, Edge, Brave, Opera, Vivaldi and Safari independently bundled source packages (Safari requires Apple packaging/signing)
+            - **Seven browser extension ZIP packages v0.2.2** — Chrome, Firefox, Edge, Brave, Opera, Vivaldi and Safari independently bundled source packages (Safari requires Apple packaging/signing)
             - **Snapvere-update-stable.json** — server-ready version notification manifest; upload it as `stable.json` to your configured `update.snapvere.com` only after the matching Tauri release is available on the official download page
 
             All ten Windows installer/browser extension artifacts, the SBOM and the update manifest are covered by SHA256SUMS.txt.
@@ -239,19 +239,20 @@ jobs:
             All three Windows executables originate from the same Tauri build, and the seven extension ZIPs are generated from audited source at the same release commit.
 
             ### Changes in v${{ steps.version.outputs.value }}
-            - Fix inaccurate update status: when automatic update checks are off,
-              Settings no longer claims that the installed version was verified.
-              Failed server checks also clear stale version notifications.
-            - Keep user-initiated update checks with a timeout, official HTTPS
-              `update.snapvere.com` manifest and `snapvere.com` download link.
-            - Include source-corrected browser extensions v0.2.1 in the repository:
-              crop selection guides are excluded from saved/copied PNGs, and
-              area/edit capture aborts on active-tab switching.
-            - Add Playwright, Node.js and security regressions for these flows.
-            - Preserve Print Screen, optional Windows tray startup, safe clipboard
-              import, bounded recording, local gallery and existing permissions.
-            - Manually reviewed npm/Rust dependency lockfiles, strict Clippy,
-              RustSec, SBOM and SHA-256 verification; no recurring update bot.
+            - Fix the collapsed browser extension popup shown in compact browser
+              toolbar windows: stable document sizing, readable one-line actions,
+              proper icon/label alignment and responsive dark/light layout.
+            - Ship seven independently bundled browser extensions v0.2.2 and
+              verify small screens with Chromium screenshots/geometry tests.
+            - Display release availability at the bottom-right of the Windows
+              application, with a close action remembered for that version only.
+              A newer release can notify again; startup checks remain optional.
+            - Keep official HTTPS-only, time-bounded, version-only update checks
+              and a user-initiated download link; no silent installer execution.
+            - Preserve private offline capture, PrintScreen, local gallery,
+              clipboard transfer and existing least-privilege permissions.
+            - Enforce TypeScript, Rust tests/Clippy, RustSec and SHA-256 release
+              verification, with manual real-device acceptance still required.
 
             **Update security:** The built-in update check is informational only.
             No installer is downloaded or executed automatically. New downloads
@@ -288,7 +289,7 @@ jobs:
           # Publishing an installer-only release is a failure: every browser
           # extension, the update notice, the SBOM and the hashes must ship.
           $browserZips = @('chrome','firefox','edge','brave','opera','vivaldi','safari') |
-            ForEach-Object { "Snapvere-$($_)-extension-0.2.1.zip" }
+            ForEach-Object { "Snapvere-$($_)-extension-0.2.2.zip" }
           $requiredAssets = @(
             'Snapvere-Portable.exe',
             'Snapvere-Setup.exe',
