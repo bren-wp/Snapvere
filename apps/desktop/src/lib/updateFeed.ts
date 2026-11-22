@@ -5,7 +5,7 @@
  * network request is a GET for a version manifest at update.snapvere.com.
  */
 export const UPDATE_FEED_URL = "https://update.snapvere.com/stable.json";
-export const OFFICIAL_DOWNLOAD_URL = "https://snapvere.com/download/";
+export const OFFICIAL_DOWNLOAD_URL = "https://snapvere.com/download/tauri/";
 export const UPDATE_PRODUCT = "snapvere-tauri-windows";
 const MAX_MANIFEST_BYTES = 8192;
 const TIMEOUT_MS = 6500;

@@ -16,12 +16,15 @@ test('accepts numeric versions and compares all components, not strings', () => 
 });
 
 test('accepts only Tauri-Windows edition and official download host', () => {
+  assert.equal(OFFICIAL_DOWNLOAD_URL, 'https://snapvere.com/download/tauri/');
   const valid = { product: UPDATE_PRODUCT, version: '0.2.20', download_url: OFFICIAL_DOWNLOAD_URL,
     notes: 'Bug fixes' };
   assert.deepEqual(parseUpdateManifest(valid, '0.2.19'), {version:'0.2.20', notes:'Bug fixes'});
   assert.equal(parseUpdateManifest(valid, '0.2.21'), null);
   assert.throws(() => parseUpdateManifest({...valid, product:'snapvere-winui-windows'}, '0.2.19'));
   assert.throws(() => parseUpdateManifest({...valid, download_url:'https://github.com/example'}, '0.2.19'));
+  assert.throws(() => parseUpdateManifest({...valid, download_url:'https://snapvere.com/download/'}, '0.2.19'));
+  assert.throws(() => parseUpdateManifest({...valid, download_url:'https://snapvere.com/files/Snapvere-Setup.exe'}, '0.2.19'));
   assert.throws(() => parseUpdateManifest({...valid, notes:'x'.repeat(900)}, '0.2.19'));
   assert.throws(() => parseUpdateManifest([], '0.2.19'));
 });
