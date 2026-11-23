@@ -47,7 +47,9 @@ for name, source in (("quality", quality), ("release", release)):
     ):
         assert artifact in source, f"{name}: missing {artifact}"
 assert "draft: true" in release and "prerelease: true" in release
-assert "gh release edit $tag --repo $repo --draft=false --prerelease" in release
+assert 'gh api --method PATCH "repos/$repo/releases/$releaseId" -F draft=false -F prerelease=true' in release
+assert 'repos/$repo/releases?per_page=100' in release, "Draft release must be queried by authorized list"
+assert '$verified.tag_name -ne $tag' in release, "Verify identity after publication"
 assert "SHA256SUMS.txt" in release and "SHA256SUMS-Linux.txt" in release
 assert "Snapvere-update-stable.json" in release
 assert "Snapvere-Pro-update-stable.json" not in release, "No unaudited Pro update feed"
