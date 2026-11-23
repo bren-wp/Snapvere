@@ -47,10 +47,28 @@ for name, source in (("quality", quality), ("release", release)):
     ):
         assert artifact in source, f"{name}: missing {artifact}"
 assert "draft: true" in release and "prerelease: true" in release
-assert "gh release edit $tag --repo $repo --draft=false --prerelease" in release
+assert 'gh api --method PATCH "repos/$repo/releases/$releaseId" -F draft=false -F prerelease=true' in release
+assert 'repos/$repo/releases?per_page=100' in release, "Draft release must be queried by authorized list"
+assert '$verified.tag_name -ne $tag' in release, "Verify identity after publication"
 assert "SHA256SUMS.txt" in release and "SHA256SUMS-Linux.txt" in release
 assert "Snapvere-update-stable.json" in release
 assert "Snapvere-Pro-update-stable.json" not in release, "No unaudited Pro update feed"
+# Pro Studio must be an actual separate workflow, not a label-only variant.
+pro_profiles = read("apps/desktop/src/lib/proProfiles.ts")
+pro_selection = read("apps/desktop/src/lib/proSelection.ts")
+pro_frame = read("apps/desktop/src/components/WindowFrame.tsx")
+pro_home = read("apps/desktop/src/windows/Home.tsx")
+pro_settings = read("apps/desktop/src/windows/Settings.tsx")
+for preset in ("tutorial", "presentation", "compact", "webinar", "smooth", "archive", "social", "detailedGif"):
+    assert f'"{preset}"' in pro_profiles, f"Missing professional preset: {preset}"
+assert "length: 6" in pro_profiles, "Pro must retain six local custom profiles"
+for action in ("all", "images", "videos", "recent", "tagged", "invert"):
+    assert f'"{action}"' in pro_selection, f"Missing Pro smart selection: {action}"
+assert "PRO_BATCH_LIMIT = 100" in pro_selection
+assert "IS_PRO ? \"snapvere-pro-shell\" : \"\"" in pro_frame, "Pro branding must appear on every main window"
+assert 'openSettings("recording")' in pro_home, "Pro recording profiles shortcut must open the real settings tab"
+assert 'snapvere:settings-tab' in pro_settings, "Pro settings must honor tab navigation"
+assert "selectProBatch" in pro_home, "Pro smart selection must be accessible"
 frontend = read("apps/desktop/src/lib/edition.ts")
 assert 'VITE_SNAPVERE_EDITION === "pro"' in frontend
 assert "import.meta" in frontend

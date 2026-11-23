@@ -1,6 +1,6 @@
 // Snapvere by Brendigo
 import type { Language } from "./i18n";
-const keys = ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","exportedSuffix"] as const;
+const keys = ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","exportedSuffix","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools","recent","tagged","insightsTitle","insightsImages","insightsVideos","insightsTagged","insightsSize"] as const;
 type Copy = Record<(typeof keys)[number], string>;
 const translations: Record<Language, Copy> = Object.fromEntries(
 [
@@ -16,7 +16,21 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Selected",
       "The export could not be completed. Your captures remain in the gallery.",
       "You can select up to 100 files.",
-      "files exported locally."
+      "files exported locally.",
+      "Images only",
+      "Videos only",
+      "Invert loaded",
+      "Professional capture studio",
+      "Eight recording presets, six saved profiles and private batch export.",
+      "Recording profiles",
+      "Batch workspace",
+      "Last 24 hours",
+      "With tags",
+      "Loaded gallery insights",
+      "Images",
+      "Recordings",
+      "Tagged",
+      "Storage"
     ]
   ],
   [
@@ -31,7 +45,21 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Odabrano",
       "Izvoz nije uspio. Izvorne snimke ostaju u galeriji.",
       "Možete odabrati najviše 100 datoteka.",
-      "datoteka lokalno izvezeno."
+      "datoteka lokalno izvezeno.",
+      "Samo slike",
+      "Samo videozapisi",
+      "Obrni učitane",
+      "Profesionalni studio snimanja",
+      "Osam postavki snimanja, šest profila i privatni skupni izvoz.",
+      "Profili snimanja",
+      "Skupni rad",
+      "Zadnja 24 sata",
+      "S oznakama",
+      "Pregled učitane galerije",
+      "Slike",
+      "Snimke",
+      "S oznakama",
+      "Prostor"
     ]
   ],
   [
@@ -46,7 +74,21 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Ausgewählt",
       "Export fehlgeschlagen. Originale bleiben in der Galerie.",
       "Bis zu 100 Dateien auswählbar.",
-      "Dateien lokal exportiert."
+      "Dateien lokal exportiert.",
+      "Nur Bilder",
+      "Nur Videos",
+      "Geladene umkehren",
+      "Professionelles Aufnahmestudio",
+      "Acht Vorlagen, sechs Profile und privater Sammelexport.",
+      "Aufnahmeprofile",
+      "Stapelexport",
+      "Letzte 24 Stunden",
+      "Mit Tags",
+      "Geladene Galerie",
+      "Bilder",
+      "Aufnahmen",
+      "Markiert",
+      "Speicher"
     ]
   ],
   [
@@ -61,7 +103,21 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Seleccionadas",
       "Falló la exportación. Las capturas originales siguen en la galería.",
       "Puedes seleccionar hasta 100 archivos.",
-      "archivos exportados localmente."
+      "archivos exportados localmente.",
+      "Solo imágenes",
+      "Solo vídeos",
+      "Invertir cargados",
+      "Estudio profesional de captura",
+      "Ocho ajustes, seis perfiles y exportación local por lotes.",
+      "Perfiles de grabación",
+      "Exportación en lote",
+      "Últimas 24 horas",
+      "Con etiquetas",
+      "Galería cargada",
+      "Imágenes",
+      "Grabaciones",
+      "Etiquetadas",
+      "Espacio"
     ]
   ],
   [
@@ -76,7 +132,21 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Sélectionnées",
       "Échec de l’exportation. Les captures restent dans la galerie.",
       "100 fichiers maximum.",
-      "fichiers exportés localement."
+      "fichiers exportés localement.",
+      "Images seulement",
+      "Vidéos seulement",
+      "Inverser chargées",
+      "Studio de capture professionnel",
+      "Huit préréglages, six profils et export local par lots.",
+      "Profils d'enregistrement",
+      "Export par lots",
+      "Dernières 24 heures",
+      "Avec étiquettes",
+      "Galerie chargée",
+      "Images",
+      "Enregistrements",
+      "Étiquetés",
+      "Stockage"
     ]
   ],
   [
@@ -91,7 +161,21 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Selezionati",
       "Esportazione non riuscita. Le acquisizioni restano in galleria.",
       "Puoi selezionare fino a 100 file.",
-      "file esportati localmente."
+      "file esportati localmente.",
+      "Solo immagini",
+      "Solo video",
+      "Inverti caricate",
+      "Studio di acquisizione professionale",
+      "Otto preset, sei profili ed esportazione locale in gruppo.",
+      "Profili di registrazione",
+      "Esportazione multipla",
+      "Ultime 24 ore",
+      "Con etichette",
+      "Galleria caricata",
+      "Immagini",
+      "Registrazioni",
+      "Etichettati",
+      "Spazio"
     ]
   ],
   [
@@ -106,7 +190,21 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Selecionados",
       "A exportação falhou. As capturas ficam na galeria.",
       "Pode selecionar até 100 ficheiros.",
-      "ficheiros exportados localmente."
+      "ficheiros exportados localmente.",
+      "Só imagens",
+      "Só vídeos",
+      "Inverter carregados",
+      "Estúdio de captura profissional",
+      "Oito predefinições, seis perfis e exportação local em lote.",
+      "Perfis de gravação",
+      "Exportação em lote",
+      "Últimas 24 horas",
+      "Com etiquetas",
+      "Galeria carregada",
+      "Imagens",
+      "Gravações",
+      "Etiquetados",
+      "Espaço"
     ]
   ],
   [
@@ -121,7 +219,21 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Geselecteerd",
       "Export mislukt. De opnamen blijven in de galerij.",
       "Maximaal 100 bestanden selecteren.",
-      "bestanden lokaal geëxporteerd."
+      "bestanden lokaal geëxporteerd.",
+      "Alleen afbeeldingen",
+      "Alleen video's",
+      "Geladen omkeren",
+      "Professionele opnamestudio",
+      "Acht presets, zes profielen en lokale bulkexport.",
+      "Opnameprofielen",
+      "Bulkexport",
+      "Laatste 24 uur",
+      "Met labels",
+      "Geladen galerij",
+      "Afbeeldingen",
+      "Opnames",
+      "Labels",
+      "Opslag"
     ]
   ],
   [
@@ -136,7 +248,21 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Wybrano",
       "Eksport nie powiódł się. Nagrania pozostają w galerii.",
       "Możesz wybrać do 100 plików.",
-      "plików wyeksportowano lokalnie."
+      "plików wyeksportowano lokalnie.",
+      "Tylko obrazy",
+      "Tylko filmy",
+      "Odwróć wczytane",
+      "Profesjonalne studio nagrań",
+      "Osiem ustawień, sześć profili i lokalny eksport zbiorczy.",
+      "Profile nagrywania",
+      "Eksport zbiorczy",
+      "Ostatnie 24 godziny",
+      "Z tagami",
+      "Wczytana galeria",
+      "Obrazy",
+      "Nagrania",
+      "Oznaczone",
+      "Miejsce"
     ]
   ],
   [
@@ -151,7 +277,21 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Vybráno",
       "Export se nezdařil. Záznamy zůstávají v galerii.",
       "Nejvýše 100 souborů.",
-      "souborů exportováno místně."
+      "souborů exportováno místně.",
+      "Pouze obrázky",
+      "Pouze videa",
+      "Obrátit načtené",
+      "Profesionální studio záznamu",
+      "Osm předvoleb, šest profilů a místní dávkový export.",
+      "Profily nahrávání",
+      "Dávkový export",
+      "Posledních 24 hodin",
+      "Se štítky",
+      "Načtená galerie",
+      "Obrázky",
+      "Nahrávky",
+      "Se štítky",
+      "Místo"
     ]
   ],
   [
@@ -166,7 +306,21 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Vybrané",
       "Export zlyhal. Záznamy zostávajú v galérii.",
       "Najviac 100 súborov.",
-      "súborov exportovaných lokálne."
+      "súborov exportovaných lokálne.",
+      "Iba obrázky",
+      "Iba videá",
+      "Obrátiť načítané",
+      "Profesionálne štúdio záznamu",
+      "Osem predvolieb, šesť profilov a lokálny dávkový export.",
+      "Profily nahrávania",
+      "Dávkový export",
+      "Posledných 24 hodín",
+      "So značkami",
+      "Načítaná galéria",
+      "Obrázky",
+      "Nahrávky",
+      "Označené",
+      "Miesto"
     ]
   ],
   [
@@ -181,7 +335,21 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Izbrano",
       "Izvoz ni uspel. Posnetki ostanejo v galeriji.",
       "Izberete lahko največ 100 datotek.",
-      "datotek izvoženih lokalno."
+      "datotek izvoženih lokalno.",
+      "Samo slike",
+      "Samo videi",
+      "Obrni naložene",
+      "Profesionalni studio zajema",
+      "Osem prednastavitev, šest profilov in lokalni paketni izvoz.",
+      "Profili snemanja",
+      "Paketni izvoz",
+      "Zadnjih 24 ur",
+      "Z oznakami",
+      "Naložena galerija",
+      "Slike",
+      "Posnetki",
+      "Z oznakami",
+      "Prostor"
     ]
   ]
 ]

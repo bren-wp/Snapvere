@@ -726,3 +726,137 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 @media (prefers-reduced-motion: reduce) {
   .snapvere-editor-tool { transition: none; }
 }
+
+
+/* A distinct Pro Studio work surface. Free keeps its original visual identity. */
+.snapvere-pro-header {
+  background: linear-gradient(120deg, rgba(74, 38, 112, .65), rgba(26, 27, 59, .94) 60%, rgba(104, 73, 25, .26));
+  border-bottom: 1px solid rgba(228, 184, 108, .30);
+}
+.snapvere-pro-header .snapvere-section-eyebrow {
+  color: #f2cf93;
+  letter-spacing: .14em;
+}
+.snapvere-pro-ribbon {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+  margin-top: 16px;
+  padding: 11px 13px;
+  border: 1px solid rgba(228, 184, 108, .35);
+  border-radius: 15px;
+  background: linear-gradient(100deg, rgba(228, 184, 108, .10), rgba(143, 98, 228, .12));
+}
+.snapvere-pro-ribbon-label {
+  margin-right: auto;
+  color: #f2cf93;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  white-space: nowrap;
+}
+.snapvere-pro-ribbon-action {
+  min-height: 36px;
+  padding: 7px 13px;
+  border-radius: 9px;
+  border: 1px solid rgba(228, 184, 108, .36);
+  background: rgba(0, 0, 0, .16);
+  color: #fff5df;
+  font-size: 12px;
+  font-weight: 650;
+  transition: background .15s ease, border-color .15s ease;
+}
+.snapvere-pro-ribbon-action:hover,
+.snapvere-pro-ribbon-action:focus-visible {
+  background: rgba(228, 184, 108, .19);
+  border-color: #f2cf93;
+  outline-offset: 2px;
+}
+[data-theme="light"] .snapvere-pro-header {
+  background: linear-gradient(115deg, rgba(236, 225, 251, .96), rgba(254, 249, 237, .96));
+  border-bottom-color: rgba(130, 92, 34, .28);
+}
+[data-theme="light"] .snapvere-pro-header .snapvere-section-eyebrow,
+[data-theme="light"] .snapvere-pro-ribbon-label {
+  color: #77501b;
+}
+[data-theme="light"] .snapvere-pro-ribbon { border-color: rgba(130, 92, 34, .3); }
+[data-theme="light"] .snapvere-pro-ribbon-action {
+  color: #4b3470;
+  background: rgba(255, 255, 255, .74);
+  border-color: rgba(130, 92, 34, .3);
+}
+@media (max-width: 560px) {
+  .snapvere-pro-ribbon-label { flex-basis: 100%; }
+  .snapvere-pro-ribbon-action { flex: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .snapvere-pro-ribbon-action { transition: none; }
+}
+
+
+/* Pro identity extends to Settings and Editor without modifying capture overlays. */
+.snapvere-pro-shell .snapvere-app-brandbar {
+  background: linear-gradient(105deg, rgba(57, 34, 83, .93), rgba(26, 24, 57, .95));
+  border-bottom: 1px solid rgba(228, 184, 108, .36);
+}
+.snapvere-pro-shell .snapvere-app-wordmark {
+  color: #f7dfa8;
+  letter-spacing: .06em;
+}
+.snapvere-pro-edition-mark {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  border: 1px solid rgba(235, 193, 116, .48);
+  border-radius: 7px;
+  padding: 3px 9px;
+  color: #f5d59e;
+  background: rgba(185, 132, 56, .11);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .10em;
+}
+[data-theme="light"] .snapvere-pro-shell .snapvere-app-brandbar {
+  background: linear-gradient(105deg, #f3eafc, #fff6e4);
+  border-bottom-color: rgba(133, 91, 31, .3);
+}
+[data-theme="light"] .snapvere-pro-shell .snapvere-app-wordmark,
+[data-theme="light"] .snapvere-pro-edition-mark { color: #754719; }
+[data-theme="light"] .snapvere-pro-edition-mark {
+  background: rgba(185, 132, 56, .12);
+  border-color: rgba(133, 91, 31, .4);
+}
+@media (max-width: 600px) {
+  .snapvere-pro-shell .snapvere-app-brandbar-end { flex-wrap: wrap; justify-content: flex-end; }
+  .snapvere-pro-edition-mark { font-size: 9px; }
+}
+
+
+/* Compact, read-only Pro insights: statistics always describe loaded gallery items. */
+.snapvere-pro-insights {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  min-height: 40px;
+  padding: 9px 13px;
+  border: 1px solid rgba(228, 184, 108, .25);
+  border-radius: 12px;
+  background: rgba(228, 184, 108, .06);
+  color: rgb(var(--snapvere-muted));
+  font-size: 11px;
+}
+.snapvere-pro-insights-title {
+  font-weight: 800;
+  color: #f2cf93;
+  letter-spacing: .03em;
+}
+.snapvere-pro-insights strong { color: rgb(var(--snapvere-text)); font-variant-numeric: tabular-nums; }
+[data-theme="light"] .snapvere-pro-insights { border-color: rgba(130, 92, 34, .22); background: rgba(228, 184, 108, .1); }
+[data-theme="light"] .snapvere-pro-insights-title { color: #77501b; }
+@media (max-width: 620px) {
+  .snapvere-pro-insights { gap: 6px 12px; }
+  .snapvere-pro-insights-title { flex-basis: 100%; }
+}

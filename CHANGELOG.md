@@ -1,5 +1,17 @@
 # Snapvere by Brendigo — Release history
 
+
+## v0.2.29 — Pro Studio and release reliability (preview)
+
+- Fix the post-merge GitHub release failure: resolve private draft releases by their authenticated release ID, verify all required files and SHA-256 coverage, and publish only the verified draft as an unsigned prerelease.
+- Free remains a fully usable offline screen capture, GIF/Windows MP4 recorder, annotation editor and local gallery.
+- Pro Studio now has a visibly distinct professional workspace and direct navigation to advanced recording profiles and batch operations, in all twelve supported UI languages.
+- Expand Pro workflows to eight optimized recording presets (Tutorial, Presentation, Compact GIF, Webinar, Smooth 60 FPS, Maximum Detail, Social Clip and Detailed GIF) and six private custom profile slots; preserve the first three saved profiles when upgrading.
+- Add Pro-only gallery batch selection of images, videos, captures from the last 24 hours, tagged items, all loaded captures and inverse selection. A compact read-only Pro Insights panel shows image/video/tag counts and loaded gallery storage. Export remains native-gated, offline and limited to 100 items.
+- Linux applies GIF-only silent recording constraints instead of falsely enabling MP4/audio/cursor capture. Pro remains a separate preview edition without payment entitlement or signing.
+- New releases must include Free and Pro Windows Portable/Setup EXE/MSI, Linux DEB/AppImage, browser source ZIPs, SBOM and integrity hashes; do not bypass CI or hardware QA gates.
+
+
 ## v0.2.28 — Free and Pro editions (unreleased; native build and QA pending)
 
 - Publish **two separate build flavors** from one audited Tauri/Rust codebase: Snapvere Free (`com.brendigo.snapvere`) and Snapvere Pro (`com.brendigo.snapvere.pro`), without restricting any existing Free features.

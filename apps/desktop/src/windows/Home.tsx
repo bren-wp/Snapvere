@@ -5,7 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { readCapturePreferences } from "../lib/capturePreferencesStore";
 import { clipboardImportCopy } from "../lib/clipboardImportCopy";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import {
   ArrowUpRight,
   Crop,
@@ -33,6 +33,9 @@ import type { RecordDone, Screenshot } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
 import { APP_NAME, IS_PRO } from "../lib/edition";
 import { proGalleryCopy } from "../lib/proGalleryCopy";
+import { selectProBatch } from "../lib/proSelection";
+import { summarizeProGallery } from "../lib/proInsights";
+import { formatMediaSize } from "../lib/mediaFormatting";
 import Viewer from "../components/Viewer";
 import CaptureCard from "../components/home/CaptureCard";
 import EmptyGallery from "../components/home/EmptyGallery";
@@ -211,6 +214,7 @@ export default function Home() {
   // SQL applies the selected category before LIMIT/OFFSET, so older media
   // cannot disappear merely because recent captures belong to another kind.
   const visible = items;
+  const proInsights = IS_PRO ? summarizeProGallery(visible) : null;
 
   const toggleProItem = (id: string) => {
     if (!IS_PRO) return;
@@ -360,16 +364,17 @@ export default function Home() {
       setToast(t("Cannot open capture folder:"));
     }
   };
-  const openSettings = async () => {
+  const openSettings = async (tab: "capture" | "recording" = "capture") => {
     try {
       const existing = await WebviewWindow.getByLabel("settings");
       if (existing) {
         await existing.show();
         await existing.setFocus();
+        await emit("snapvere:settings-tab", tab);
         return;
       }
       const settingsWindow = new WebviewWindow("settings", {
-        url: "index.html#settings",
+        url: `index.html#settings?tab=${tab}`,
         title: `Snapvere — ${t("Settings")}`,
         width: 860,
         height: 660,
@@ -392,18 +397,18 @@ export default function Home() {
   return (
     <WindowFrame title={APP_NAME}>
       {/* Keep native capture commands unchanged; only their visual priority changes. */}
-      <header className="snapvere-workspace-header shrink-0 px-5 pb-5 pt-5">
+      <header className={`snapvere-workspace-header shrink-0 px-5 pb-5 pt-5 ${IS_PRO ? "snapvere-pro-header" : ""}`}>
         <div className="snapvere-workspace-heading">
           <div className="min-w-0">
-            <p className="snapvere-section-eyebrow">SNAPVERE</p>
-            <h1 className="snapvere-workspace-title">{t("Capture what matters.")}</h1>
+            <p className="snapvere-section-eyebrow">{IS_PRO ? "SNAPVERE PRO · STUDIO" : "SNAPVERE"}</p>
+            <h1 className="snapvere-workspace-title">{IS_PRO ? proText.studioTitle : t("Capture what matters.")}</h1>
             <p className="snapvere-workspace-subtitle">
-              {t("Capture, record, and annotate your screen.")}
+              {IS_PRO ? proText.studioSubtitle : t("Capture, record, and annotate your screen.")}
             </p>
           </div>
           <button
             type="button"
-            onClick={openSettings}
+            onClick={() => void openSettings()}
             aria-label={t("Settings")}
             className="snapvere-btn-secondary snapvere-workspace-settings"
           >
@@ -455,6 +460,15 @@ export default function Home() {
             <ArrowUpRight className="snapvere-action-arrow" size={17} aria-hidden="true" />
           </button>
         </div>
+        {IS_PRO && (
+          <div className="snapvere-pro-ribbon" role="group" aria-label={proText.studioTitle}>
+            <span className="snapvere-pro-ribbon-label">{APP_NAME}</span>
+            <button type="button" className="snapvere-pro-ribbon-action"
+              onClick={() => void openSettings("recording")}>{proText.profiles}</button>
+            <button type="button" className="snapvere-pro-ribbon-action"
+              onClick={() => { setProBatchMode(true); setProSelected(new Set()); }}>{proText.batchTools}</button>
+          </div>
+        )}
       </header>
 
       <section className="snapvere-gallery-controls shrink-0 px-5 py-4" aria-label={t("Gallery controls")}>
@@ -563,16 +577,36 @@ export default function Home() {
         </div>
       </section>
 
+      {IS_PRO && proInsights && !proBatchMode && (
+        <section className="snapvere-pro-insights mx-5 mb-3" aria-label={proText.insightsTitle}>
+          <span className="snapvere-pro-insights-title">{proText.insightsTitle}</span>
+          <span>{proText.insightsImages}: <strong>{proInsights.images}</strong></span>
+          <span>{proText.insightsVideos}: <strong>{proInsights.recordings}</strong></span>
+          <span>{proText.insightsTagged}: <strong>{proInsights.tagged}</strong></span>
+          <span>{proText.insightsSize}: <strong>{formatMediaSize(proInsights.sizeBytes, language)}</strong></span>
+        </section>
+      )}
       {IS_PRO && proBatchMode && (
         <div className="mx-5 mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-elevated/85 px-4 py-3 text-sm">
           <span className="mr-auto font-medium" aria-live="polite">{proText.count(proSelected.size)}</span>
           <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
             disabled={proExportBusy || visible.length === 0}
-            onClick={() => {
-              const next = new Set(proSelected);
-              for (const item of visible) { if (next.size >= 100) break; next.add(item.id); }
-              setProSelected(next);
-            }}>{proText.selectLoaded}</button>
+            onClick={() => setProSelected(current => selectProBatch(current, visible, "all"))}>{proText.selectLoaded}</button>
+          <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
+            disabled={proExportBusy || visible.length === 0}
+            onClick={() => setProSelected(current => selectProBatch(current, visible, "images"))}>{proText.imagesOnly}</button>
+          <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
+            disabled={proExportBusy || visible.length === 0}
+            onClick={() => setProSelected(current => selectProBatch(current, visible, "videos"))}>{proText.videosOnly}</button>
+          <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
+            disabled={proExportBusy || visible.length === 0}
+            onClick={() => setProSelected(current => selectProBatch(current, visible, "recent"))}>{proText.recent}</button>
+          <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
+            disabled={proExportBusy || visible.length === 0}
+            onClick={() => setProSelected(current => selectProBatch(current, visible, "tagged"))}>{proText.tagged}</button>
+          <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
+            disabled={proExportBusy || visible.length === 0}
+            onClick={() => setProSelected(current => selectProBatch(current, visible, "invert"))}>{proText.invert}</button>
           <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
             disabled={proExportBusy || proSelected.size === 0}
             onClick={() => setProSelected(new Set())}>{proText.clear}</button>

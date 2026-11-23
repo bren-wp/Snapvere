@@ -5,7 +5,7 @@ import { load, type Store } from "@tauri-apps/plugin-store";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
-import { emit } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import UpdateNotice from "../components/UpdateNotice";
 import { OFFICIAL_DOWNLOAD_URL } from "../lib/updateFeed";
 import { ipc } from "../lib/ipc";
@@ -53,7 +53,10 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
 
 export default function Settings() {
   const { language, changeLanguage, t } = useLanguage();
-  const [tab, setTab] = useState<Tab>("capture");
+  const [tab, setTab] = useState<Tab>(() => {
+    const requested = new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("tab");
+    return requested === "recording" ? "recording" : "capture";
+  });
   const [s, setS] = useState<AppSettings>(DEFAULTS);
   const [store, setStore] = useState<Store | null>(null);
   const [autostart, setAutostart] = useState(false);
@@ -65,6 +68,17 @@ export default function Settings() {
   const [platform, setPlatform] = useState<PlatformCapabilities | null>(null);
   const linuxGifOnly = platform?.os === "linux";
   const [status, setStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void listen<"capture" | "recording">("snapvere:settings-tab", ({ payload }) => {
+      if (payload === "capture" || payload === "recording") setTab(payload);
+    }).then((stop) => {
+      if (disposed) stop(); else unlisten = stop;
+    }).catch((error) => console.error("Could not navigate to settings tab", error));
+    return () => { disposed = true; unlisten?.(); };
+  }, []);
 
   useEffect(() => {
     void ipc.getPlatformCapabilities().then(setPlatform).catch((error) => {
