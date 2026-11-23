@@ -9,7 +9,7 @@ test("Pro gallery selection/exports have complete translations", () => {
   assert.equal(LANGUAGES.length, 12);
   for (const { code } of LANGUAGES) {
     const copy = proGalleryCopy(code);
-    for (const key of ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","imagesOnly","videosOnly","invert"]) {
+    for (const key of ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools"]) {
       assert.ok(copy[key].trim(), code + " missing " + key);
     }
     assert.match(copy.count(3), /3 \/ 100/);
