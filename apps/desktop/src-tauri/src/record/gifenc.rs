@@ -127,9 +127,7 @@ impl GifEncoder {
         // reusable buffers. Only quantize changed frames, not every tick.
         self.flush_pending()?;
         let len = self.rgba.len();
-        let pending = self
-            .pending_rgba
-            .get_or_insert_with(|| vec![0u8; len]);
+        let pending = self.pending_rgba.get_or_insert_with(|| vec![0u8; len]);
         std::mem::swap(pending, &mut self.rgba);
         self.pending_delay_cs = self.delay_cs;
         Ok(())
@@ -240,8 +238,10 @@ mod tests {
 
     #[test]
     fn refuses_to_overwrite_existing_recording() {
-        let path = std::env::temp_dir()
-            .join(format!("snapvere-gif-exclusive-{}.gif", uuid::Uuid::new_v4()));
+        let path = std::env::temp_dir().join(format!(
+            "snapvere-gif-exclusive-{}.gif",
+            uuid::Uuid::new_v4()
+        ));
         std::fs::write(&path, b"keep original user data").expect("seed original file");
         assert!(GifEncoder::new(&path, 32, 32, 10, 80).is_err());
         assert_eq!(
@@ -253,8 +253,8 @@ mod tests {
 
     #[test]
     fn identical_frames_have_one_descriptor_and_full_playback_duration() {
-        let path = std::env::temp_dir()
-            .join(format!("snapvere-gif-static-{}.gif", uuid::Uuid::new_v4()));
+        let path =
+            std::env::temp_dir().join(format!("snapvere-gif-static-{}.gif", uuid::Uuid::new_v4()));
         let mut encoder = GifEncoder::new(&path, 32, 32, 10, 80).expect("gif encoder");
         let frame = vec![125u8; 32 * 32 * 4];
         for _ in 0..20 {
@@ -266,15 +266,18 @@ mod tests {
         let file = File::open(&path).expect("recording");
         let mut reader = gif::DecodeOptions::new().read_info(file).expect("read gif");
         let first = reader.read_next_frame().expect("decode").expect("frame");
-        assert_eq!(first.delay, 200, "20 ticks at 10 FPS must equal two seconds");
+        assert_eq!(
+            first.delay, 200,
+            "20 ticks at 10 FPS must equal two seconds"
+        );
         assert!(reader.read_next_frame().expect("decode end").is_none());
         std::fs::remove_file(path).expect("cleanup");
     }
 
     #[test]
     fn changed_pixels_flush_pending_frame_and_preserve_each_duration() {
-        let path = std::env::temp_dir()
-            .join(format!("snapvere-gif-change-{}.gif", uuid::Uuid::new_v4()));
+        let path =
+            std::env::temp_dir().join(format!("snapvere-gif-change-{}.gif", uuid::Uuid::new_v4()));
         let mut encoder = GifEncoder::new(&path, 16, 16, 10, 80).expect("gif encoder");
         let dark = vec![0u8; 16 * 16 * 4];
         let light = vec![255u8; 16 * 16 * 4];
