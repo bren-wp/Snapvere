@@ -18,7 +18,7 @@ jobs:
   linux-build:
     name: Build Linux preview .deb and AppImage from release revision
     runs-on: ubuntu-24.04
-    timeout-minutes: 100
+    timeout-minutes: 180
     permissions:
       contents: read
     steps:
@@ -63,27 +63,51 @@ jobs:
           cargo fmt --all -- --check
           cargo test --locked
           cargo clippy --all-targets --locked -- -D warnings
-      - name: Build both Linux distribution packages
+      - name: Build Free Linux DEB and AppImage
         working-directory: apps/desktop
         run: npm run tauri -- build --bundles deb,appimage
-      - name: Verify packages and generate Linux checksum manifest
+      - name: Stage Free Linux packages before Pro build
         shell: bash
         run: |
           set -euo pipefail
           shopt -s nullglob
-          deb=(apps/desktop/src-tauri/target/release/bundle/deb/*.deb)
-          images=(apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage)
-          [[ ${#deb[@]} == 1 && ${#images[@]} == 1 ]] || {
-            echo "::error::Expected exactly one .deb and one .AppImage"
-            exit 1
-          }
-          test "$(stat -c%s "${deb[0]}")" -gt 1000000
-          test "$(stat -c%s "${images[0]}")" -gt 1000000
+          root=apps/desktop/src-tauri/target/release/bundle
+          deb=("$root"/deb/*.deb)
+          images=("$root"/appimage/*.AppImage)
+          [[ ${#deb[@]} == 1 && ${#images[@]} == 1 ]] || { echo "::error::Free Linux packages missing"; exit 1; }
           mkdir -p dist-linux
           cp -- "${deb[0]}" dist-linux/Snapvere-Linux-amd64.deb
           cp -- "${images[0]}" dist-linux/Snapvere-Linux-x86_64.AppImage
-          chmod 755 dist-linux/Snapvere-Linux-x86_64.AppImage
-          (cd dist-linux && sha256sum Snapvere-Linux-amd64.deb Snapvere-Linux-x86_64.AppImage > SHA256SUMS-Linux.txt)
+          rm -rf -- "$root/deb" "$root/appimage"
+      - name: Test native Pro Rust features and batch export
+        working-directory: apps/desktop/src-tauri
+        run: cargo test --features pro --locked
+      - name: Build Pro Linux DEB and AppImage
+        working-directory: apps/desktop
+        env:
+          VITE_SNAPVERE_EDITION: pro
+        run: npm run tauri -- build --bundles deb,appimage --features pro --config src-tauri/tauri.pro.conf.json
+      - name: Verify both Linux editions and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          root=apps/desktop/src-tauri/target/release/bundle
+          deb=("$root"/deb/*.deb)
+          images=("$root"/appimage/*.AppImage)
+          [[ ${#deb[@]} == 1 && ${#images[@]} == 1 ]] || { echo "::error::Pro Linux packages missing"; exit 1; }
+          [[ "${deb[0],,}" == *pro* && "${images[0],,}" == *pro* ]] || { echo "::error::Pro product identity missing"; exit 1; }
+          cp -- "${deb[0]}" dist-linux/Snapvere-Pro-Linux-amd64.deb
+          cp -- "${images[0]}" dist-linux/Snapvere-Pro-Linux-x86_64.AppImage
+          for artifact in dist-linux/*.deb dist-linux/*.AppImage; do
+            test "$(stat -c%s "$artifact")" -gt 1000000 || { echo "::error::Undersized Linux artifact"; exit 1; }
+          done
+          if cmp -s dist-linux/Snapvere-Linux-amd64.deb dist-linux/Snapvere-Pro-Linux-amd64.deb; then
+            echo "::error::Free and Pro packages are identical"
+            exit 1
+          fi
+          chmod 755 dist-linux/*.AppImage
+          (cd dist-linux && sha256sum Snapvere-Linux-amd64.deb Snapvere-Linux-x86_64.AppImage Snapvere-Pro-Linux-amd64.deb Snapvere-Pro-Linux-x86_64.AppImage > SHA256SUMS-Linux.txt)
           (cd dist-linux && sha256sum --check SHA256SUMS-Linux.txt)
       - uses: actions/upload-artifact@v4
         with:
@@ -98,7 +122,7 @@ jobs:
       contents: write
     name: Verify Windows packages and publish Windows + Linux preview
     runs-on: windows-latest
-    timeout-minutes: 85
+    timeout-minutes: 160
     steps:
       - name: Checkout release revision without persisting publish credentials
         uses: actions/checkout@v7
@@ -228,9 +252,51 @@ jobs:
           } finally {
             Pop-Location
           }
-      - name: Build Windows NSIS EXE and WiX MSI bundles
+      - name: Build Free Windows NSIS EXE and MSI
         working-directory: apps/desktop
         run: npm run tauri -- build --bundles nsis,msi
+      - name: Stage Free Windows binaries and installer packages
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = Join-Path $PWD 'apps/desktop/src-tauri/target/release'
+          $dist = Join-Path $PWD 'dist-installers'
+          New-Item -ItemType Directory -Force -Path $dist | Out-Null
+          $exe = Join-Path $base 'snapvere.exe'
+          $nsis = @(Get-ChildItem (Join-Path $base 'bundle/nsis') -Filter '*.exe' -File)
+          $msi = @(Get-ChildItem (Join-Path $base 'bundle/msi') -Filter '*.msi' -File)
+          if (!(Test-Path $exe) -or $nsis.Count -ne 1 -or $msi.Count -ne 1) { throw 'Incomplete Free Windows edition' }
+          Copy-Item $exe (Join-Path $dist 'Snapvere-Portable.exe')
+          Copy-Item $nsis[0].FullName (Join-Path $dist 'Snapvere-Setup.exe')
+          Copy-Item $msi[0].FullName (Join-Path $dist 'Snapvere-Setup.msi')
+          Remove-Item (Join-Path $base 'bundle/nsis') -Recurse -Force
+          Remove-Item (Join-Path $base 'bundle/msi') -Recurse -Force
+      - name: Test native Pro Rust features and batch export
+        working-directory: apps/desktop/src-tauri
+        run: cargo test --features pro --locked
+      - name: Build Pro Windows NSIS EXE and MSI
+        working-directory: apps/desktop
+        shell: pwsh
+        run: |
+          $env:VITE_SNAPVERE_EDITION = 'pro'
+          npm run tauri -- build --bundles nsis,msi --features pro --config src-tauri/tauri.pro.conf.json
+          if ($LASTEXITCODE -ne 0) { throw 'Pro native build failed' }
+      - name: Stage and verify Pro Windows edition
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = Join-Path $PWD 'apps/desktop/src-tauri/target/release'
+          $dist = Join-Path $PWD 'dist-installers'
+          $exe = Join-Path $base 'snapvere.exe'
+          $nsis = @(Get-ChildItem (Join-Path $base 'bundle/nsis') -Filter '*.exe' -File)
+          $msi = @(Get-ChildItem (Join-Path $base 'bundle/msi') -Filter '*.msi' -File)
+          if (!(Test-Path $exe) -or $nsis.Count -ne 1 -or $msi.Count -ne 1) { throw 'Incomplete Pro Windows edition' }
+          if ($nsis[0].Name -notmatch 'Pro' -or $msi[0].Name -notmatch 'Pro') { throw 'Pro product identity missing' }
+          Copy-Item $exe (Join-Path $dist 'Snapvere-Pro-Portable.exe')
+          Copy-Item $nsis[0].FullName (Join-Path $dist 'Snapvere-Pro-Setup.exe')
+          Copy-Item $msi[0].FullName (Join-Path $dist 'Snapvere-Pro-Setup.msi')
+          if ((Get-FileHash (Join-Path $dist 'Snapvere-Portable.exe')).Hash -eq
+              (Get-FileHash (Join-Path $dist 'Snapvere-Pro-Portable.exe')).Hash) { throw 'Free and Pro binaries are identical' }
       - name: Download already verified Linux preview packages from this commit
         uses: actions/download-artifact@v4
         with:
