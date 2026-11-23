@@ -127,7 +127,7 @@ mod tests {
     #[test]
     fn rejects_duplicate_invalid_and_oversized_batch_requests() {
         let id = uuid::Uuid::new_v4().to_string();
-        assert!(validate_ids(&[id.clone()]).is_ok());
+        assert!(validate_ids(std::slice::from_ref(&id)).is_ok());
         assert!(validate_ids(&[]).is_err());
         assert!(validate_ids(&[id.clone(), id]).is_err());
         assert!(validate_ids(&["../secrets.txt".into()]).is_err());
