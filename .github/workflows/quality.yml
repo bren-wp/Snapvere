@@ -279,7 +279,9 @@ jobs:
           Remove-Item (Join-Path $base 'bundle/msi') -Recurse -Force
       - name: Test native Pro Rust commands and filesystem security
         working-directory: apps/desktop/src-tauri
-        run: cargo test --features pro --locked
+        run: |
+          cargo test --features pro --locked
+          cargo clippy --all-targets --features pro --locked -- -D warnings
       - name: Build Pro Windows Portable / NSIS / MSI from same audited source
         working-directory: apps/desktop
         shell: pwsh
@@ -396,7 +398,9 @@ jobs:
           rm -rf -- "$root/deb" "$root/rpm" "$root/appimage"
       - name: Test native Pro Linux batch export and recording operations
         working-directory: apps/desktop/src-tauri
-        run: cargo test --features pro --locked
+        run: |
+          cargo test --features pro --locked
+          cargo clippy --all-targets --features pro --locked -- -D warnings
       - name: Build Pro Linux DEB, RPM and AppImage from same source
         working-directory: apps/desktop
         env:
