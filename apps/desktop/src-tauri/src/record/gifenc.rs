@@ -5,7 +5,7 @@
 //! izbor: GIF se lijepi izravno u Slack/GitHub/Jira bez playera. Cijena je veličina,
 //! pa frameove skaliramo na razumnu širinu i kvantiziramo na 256 boja po frameu.
 
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::Path;
 
@@ -54,8 +54,13 @@ pub struct GifEncoder {
     src_h: u32,
     delay_cs: u16,
     palette_speed: i32,
-    /// Reupotrebljivi RGBA buffer za kvantizaciju.
+    /// Current frame buffer; reused to avoid allocating on every frame.
     rgba: Vec<u8>,
+    /// Unchanged frames can share one GIF image descriptor with an accumulated
+    /// delay. This dramatically reduces output size on static screens without
+    /// speeding up or cutting any recorded playback time.
+    pending_rgba: Option<Vec<u8>>,
+    pending_delay_cs: u16,
 }
 
 impl GifEncoder {
@@ -63,7 +68,13 @@ impl GifEncoder {
         input_frame_bytes(w, h)?;
         let (max_width, palette_speed) = gif_quality_profile(quality);
         let (out_w, out_h) = fit(w, h, max_width);
-        let file = File::create(path).map_err(|e| format!("GIF create: {e}"))?;
+        // File::create truncates an existing recording or follows a symlink.
+        // A capture must only create its own new file, never replace user data.
+        let file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(|e| format!("GIF create: {e}"))?;
         let mut enc = Encoder::new(BufWriter::new(file), out_w as u16, out_h as u16, &[])
             .map_err(|e| format!("GIF encoder: {e}"))?;
         enc.set_repeat(Repeat::Infinite)
@@ -86,40 +97,70 @@ impl GifEncoder {
             delay_cs,
             palette_speed,
             rgba: vec![0u8; (out_w as usize) * (out_h as usize) * 4],
+            pending_rgba: None,
+            pending_delay_cs: 0,
         })
     }
 
-    /// Dodaj jedan BGRA frame.
+    /// Accept one frame on every recorder tick. Consecutive identical pixels
+    /// do not need separate GIF image descriptors: the pending frame's delay
+    /// accumulates instead. Split the delay when it would exceed GIF's u16
+    /// centisecond field, preserving long (10+ minute) static recordings.
     pub fn write(&mut self, bgra: &[u8]) -> Result<(), String> {
         let required = input_frame_bytes(self.src_w, self.src_h)?;
         if bgra.len() < required {
             return Err("GIF input frame is truncated".into());
         }
         self.fill_rgba(bgra);
-        // Razdvojene posudbe polja — `from_rgba_speed` traži &mut rgba dok držimo &mut enc.
-        let Self {
-            enc,
-            out_w,
-            out_h,
-            delay_cs,
-            palette_speed,
-            rgba,
-            ..
-        } = self;
-        let Some(enc) = enc.as_mut() else {
-            return Err("GIF enkoder je već zatvoren".into());
+
+        let unchanged = self
+            .pending_rgba
+            .as_ref()
+            .is_some_and(|frame| frame.as_slice() == self.rgba.as_slice());
+        let combined_delay = u32::from(self.pending_delay_cs) + u32::from(self.delay_cs);
+        if unchanged && combined_delay <= u32::from(u16::MAX) {
+            self.pending_delay_cs = combined_delay as u16;
+            return Ok(());
+        }
+
+        // The previous frame is complete. Commit it *before* swapping the
+        // reusable buffers. Only quantize changed frames, not every tick.
+        self.flush_pending()?;
+        let len = self.rgba.len();
+        let pending = self
+            .pending_rgba
+            .get_or_insert_with(|| vec![0u8; len]);
+        std::mem::swap(pending, &mut self.rgba);
+        self.pending_delay_cs = self.delay_cs;
+        Ok(())
+    }
+
+    fn flush_pending(&mut self) -> Result<(), String> {
+        let Some(pending) = self.pending_rgba.as_mut() else {
+            return Ok(());
         };
-        // Lower NeuQuant speed values spend more CPU on a higher-quality
-        // palette; cap both the resolution and CPU cost for lengthy GIFs.
-        let mut frame = Frame::from_rgba_speed(*out_w as u16, *out_h as u16, rgba, *palette_speed);
-        frame.delay = *delay_cs;
+        let Some(enc) = self.enc.as_mut() else {
+            return Err("GIF encoder is already closed".into());
+        };
+        let mut frame = Frame::from_rgba_speed(
+            self.out_w as u16,
+            self.out_h as u16,
+            pending,
+            self.palette_speed,
+        );
+        frame.delay = self.pending_delay_cs;
         frame.dispose = DisposalMethod::Any;
         enc.write_frame(&frame)
             .map_err(|e| format!("GIF write_frame: {e}"))
     }
 
-    /// Zapiši GIF trailer i flushaj buffer. Bez toga zadnji kB ostane u BufWriteru.
+    /// Flush the final pending frame, GIF trailer and buffered writer before
+    /// worker-level sync_all() commits the file to the local gallery.
     pub fn finish(&mut self) -> Result<(), String> {
+        if self.enc.is_none() {
+            return Ok(());
+        }
+        self.flush_pending()?;
         let Some(enc) = self.enc.take() else {
             return Ok(());
         };
@@ -195,5 +236,64 @@ mod tests {
         assert!(input_frame_bytes(16_385, 100).is_err());
         assert!(input_frame_bytes(16_384, 16_384).is_err());
         assert_eq!(input_frame_bytes(7680, 4320).unwrap(), 7680 * 4320 * 4);
+    }
+
+    #[test]
+    fn refuses_to_overwrite_existing_recording() {
+        let path = std::env::temp_dir()
+            .join(format!("snapvere-gif-exclusive-{}.gif", uuid::Uuid::new_v4()));
+        std::fs::write(&path, b"keep original user data").expect("seed original file");
+        assert!(GifEncoder::new(&path, 32, 32, 10, 80).is_err());
+        assert_eq!(
+            std::fs::read(&path).expect("original must remain readable"),
+            b"keep original user data"
+        );
+        std::fs::remove_file(path).expect("cleanup original");
+    }
+
+    #[test]
+    fn identical_frames_have_one_descriptor_and_full_playback_duration() {
+        let path = std::env::temp_dir()
+            .join(format!("snapvere-gif-static-{}.gif", uuid::Uuid::new_v4()));
+        let mut encoder = GifEncoder::new(&path, 32, 32, 10, 80).expect("gif encoder");
+        let frame = vec![125u8; 32 * 32 * 4];
+        for _ in 0..20 {
+            encoder.write(&frame).expect("gif tick");
+        }
+        encoder.finish().expect("finish gif");
+        drop(encoder);
+
+        let file = File::open(&path).expect("recording");
+        let mut reader = gif::DecodeOptions::new().read_info(file).expect("read gif");
+        let first = reader.read_next_frame().expect("decode").expect("frame");
+        assert_eq!(first.delay, 200, "20 ticks at 10 FPS must equal two seconds");
+        assert!(reader.read_next_frame().expect("decode end").is_none());
+        std::fs::remove_file(path).expect("cleanup");
+    }
+
+    #[test]
+    fn changed_pixels_flush_pending_frame_and_preserve_each_duration() {
+        let path = std::env::temp_dir()
+            .join(format!("snapvere-gif-change-{}.gif", uuid::Uuid::new_v4()));
+        let mut encoder = GifEncoder::new(&path, 16, 16, 10, 80).expect("gif encoder");
+        let dark = vec![0u8; 16 * 16 * 4];
+        let light = vec![255u8; 16 * 16 * 4];
+        for _ in 0..4 {
+            encoder.write(&dark).expect("first frame");
+        }
+        for _ in 0..3 {
+            encoder.write(&light).expect("second frame");
+        }
+        encoder.finish().expect("finish gif");
+        drop(encoder);
+
+        let file = File::open(&path).expect("recording");
+        let mut reader = gif::DecodeOptions::new().read_info(file).expect("read gif");
+        let first = reader.read_next_frame().expect("decode").expect("first");
+        assert_eq!(first.delay, 40);
+        let second = reader.read_next_frame().expect("decode").expect("second");
+        assert_eq!(second.delay, 30);
+        assert!(reader.read_next_frame().expect("decode end").is_none());
+        std::fs::remove_file(path).expect("cleanup");
     }
 }
