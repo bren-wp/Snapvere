@@ -1,6 +1,6 @@
 // Snapvere by Brendigo
 import type { Language } from "./i18n";
-const keys = ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","exportedSuffix","imagesOnly","videosOnly","invert"] as const;
+const keys = ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","exportedSuffix","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools"] as const;
 type Copy = Record<(typeof keys)[number], string>;
 const translations: Record<Language, Copy> = Object.fromEntries(
 [
@@ -19,7 +19,11 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "files exported locally.",
       "Images only",
       "Videos only",
-      "Invert loaded"
+      "Invert loaded",
+      "Professional capture studio",
+      "Eight recording presets, six saved profiles and private batch export.",
+      "Recording profiles",
+      "Batch workspace"
     ]
   ],
   [
@@ -37,7 +41,11 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "datoteka lokalno izvezeno.",
       "Samo slike",
       "Samo videozapisi",
-      "Obrni učitane"
+      "Obrni učitane",
+      "Profesionalni studio snimanja",
+      "Osam postavki snimanja, šest profila i privatni skupni izvoz.",
+      "Profili snimanja",
+      "Skupni rad"
     ]
   ],
   [
@@ -55,7 +63,11 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Dateien lokal exportiert.",
       "Nur Bilder",
       "Nur Videos",
-      "Geladene umkehren"
+      "Geladene umkehren",
+      "Professionelles Aufnahmestudio",
+      "Acht Vorlagen, sechs Profile und privater Sammelexport.",
+      "Aufnahmeprofile",
+      "Stapelexport"
     ]
   ],
   [
@@ -73,7 +85,11 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "archivos exportados localmente.",
       "Solo imágenes",
       "Solo vídeos",
-      "Invertir cargados"
+      "Invertir cargados",
+      "Estudio profesional de captura",
+      "Ocho ajustes, seis perfiles y exportación local por lotes.",
+      "Perfiles de grabación",
+      "Exportación en lote"
     ]
   ],
   [
@@ -91,7 +107,11 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "fichiers exportés localement.",
       "Images seulement",
       "Vidéos seulement",
-      "Inverser chargées"
+      "Inverser chargées",
+      "Studio de capture professionnel",
+      "Huit préréglages, six profils et export local par lots.",
+      "Profils d'enregistrement",
+      "Export par lots"
     ]
   ],
   [
@@ -109,7 +129,11 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "file esportati localmente.",
       "Solo immagini",
       "Solo video",
-      "Inverti caricate"
+      "Inverti caricate",
+      "Studio di acquisizione professionale",
+      "Otto preset, sei profili ed esportazione locale in gruppo.",
+      "Profili di registrazione",
+      "Esportazione multipla"
     ]
   ],
   [
@@ -127,7 +151,11 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "ficheiros exportados localmente.",
       "Só imagens",
       "Só vídeos",
-      "Inverter carregados"
+      "Inverter carregados",
+      "Estúdio de captura profissional",
+      "Oito predefinições, seis perfis e exportação local em lote.",
+      "Perfis de gravação",
+      "Exportação em lote"
     ]
   ],
   [
@@ -145,7 +173,11 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "bestanden lokaal geëxporteerd.",
       "Alleen afbeeldingen",
       "Alleen video's",
-      "Geladen omkeren"
+      "Geladen omkeren",
+      "Professionele opnamestudio",
+      "Acht presets, zes profielen en lokale bulkexport.",
+      "Opnameprofielen",
+      "Bulkexport"
     ]
   ],
   [
@@ -163,7 +195,11 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "plików wyeksportowano lokalnie.",
       "Tylko obrazy",
       "Tylko filmy",
-      "Odwróć wczytane"
+      "Odwróć wczytane",
+      "Profesjonalne studio nagrań",
+      "Osiem ustawień, sześć profili i lokalny eksport zbiorczy.",
+      "Profile nagrywania",
+      "Eksport zbiorczy"
     ]
   ],
   [
@@ -181,7 +217,11 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "souborů exportováno místně.",
       "Pouze obrázky",
       "Pouze videa",
-      "Obrátit načtené"
+      "Obrátit načtené",
+      "Profesionální studio záznamu",
+      "Osm předvoleb, šest profilů a místní dávkový export.",
+      "Profily nahrávání",
+      "Dávkový export"
     ]
   ],
   [
@@ -199,7 +239,11 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "súborov exportovaných lokálne.",
       "Iba obrázky",
       "Iba videá",
-      "Obrátiť načítané"
+      "Obrátiť načítané",
+      "Profesionálne štúdio záznamu",
+      "Osem predvolieb, šesť profilov a lokálny dávkový export.",
+      "Profily nahrávania",
+      "Dávkový export"
     ]
   ],
   [
@@ -217,7 +261,11 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "datotek izvoženih lokalno.",
       "Samo slike",
       "Samo videi",
-      "Obrni naložene"
+      "Obrni naložene",
+      "Profesionalni studio zajema",
+      "Osem prednastavitev, šest profilov in lokalni paketni izvoz.",
+      "Profili snemanja",
+      "Paketni izvoz"
     ]
   ]
 ]
