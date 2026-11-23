@@ -4,12 +4,13 @@ import assert from "node:assert/strict";
 import { proGalleryCopy } from "../src/lib/proGalleryCopy.ts";
 import { LANGUAGES } from "../src/lib/i18n.ts";
 import { PRO_BATCH_LIMIT, selectProBatch } from "../src/lib/proSelection.ts";
+import { summarizeProGallery } from "../src/lib/proInsights.ts";
 
 test("Pro gallery selection/exports have complete translations", () => {
   assert.equal(LANGUAGES.length, 12);
   for (const { code } of LANGUAGES) {
     const copy = proGalleryCopy(code);
-    for (const key of ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools","recent","tagged"]) {
+    for (const key of ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools","recent","tagged","insightsTitle","insightsImages","insightsVideos","insightsTagged","insightsSize"]) {
       assert.ok(copy[key].trim(), code + " missing " + key);
     }
     assert.match(copy.count(3), /3 \/ 100/);
@@ -52,4 +53,16 @@ test("Pro smart selection filters by recent captures and user tags", () => {
   const tagged = selectProBatch(new Set(), gallery, "tagged", now);
   assert.deepEqual([...tagged], ["old", "future"]);
   assert.deepEqual([...selectProBatch(recent, gallery, "tagged", now)], ["recent","old","future"]);
+});
+
+test("Pro gallery insights handle mixed media, invalid sizes and private tags locally", () => {
+  const captures = [
+    { id: "a", source: "region", format: "png", sizeBytes: 256, tags: ["work"] },
+    { id: "b", source: "recording", format: "gif", sizeBytes: 768, tags: [""] },
+    { id: "c", source: "recording", format: "mp4", sizeBytes: Number.NaN, tags: [] },
+    { id: "d", source: "fullscreen", format: "jpg", sizeBytes: -1, tags: [" project "] },
+  ];
+  const summary = summarizeProGallery(captures);
+  assert.deepEqual(summary, { count: 4, images: 2, recordings: 2, tagged: 2, sizeBytes: 1024 });
+  assert.deepEqual(summarizeProGallery([]), { count: 0, images: 0, recordings: 0, tagged: 0, sizeBytes: 0 });
 });
