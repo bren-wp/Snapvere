@@ -1,5 +1,12 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.31 — Shared gallery reliability and Pro export preferences (development)
+
+- Both Windows and Linux, Free and Pro: uncropped gallery previews, lazy asynchronous decoding, safe fallback from a failed thumbnail to a registered still image, and localized unavailable-preview state. Recording files never become still-image fallback paths.
+- Show localized capture dates and GB/TB media sizes in both editions.
+- Pro: persist the last validated export preset locally; safely recover if preferences are invalid or inaccessible. Flag oversized images in loaded selections using the native 64 MiB / 24 MP limits. Native validation remains authoritative.
+- Linux MP4, system audio, microphone and cursor compositing remain open native parity tasks; do not advertise unimplemented capabilities. Native OS visual comparison and hardware acceptance remain required.
+
 ## v0.2.30 — Pro batch workspace (development)
 
 - Warn about known incompatible selected files before image-preset export and offer explicit deselection of incompatible loaded files. Keep hidden selection intact for native validation; no original file is deleted. Localized feedback in all 12 languages and regression coverage.

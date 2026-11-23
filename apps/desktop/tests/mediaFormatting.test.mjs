@@ -21,3 +21,9 @@ test("gallery sizes are localized and invalid metadata safely rejected", () => {
   assert.equal(formatMediaSize(1.5 * 1024 * 1024, "hr"), "1,5 MB");
   for (const input of [-1, NaN, Infinity]) assert.equal(formatMediaSize(input), "—");
 });
+
+test("large recordings and gallery totals use readable gigabyte and terabyte units", () => {
+  assert.equal(formatMediaSize(2.5 * 1024 ** 3, "en"), "2.5 GB");
+  assert.equal(formatMediaSize(2.5 * 1024 ** 3, "hr"), "2,5 GB");
+  assert.equal(formatMediaSize(1024 ** 4, "en"), "1.0 TB");
+});

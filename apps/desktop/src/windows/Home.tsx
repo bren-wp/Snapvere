@@ -33,7 +33,7 @@ import type { RecordDone, Screenshot } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
 import { APP_NAME, IS_PRO } from "../lib/edition";
 import { proGalleryCopy } from "../lib/proGalleryCopy";
-import { PRO_BATCH_LIMIT, incompatibleProImageIds, removeIncompatibleProImages, retainLoadedProSelection, selectProBatch, summarizeProSelection } from "../lib/proSelection";
+import { PRO_BATCH_LIMIT, incompatibleProImageIds, isProExportPreset, readProExportPreset, writeProExportPreset, removeIncompatibleProImages, retainLoadedProSelection, selectProBatch, summarizeProSelection, type ProExportPreset } from "../lib/proSelection";
 import { summarizeProGallery } from "../lib/proInsights";
 import { formatMediaSize } from "../lib/mediaFormatting";
 import Viewer from "../components/Viewer";
@@ -53,7 +53,7 @@ export default function Home() {
   const [proBatchMode, setProBatchMode] = useState(false);
   const [proSelected, setProSelected] = useState<Set<string>>(() => new Set());
   const [proExportBusy, setProExportBusy] = useState(false);
-  const [proExportPreset, setProExportPreset] = useState<"original" | "png" | "png1280" | "webp1920">("original");
+  const [proExportPreset, setProExportPreset] = useState<ProExportPreset>(() => IS_PRO ? readProExportPreset() : "original");
   const proExportLock = useRef(false);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -650,8 +650,9 @@ export default function Home() {
               onChange={(event) => {
                 const value = event.target.value;
                 if (proExportLock.current) return;
-                if (value === "original" || value === "png" || value === "png1280" || value === "webp1920") {
+                if (isProExportPreset(value)) {
                   setProExportPreset(value);
+                  writeProExportPreset(value);
                 }
               }}>
               <option value="original">{proText.originalPreset}</option>

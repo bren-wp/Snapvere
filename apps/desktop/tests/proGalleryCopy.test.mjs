@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { proGalleryCopy } from "../src/lib/proGalleryCopy.ts";
 import { LANGUAGES } from "../src/lib/i18n.ts";
-import { PRO_BATCH_LIMIT, PRO_LARGE_FILE_BYTES, incompatibleProImageIds, removeIncompatibleProImages, retainLoadedProSelection, selectProBatch, summarizeProSelection } from "../src/lib/proSelection.ts";
+import { PRO_BATCH_LIMIT, PRO_LARGE_FILE_BYTES, PRO_MAX_IMAGE_BYTES, PRO_MAX_IMAGE_PIXELS, isProExportPreset, readProExportPreset, writeProExportPreset, incompatibleProImageIds, removeIncompatibleProImages, retainLoadedProSelection, selectProBatch, summarizeProSelection } from "../src/lib/proSelection.ts";
 import { summarizeProGallery } from "../src/lib/proInsights.ts";
 
 test("Pro gallery selection/exports have complete translations", () => {
@@ -115,4 +115,29 @@ test("Pro image preset feedback rejects known incompatible selections without dr
   assert.deepEqual([...removeIncompatibleProImages(selected, visible)], ["png","jpeg","webp","hidden"]);
   assert.equal(selected.size, 7);
   assert.deepEqual([...removeIncompatibleProImages(selected, [])], [...selected]);
+});
+
+test("Pro preflight includes native size and pixel thresholds, without rejecting unknown metadata", () => {
+  const items = [
+    {id:"valid",format:"png",sizeBytes:PRO_MAX_IMAGE_BYTES,width:6000,height:4000},
+    {id:"big",format:"png",sizeBytes:PRO_MAX_IMAGE_BYTES+1,width:100,height:100},
+    {id:"wide",format:"png",sizeBytes:100,width:6001,height:4000},
+    {id:"unknown",format:"png",sizeBytes:NaN,width:0,height:0},
+  ];
+  assert.equal(PRO_MAX_IMAGE_PIXELS, 24_000_000);
+  assert.deepEqual([...incompatibleProImageIds(new Set(items.map(x=>x.id)),items)],["big","wide"]);
+});
+test("Pro remembers only valid local export presets and tolerates storage failures", () => {
+  const data = new Map();
+  const store = {getItem: key => data.get(key) ?? null, setItem: (key,value) => data.set(key,value)};
+  assert.equal(readProExportPreset(store),"original");
+  writeProExportPreset("webp1920",store);
+  assert.equal(readProExportPreset(store),"webp1920");
+  writeProExportPreset("../untrusted",store);
+  assert.equal(readProExportPreset(store),"webp1920");
+  assert.equal(isProExportPreset("png1280"),true);
+  assert.equal(isProExportPreset({preset:"png"}),false);
+  assert.equal(readProExportPreset({getItem:()=> "invalid"}),"original");
+  assert.equal(readProExportPreset({getItem:()=> { throw Error("unavailable"); }}),"original");
+  assert.doesNotThrow(()=>writeProExportPreset("png",{setItem:()=>{throw Error("unavailable");}}));
 });

@@ -4,6 +4,30 @@ import { isVideo, type Screenshot } from "./types.ts";
 
 export const PRO_BATCH_LIMIT = 100;
 export const PRO_LARGE_FILE_BYTES = 10 * 1024 * 1024;
+export const PRO_MAX_IMAGE_BYTES = 64 * 1024 * 1024;
+export const PRO_MAX_IMAGE_PIXELS = 24_000_000;
+export const PRO_EXPORT_PRESETS = ["original", "png", "png1280", "webp1920"] as const;
+export type ProExportPreset = (typeof PRO_EXPORT_PRESETS)[number];
+const PRO_EXPORT_PRESET_KEY = "snapvere-pro-export-preset-v1";
+
+export function isProExportPreset(value: unknown): value is ProExportPreset {
+  return typeof value === "string" && (PRO_EXPORT_PRESETS as readonly string[]).includes(value);
+}
+
+export function readProExportPreset(store?: Pick<Storage, "getItem">): ProExportPreset {
+  try {
+    const value = (store ?? localStorage).getItem(PRO_EXPORT_PRESET_KEY);
+    return isProExportPreset(value) ? value : "original";
+  } catch {
+    return "original";
+  }
+}
+
+export function writeProExportPreset(value: ProExportPreset, store?: Pick<Storage, "setItem">): void {
+  if (!isProExportPreset(value)) return;
+  try { (store ?? localStorage).setItem(PRO_EXPORT_PRESET_KEY, value); }
+  catch { /* The in-memory preference remains usable. */ }
+}
 export type ProSelectionAction = "all" | "images" | "videos" | "recent" | "tagged" | "invert" | "week" | "large" | "untagged";
 const RECENT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -71,7 +95,10 @@ export function incompatibleProImageIds(selected: ReadonlySet<string>, visible: 
   const incompatible = new Set<string>();
   for (const item of visible) {
     if (!selected.has(item.id)) continue;
-    if (isVideo(item) || !["png", "jpg", "jpeg", "webp"].includes(item.format)) {
+    const tooLarge = Number.isSafeInteger(item.sizeBytes) && item.sizeBytes > PRO_MAX_IMAGE_BYTES;
+    const tooManyPixels = Number.isSafeInteger(item.width) && Number.isSafeInteger(item.height) &&
+      item.width > 0 && item.height > 0 && item.width * item.height > PRO_MAX_IMAGE_PIXELS;
+    if (isVideo(item) || !["png", "jpg", "jpeg", "webp"].includes(item.format) || tooLarge || tooManyPixels) {
       incompatible.add(item.id);
     }
   }

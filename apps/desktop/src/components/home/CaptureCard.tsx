@@ -1,10 +1,29 @@
 // Snapvere by Brendigo
+import { useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Copy, FolderOpen, Trash2, Video, Play } from "lucide-react";
+import { Copy, FolderOpen, Trash2, Video, Play, Image as ImageIcon } from "lucide-react";
 import type { Screenshot } from "../../lib/types";
 import { isVideo } from "../../lib/types";
 import { useLanguage } from "../../lib/LanguageProvider";
-import { formatMediaSize } from "../../lib/mediaFormatting";
+import { formatMediaDate, formatMediaSize } from "../../lib/mediaFormatting";
+import { galleryPreviewPaths } from "../../lib/galleryPaging";
+import { galleryStatusCopy } from "../../lib/galleryStatusCopy";
+
+function CapturePreview({ paths, name, video, unavailable }: {
+  paths: string[]; name: string; video: boolean; unavailable: string;
+}) {
+  const [attempt, setAttempt] = useState(0);
+  const source = paths[attempt];
+  return source ? (
+    <img key={source} src={convertFileSrc(source)} alt={name}
+      className="h-full w-full object-contain" loading="lazy" decoding="async" draggable={false}
+      onError={() => setAttempt(current => current === attempt ? current + 1 : current)} />
+  ) : (
+    <div className="grid h-full w-full place-items-center text-muted" role="img" aria-label={unavailable}>
+      {video ? <Video size={26} aria-hidden="true" /> : <ImageIcon size={26} aria-hidden="true" />}
+    </div>
+  );
+}
 
 export default function CaptureCard({
   shot,
@@ -27,8 +46,9 @@ export default function CaptureCard({
 }) {
   const { t, language } = useLanguage();
   const video = isVideo(shot);
-  // MP4 se ne moze prikazati u <img>; bez thumbnaila ide placeholder.
-  const src = shot.thumbPath ?? (video ? null : shot.filePath);
+  const paths = galleryPreviewPaths(shot.thumbPath, shot.filePath, video);
+  const date = formatMediaDate(shot.createdAt, language);
+  const galleryText = galleryStatusCopy(language);
   return (
     <article
       role="group"
@@ -50,19 +70,8 @@ export default function CaptureCard({
         className="absolute inset-0 z-[1] cursor-pointer rounded-[inherit] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent"
       />
       <div className="pointer-events-none relative aspect-video w-full bg-black/30">
-        {src ? (
-          <img
-            src={convertFileSrc(src)}
-            alt={shot.name}
-            className="h-full w-full object-cover"
-            loading="lazy"
-            draggable={false}
-          />
-        ) : (
-          <div className="grid h-full w-full place-items-center text-muted">
-            <Video size={26} />
-          </div>
-        )}
+        <CapturePreview key={JSON.stringify(paths)} paths={paths} name={shot.name}
+          video={video} unavailable={galleryText.previewUnavailable} />
         {video && (
           <>
             <div className="pointer-events-none absolute inset-0 grid place-items-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
@@ -78,10 +87,11 @@ export default function CaptureCard({
         )}
       </div>
       <div className="pointer-events-none relative px-3 py-2">
-        <div className="truncate text-[13px] font-medium">{shot.name}</div>
+        <div className="truncate text-[13px] font-medium" title={shot.name}>{shot.name}</div>
         <div className="font-mono text-[11px] text-muted">
           {shot.width}×{shot.height} · {formatMediaSize(shot.sizeBytes, language)}
         </div>
+        <div className="truncate text-[11px] text-muted" title={date}>{date}</div>
       </div>
       <div
         className="snapvere-gallery-card-actions absolute right-2 top-2 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"

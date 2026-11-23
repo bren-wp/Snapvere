@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { galleryKeyboardShortcut } from "../src/lib/galleryKeyboard.ts";
 import {
   createGallerySelectionStore,
+  galleryPreviewPaths,
   mergeUniqueById,
   offsetAfterDeletingLoadedCapture,
   splitGalleryPage,
@@ -81,4 +82,13 @@ test("Home intercepts gallery keyboard shortcuts before card controls stop bubbl
   assert.match(home, /window\.removeEventListener\("keydown", onShortcut, true\)/);
   assert.match(home, /aria-keyshortcuts="Control\+F Meta\+F"/);
   assert.match(home, /aria-keyshortcuts="F5"/);
+});
+
+test("gallery thumbnails fall back only to registered still-image originals", () => {
+  assert.deepEqual(galleryPreviewPaths("thumb.png", "shot.png", false), ["thumb.png", "shot.png"]);
+  assert.deepEqual(galleryPreviewPaths("shot.png", "shot.png", false), ["shot.png"]);
+  assert.deepEqual(galleryPreviewPaths(null, "shot.png", false), ["shot.png"]);
+  assert.deepEqual(galleryPreviewPaths(" ", "shot.png", false), ["shot.png"]);
+  assert.deepEqual(galleryPreviewPaths("poster.png", "recording.mp4", true), ["poster.png"]);
+  assert.deepEqual(galleryPreviewPaths(null, "recording.gif", true), []);
 });
