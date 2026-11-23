@@ -726,3 +726,71 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 @media (prefers-reduced-motion: reduce) {
   .snapvere-editor-tool { transition: none; }
 }
+
+
+/* A distinct Pro Studio work surface. Free keeps its original visual identity. */
+.snapvere-pro-header {
+  background: linear-gradient(120deg, rgba(74, 38, 112, .65), rgba(26, 27, 59, .94) 60%, rgba(104, 73, 25, .26));
+  border-bottom: 1px solid rgba(228, 184, 108, .30);
+}
+.snapvere-pro-header .snapvere-section-eyebrow {
+  color: #f2cf93;
+  letter-spacing: .14em;
+}
+.snapvere-pro-ribbon {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+  margin-top: 16px;
+  padding: 11px 13px;
+  border: 1px solid rgba(228, 184, 108, .35);
+  border-radius: 15px;
+  background: linear-gradient(100deg, rgba(228, 184, 108, .10), rgba(143, 98, 228, .12));
+}
+.snapvere-pro-ribbon-label {
+  margin-right: auto;
+  color: #f2cf93;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  white-space: nowrap;
+}
+.snapvere-pro-ribbon-action {
+  min-height: 36px;
+  padding: 7px 13px;
+  border-radius: 9px;
+  border: 1px solid rgba(228, 184, 108, .36);
+  background: rgba(0, 0, 0, .16);
+  color: #fff5df;
+  font-size: 12px;
+  font-weight: 650;
+  transition: background .15s ease, border-color .15s ease;
+}
+.snapvere-pro-ribbon-action:hover,
+.snapvere-pro-ribbon-action:focus-visible {
+  background: rgba(228, 184, 108, .19);
+  border-color: #f2cf93;
+  outline-offset: 2px;
+}
+[data-theme="light"] .snapvere-pro-header {
+  background: linear-gradient(115deg, rgba(236, 225, 251, .96), rgba(254, 249, 237, .96));
+  border-bottom-color: rgba(130, 92, 34, .28);
+}
+[data-theme="light"] .snapvere-pro-header .snapvere-section-eyebrow,
+[data-theme="light"] .snapvere-pro-ribbon-label {
+  color: #77501b;
+}
+[data-theme="light"] .snapvere-pro-ribbon { border-color: rgba(130, 92, 34, .3); }
+[data-theme="light"] .snapvere-pro-ribbon-action {
+  color: #4b3470;
+  background: rgba(255, 255, 255, .74);
+  border-color: rgba(130, 92, 34, .3);
+}
+@media (max-width: 560px) {
+  .snapvere-pro-ribbon-label { flex-basis: 100%; }
+  .snapvere-pro-ribbon-action { flex: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .snapvere-pro-ribbon-action { transition: none; }
+}
