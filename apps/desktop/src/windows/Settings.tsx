@@ -529,9 +529,25 @@ export default function Settings() {
               </button>
             </div>
             <div className="mt-4">
-              <UpdateNotice mode="settings" onAction={() => {
-                void openUrl(OFFICIAL_DOWNLOAD_URL).catch((error) => setNotice(String(error)));
-              }} />
+              {linuxGifOnly ? (
+                <div className="rounded-xl border border-border bg-elevated/80 px-4 py-3">
+                  <p className="text-sm text-muted">
+                    {t("On Linux, silent GIF recording is available. MP4, audio and recorded cursor are not supported.")}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void openUrl(OFFICIAL_DOWNLOAD_URL).catch(() => setNotice(t("Cannot open data folder:")))}
+                    className="mt-3 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:border-accent focus-visible:ring-2 focus-visible:ring-accent"
+                    aria-label={t("Official website")}
+                  >
+                    {t("Official website")}: snapvere.com/download/tauri/
+                  </button>
+                </div>
+              ) : (
+                <UpdateNotice mode="settings" onAction={() => {
+                  void openUrl(OFFICIAL_DOWNLOAD_URL).catch(() => setNotice(t("Cannot open data folder:")));
+                }} />
+              )}
             </div>
             <div className="mt-5 rounded-xl border border-border/60 bg-elevated/20 p-4">
               <div className="text-sm font-medium">{t("Commercial license agreement")}</div>
