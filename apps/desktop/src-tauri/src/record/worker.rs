@@ -77,6 +77,8 @@ pub(super) fn run(
         opts.quality,
         mixer.is_some(),
     )?;
+    // Mark the file as session-owned only after exclusive encoder creation succeeds.
+    ctl.output_owned.store(true, Ordering::Release);
 
     #[cfg(windows)]
     let mut painter = cursor::CursorPainter::new();
