@@ -1,6 +1,6 @@
 // Snapvere by Brendigo
 import type { Language } from "./i18n";
-const keys = ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","exportedSuffix","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools","recent","tagged"] as const;
+const keys = ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","exportedSuffix","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools","recent","tagged","insightsTitle","insightsImages","insightsVideos","insightsTagged","insightsSize"] as const;
 type Copy = Record<(typeof keys)[number], string>;
 const translations: Record<Language, Copy> = Object.fromEntries(
 [
@@ -25,7 +25,12 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Recording profiles",
       "Batch workspace",
       "Last 24 hours",
-      "With tags"
+      "With tags",
+      "Loaded gallery insights",
+      "Images",
+      "Recordings",
+      "Tagged",
+      "Storage"
     ]
   ],
   [
@@ -49,7 +54,12 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Profili snimanja",
       "Skupni rad",
       "Zadnja 24 sata",
-      "S oznakama"
+      "S oznakama",
+      "Pregled učitane galerije",
+      "Slike",
+      "Snimke",
+      "S oznakama",
+      "Prostor"
     ]
   ],
   [
@@ -73,7 +83,12 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Aufnahmeprofile",
       "Stapelexport",
       "Letzte 24 Stunden",
-      "Mit Tags"
+      "Mit Tags",
+      "Geladene Galerie",
+      "Bilder",
+      "Aufnahmen",
+      "Markiert",
+      "Speicher"
     ]
   ],
   [
@@ -97,7 +112,12 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Perfiles de grabación",
       "Exportación en lote",
       "Últimas 24 horas",
-      "Con etiquetas"
+      "Con etiquetas",
+      "Galería cargada",
+      "Imágenes",
+      "Grabaciones",
+      "Etiquetadas",
+      "Espacio"
     ]
   ],
   [
@@ -121,7 +141,12 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Profils d'enregistrement",
       "Export par lots",
       "Dernières 24 heures",
-      "Avec étiquettes"
+      "Avec étiquettes",
+      "Galerie chargée",
+      "Images",
+      "Enregistrements",
+      "Étiquetés",
+      "Stockage"
     ]
   ],
   [
@@ -145,7 +170,12 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Profili di registrazione",
       "Esportazione multipla",
       "Ultime 24 ore",
-      "Con etichette"
+      "Con etichette",
+      "Galleria caricata",
+      "Immagini",
+      "Registrazioni",
+      "Etichettati",
+      "Spazio"
     ]
   ],
   [
@@ -169,7 +199,12 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Perfis de gravação",
       "Exportação em lote",
       "Últimas 24 horas",
-      "Com etiquetas"
+      "Com etiquetas",
+      "Galeria carregada",
+      "Imagens",
+      "Gravações",
+      "Etiquetados",
+      "Espaço"
     ]
   ],
   [
@@ -193,7 +228,12 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Opnameprofielen",
       "Bulkexport",
       "Laatste 24 uur",
-      "Met labels"
+      "Met labels",
+      "Geladen galerij",
+      "Afbeeldingen",
+      "Opnames",
+      "Labels",
+      "Opslag"
     ]
   ],
   [
@@ -217,7 +257,12 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Profile nagrywania",
       "Eksport zbiorczy",
       "Ostatnie 24 godziny",
-      "Z tagami"
+      "Z tagami",
+      "Wczytana galeria",
+      "Obrazy",
+      "Nagrania",
+      "Oznaczone",
+      "Miejsce"
     ]
   ],
   [
@@ -241,7 +286,12 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Profily nahrávání",
       "Dávkový export",
       "Posledních 24 hodin",
-      "Se štítky"
+      "Se štítky",
+      "Načtená galerie",
+      "Obrázky",
+      "Nahrávky",
+      "Se štítky",
+      "Místo"
     ]
   ],
   [
@@ -265,7 +315,12 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Profily nahrávania",
       "Dávkový export",
       "Posledných 24 hodín",
-      "So značkami"
+      "So značkami",
+      "Načítaná galéria",
+      "Obrázky",
+      "Nahrávky",
+      "Označené",
+      "Miesto"
     ]
   ],
   [
@@ -289,7 +344,12 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Profili snemanja",
       "Paketni izvoz",
       "Zadnjih 24 ur",
-      "Z oznakami"
+      "Z oznakami",
+      "Naložena galerija",
+      "Slike",
+      "Posnetki",
+      "Z oznakami",
+      "Prostor"
     ]
   ]
 ]
