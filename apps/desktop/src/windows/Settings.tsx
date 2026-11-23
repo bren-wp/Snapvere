@@ -14,6 +14,9 @@ import { useLanguage } from "../lib/LanguageProvider";
 import { printScreenCopy } from "../lib/printScreenHelp";
 import type { ImageFormat, RecordFormat, PlatformCapabilities } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
+import ProRecordingProfiles from "../components/ProRecordingProfiles";
+import { APP_NAME, IS_PRO } from "../lib/edition";
+import { PROFILE_KEYS, type Profile } from "../lib/proProfiles";
 import { DEFAULTS, normalizeSettings, type AppSettings } from "./settings/preferences";
 import { Section, Row, Toggle, Segmented, HotkeyInput } from "./settings/SettingsControls";
 import { version as appVersion } from "../../package.json";
@@ -160,6 +163,13 @@ export default function Settings() {
     });
   };
 
+  const applyProProfile = async (profile: Profile) => {
+    if (!IS_PRO || !store) throw new Error("Settings are unavailable");
+    for (const key of PROFILE_KEYS) await store.set(key, profile[key]);
+    await store.save();
+    setS((prev) => ({ ...prev, ...profile }));
+  };
+
   const toggleAutostart = async (on: boolean) => {
     if (!store || autostartBusy) {
       setNotice(t("Settings are not ready yet. Try again."));
@@ -220,7 +230,7 @@ export default function Settings() {
   };
 
   return (
-    <WindowFrame title="Settings">
+    <WindowFrame title={IS_PRO ? "Snapvere Pro — Settings" : "Settings"}>
       <div className="snapvere-settings-layout flex min-h-0 flex-1">
         <nav
           aria-label={t("Settings")}
@@ -457,6 +467,10 @@ export default function Settings() {
                 onChange={(v) => set("recordMaxSeconds", Number(v))}
               />
             </Row>
+            {IS_PRO && (
+              <ProRecordingProfiles store={store} current={s} linux={linuxGifOnly}
+                language={language} apply={applyProProfile} />
+            )}
             {linuxGifOnly && (
               <p className="text-xs text-muted" role="status">
                 {t("On Linux, silent GIF recording is available. MP4, audio and recorded cursor are not supported.")}
@@ -513,7 +527,7 @@ export default function Settings() {
 
         {tab === "about" && (
           <Section title={t("About")}>
-            <p className="text-sm text-muted">Snapvere · {t("Version")} {appVersion}</p>
+            <p className="text-sm text-muted">{APP_NAME} · {t("Version")} {appVersion}</p>
             <p className="mt-2 text-sm text-muted">
               {t("Screen capture and recording by Brendigo.")}
             </p>

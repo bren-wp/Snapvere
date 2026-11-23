@@ -31,6 +31,7 @@ import { galleryStatusCopy } from "../lib/galleryStatusCopy";
 import { galleryKeyboardShortcut } from "../lib/galleryKeyboard";
 import type { RecordDone, Screenshot } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
+import { APP_NAME } from "../lib/edition";
 import Viewer from "../components/Viewer";
 import CaptureCard from "../components/home/CaptureCard";
 import EmptyGallery from "../components/home/EmptyGallery";
@@ -354,7 +355,7 @@ export default function Home() {
   };
 
   return (
-    <WindowFrame title="Snapvere">
+    <WindowFrame title={APP_NAME}>
       {/* Keep native capture commands unchanged; only their visual priority changes. */}
       <header className="snapvere-workspace-header shrink-0 px-5 pb-5 pt-5">
         <div className="snapvere-workspace-heading">
