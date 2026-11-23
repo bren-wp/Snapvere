@@ -38,8 +38,10 @@ fn copy_exclusively(source: &Path, destination: &Path) -> Result<(), String> {
     // Symlinks in the gallery must not turn a batch operation into a private
     // file-exfiltration primitive. The destination path is generated, not input.
     let metadata = fs::symlink_metadata(source).map_err(estr)?;
-    if !metadata.is_file() || metadata.file_type().is_symlink()
-        || metadata.len() == 0 || metadata.len() > MAX_FILE_BYTES
+    if !metadata.is_file()
+        || metadata.file_type().is_symlink()
+        || metadata.len() == 0
+        || metadata.len() > MAX_FILE_BYTES
     {
         return Err("Invalid, redirected or oversized gallery file".into());
     }
@@ -49,17 +51,18 @@ fn copy_exclusively(source: &Path, destination: &Path) -> Result<(), String> {
         .create_new(true)
         .open(destination)
         .map_err(estr)?;
-    let result = io::copy(&mut reader, &mut writer)
-        .and_then(|copied| {
-            if copied != metadata.len() {
-                return Err(io::Error::other("Source changed during export"));
-            }
-            writer.sync_all()
-        });
+    let result = io::copy(&mut reader, &mut writer).and_then(|copied| {
+        if copied != metadata.len() {
+            return Err(io::Error::other("Source changed during export"));
+        }
+        writer.sync_all()
+    });
     drop(writer);
     if let Err(error) = result {
         if let Err(cleanup) = fs::remove_file(destination) {
-            log(&format!("failed to remove incomplete Pro batch output: {cleanup}"));
+            log(&format!(
+                "failed to remove incomplete Pro batch output: {cleanup}"
+            ));
         }
         return Err(format!("Could not complete local export: {error}"));
     }
@@ -93,7 +96,9 @@ pub(super) async fn export(
             let db = lock(&state.db);
             ids.iter()
                 .map(|id| {
-                    db.get(id).map_err(estr)?.ok_or_else(|| "Gallery item no longer exists".into())
+                    db.get(id)
+                        .map_err(estr)?
+                        .ok_or_else(|| "Gallery item no longer exists".into())
                 })
                 .collect::<Result<Vec<_>, String>>()?
         };
@@ -126,21 +131,25 @@ mod tests {
         assert!(validate_ids(&[]).is_err());
         assert!(validate_ids(&[id.clone(), id]).is_err());
         assert!(validate_ids(&["../secrets.txt".into()]).is_err());
-        let too_many = (0..101).map(|_| uuid::Uuid::new_v4().to_string()).collect::<Vec<_>>();
+        let too_many = (0..101)
+            .map(|_| uuid::Uuid::new_v4().to_string())
+            .collect::<Vec<_>>();
         assert!(validate_ids(&too_many).is_err());
     }
 
     #[test]
     fn source_overwrite_is_rejected_and_only_whitelisted_media_exports() {
-        let dir = std::env::temp_dir()
-            .join(format!("snapvere-pro-batch-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("snapvere-pro-batch-{}", uuid::Uuid::new_v4()));
         fs::create_dir(&dir).expect("create fixture");
         let source = dir.join("capture.png");
         let target = dir.join("existing.png");
         fs::write(&source, b"private capture").expect("create source");
         fs::write(&target, b"existing user file").expect("create target");
         assert!(copy_exclusively(&source, &target).is_err());
-        assert_eq!(fs::read(&target).expect("original intact"), b"existing user file");
+        assert_eq!(
+            fs::read(&target).expect("original intact"),
+            b"existing user file"
+        );
         assert_eq!(accepted_extension("png").unwrap(), "png");
         assert_eq!(accepted_extension("jpeg").unwrap(), "jpg");
         assert!(accepted_extension("exe").is_err());

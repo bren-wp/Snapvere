@@ -9,9 +9,9 @@
 
 mod gallery_helpers;
 mod image_export;
-mod record_windows;
 #[cfg(feature = "pro")]
 mod pro_batch;
+mod record_windows;
 
 use record_windows::{resolve_target, show_rec_draw, show_rec_frame, show_rec_hud};
 
@@ -1735,7 +1735,11 @@ pub fn show_home(app: AppHandle) -> Result<(), String> {
         return Ok(());
     }
     WebviewWindowBuilder::new(&app, "home", WebviewUrl::App("index.html".into()))
-        .title(if cfg!(feature = "pro") { "Snapvere Pro" } else { "Snapvere" })
+        .title(if cfg!(feature = "pro") {
+            "Snapvere Pro"
+        } else {
+            "Snapvere"
+        })
         .inner_size(1120.0, 740.0)
         .min_inner_size(880.0, 560.0)
         .center()
