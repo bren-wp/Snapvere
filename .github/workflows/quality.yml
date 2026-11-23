@@ -277,6 +277,9 @@ jobs:
           Copy-Item $msi[0].FullName (Join-Path $out 'Snapvere-Setup.msi')
           Remove-Item (Join-Path $base 'bundle/nsis') -Recurse -Force
           Remove-Item (Join-Path $base 'bundle/msi') -Recurse -Force
+      - name: Test native Pro Rust commands and filesystem security
+        working-directory: apps/desktop/src-tauri
+        run: cargo test --features pro --locked
       - name: Build Pro Windows Portable / NSIS / MSI from same audited source
         working-directory: apps/desktop
         shell: pwsh
@@ -391,6 +394,9 @@ jobs:
           cp -- "${rpm[0]}" dist-linux/Snapvere-Linux-x86_64-UNTESTED.rpm
           cp -- "${image[0]}" dist-linux/Snapvere-Linux-x86_64.AppImage
           rm -rf -- "$root/deb" "$root/rpm" "$root/appimage"
+      - name: Test native Pro Linux batch export and recording operations
+        working-directory: apps/desktop/src-tauri
+        run: cargo test --features pro --locked
       - name: Build Pro Linux DEB, RPM and AppImage from same source
         working-directory: apps/desktop
         env:
