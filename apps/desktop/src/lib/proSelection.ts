@@ -64,3 +64,21 @@ export function summarizeProSelection(selected: ReadonlySet<string>, visible: re
   }
   return { loaded: seen.size, hidden: selected.size - seen.size, sizeBytes };
 }
+
+// Use only loaded metadata for immediate feedback; Rust validates the entire
+// selection again, including hidden items and actual source bytes.
+export function incompatibleProImageIds(selected: ReadonlySet<string>, visible: readonly Screenshot[]): Set<string> {
+  const incompatible = new Set<string>();
+  for (const item of visible) {
+    if (!selected.has(item.id)) continue;
+    if (isVideo(item) || !["png", "jpg", "jpeg", "webp"].includes(item.format)) {
+      incompatible.add(item.id);
+    }
+  }
+  return incompatible;
+}
+
+export function removeIncompatibleProImages(selected: ReadonlySet<string>, visible: readonly Screenshot[]): Set<string> {
+  const incompatible = incompatibleProImageIds(selected, visible);
+  return new Set([...selected].filter(id => !incompatible.has(id)));
+}

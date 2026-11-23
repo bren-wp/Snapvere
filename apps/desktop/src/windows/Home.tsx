@@ -33,7 +33,7 @@ import type { RecordDone, Screenshot } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
 import { APP_NAME, IS_PRO } from "../lib/edition";
 import { proGalleryCopy } from "../lib/proGalleryCopy";
-import { PRO_BATCH_LIMIT, retainLoadedProSelection, selectProBatch, summarizeProSelection } from "../lib/proSelection";
+import { PRO_BATCH_LIMIT, incompatibleProImageIds, removeIncompatibleProImages, retainLoadedProSelection, selectProBatch, summarizeProSelection } from "../lib/proSelection";
 import { summarizeProGallery } from "../lib/proInsights";
 import { formatMediaSize } from "../lib/mediaFormatting";
 import Viewer from "../components/Viewer";
@@ -218,6 +218,8 @@ export default function Home() {
   const visible = items;
   const proInsights = IS_PRO ? summarizeProGallery(visible) : null;
   const proBatchSummary = IS_PRO && proBatchMode ? summarizeProSelection(proSelected, visible) : null;
+  const incompatibleCount = IS_PRO && proBatchMode && proExportPreset !== "original"
+    ? incompatibleProImageIds(proSelected, visible).size : 0;
 
   const toggleProItem = (id: string) => {
     if (!IS_PRO || proExportLock.current) return;
@@ -231,7 +233,7 @@ export default function Home() {
   };
 
   const exportProSelection = async () => {
-    if (!IS_PRO || proExportLock.current || !proSelected.size) return;
+    if (!IS_PRO || proExportLock.current || !proSelected.size || incompatibleCount > 0) return;
     proExportLock.current = true;
     setProExportBusy(true);
     try {
@@ -661,8 +663,18 @@ export default function Home() {
           {proExportPreset !== "original" && (
             <p className="basis-full text-xs text-muted">{proText.imagePresetHelp}</p>
           )}
+          {incompatibleCount > 0 && (
+            <div className="basis-full flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2">
+              <span role="status" className="text-sm">{proText.incompatibleImages}: {incompatibleCount}</span>
+              <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
+                disabled={proExportBusy || loading || galleryError}
+                onClick={() => {
+                  if (!proExportLock.current) setProSelected(current => removeIncompatibleProImages(current, visible));
+                }}>{proText.removeIncompatible}</button>
+            </div>
+          )}
           <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm font-semibold"
-            disabled={proExportBusy || proSelected.size === 0}
+            disabled={proExportBusy || proSelected.size === 0 || incompatibleCount > 0}
             onClick={() => void exportProSelection()}>
             {proExportBusy ? proText.exporting : proText.export}
           </button>

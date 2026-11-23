@@ -3,14 +3,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { proGalleryCopy } from "../src/lib/proGalleryCopy.ts";
 import { LANGUAGES } from "../src/lib/i18n.ts";
-import { PRO_BATCH_LIMIT, PRO_LARGE_FILE_BYTES, retainLoadedProSelection, selectProBatch, summarizeProSelection } from "../src/lib/proSelection.ts";
+import { PRO_BATCH_LIMIT, PRO_LARGE_FILE_BYTES, incompatibleProImageIds, removeIncompatibleProImages, retainLoadedProSelection, selectProBatch, summarizeProSelection } from "../src/lib/proSelection.ts";
 import { summarizeProGallery } from "../src/lib/proInsights.ts";
 
 test("Pro gallery selection/exports have complete translations", () => {
   assert.equal(LANGUAGES.length, 12);
   for (const { code } of LANGUAGES) {
     const copy = proGalleryCopy(code);
-    for (const key of ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools","recent","tagged","insightsTitle","insightsImages","insightsVideos","insightsTagged","insightsSize","advancedSelection","lastWeek","largeFiles","untagged","hiddenSelection","keepLoaded","loadedSelectionSize","exportPreset","originalPreset","pngPreset","png1280Preset","webp1920Preset","imagePresetHelp"]) {
+    for (const key of ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools","recent","tagged","insightsTitle","insightsImages","insightsVideos","insightsTagged","insightsSize","advancedSelection","lastWeek","largeFiles","untagged","hiddenSelection","keepLoaded","loadedSelectionSize","exportPreset","originalPreset","pngPreset","png1280Preset","webp1920Preset","imagePresetHelp","incompatibleImages","removeIncompatible"]) {
       assert.ok(copy[key].trim(), code + " missing " + key);
     }
     assert.match(copy.count(3), /3 \/ 100/);
@@ -97,4 +97,22 @@ test("Pro selection exposes hidden IDs and counts unique loaded bytes only", () 
   assert.deepEqual([...retainLoadedProSelection(selected,visible)],["a","b"]);
   assert.equal(selected.size,3);
   assert.deepEqual(summarizeProSelection(new Set(["a","b"]),[{id:"a",sizeBytes:Number.MAX_SAFE_INTEGER},{id:"b",sizeBytes:10}]),{loaded:2,hidden:0,sizeBytes:Number.MAX_SAFE_INTEGER});
+});
+
+test("Pro image preset feedback rejects known incompatible selections without dropping hidden IDs", () => {
+  const selected = new Set(["png","jpeg","webp","video","gif","unknown","hidden"]);
+  const visible = [
+    {id:"png",source:"region",format:"png"},
+    {id:"jpeg",source:"clipboard",format:"jpeg"},
+    {id:"webp",source:"region",format:"webp"},
+    {id:"video",source:"recording",format:"png"},
+    {id:"gif",source:"recording",format:"gif"},
+    {id:"unknown",source:"region",format:"bmp"},
+    {id:"unselected",source:"recording",format:"mp4"},
+    {id:"video",source:"recording",format:"png"},
+  ];
+  assert.deepEqual([...incompatibleProImageIds(selected, visible)], ["video","gif","unknown"]);
+  assert.deepEqual([...removeIncompatibleProImages(selected, visible)], ["png","jpeg","webp","hidden"]);
+  assert.equal(selected.size, 7);
+  assert.deepEqual([...removeIncompatibleProImages(selected, [])], [...selected]);
 });

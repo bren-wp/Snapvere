@@ -1,6 +1,6 @@
 // Snapvere by Brendigo
 import type { Language } from "./i18n";
-const keys = ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","exportedSuffix","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools","recent","tagged","insightsTitle","insightsImages","insightsVideos","insightsTagged","insightsSize","advancedSelection","lastWeek","largeFiles","untagged","hiddenSelection","keepLoaded","loadedSelectionSize","exportPreset","originalPreset","pngPreset","png1280Preset","webp1920Preset","imagePresetHelp"] as const;
+const keys = ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","exportedSuffix","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools","recent","tagged","insightsTitle","insightsImages","insightsVideos","insightsTagged","insightsSize","advancedSelection","lastWeek","largeFiles","untagged","hiddenSelection","keepLoaded","loadedSelectionSize","exportPreset","originalPreset","pngPreset","png1280Preset","webp1920Preset","imagePresetHelp","incompatibleImages","removeIncompatible"] as const;
 type Copy = Record<(typeof keys)[number], string>;
 const translations: Record<Language, Copy> = Object.fromEntries(
 [
@@ -43,7 +43,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "PNG · original dimensions",
       "PNG · up to 1280 px",
       "WebP · up to 1920 px",
-      "Image presets require PNG, JPEG or WebP screenshots (up to 64 MiB and 24 megapixels each). No enlargement; recordings require Original files. Originals are preserved."
+      "Image presets require PNG, JPEG or WebP screenshots (up to 64 MiB and 24 megapixels each). No enlargement; recordings require Original files. Originals are preserved.",
+      "Incompatible selected files in loaded results",
+      "Deselect incompatible files"
     ]
   ],
   [
@@ -85,7 +87,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "PNG · izvorne dimenzije",
       "PNG · do 1280 px",
       "WebP · do 1920 px",
-      "Predlošci podržavaju PNG, JPEG ili WebP snimke zaslona (do 64 MiB i 24 megapiksela po slici). Bez povećavanja; videozapisi zahtijevaju izvorne datoteke. Izvornici ostaju sačuvani."
+      "Predlošci podržavaju PNG, JPEG ili WebP snimke zaslona (do 64 MiB i 24 megapiksela po slici). Bez povećavanja; videozapisi zahtijevaju izvorne datoteke. Izvornici ostaju sačuvani.",
+      "Nekompatibilne odabrane datoteke u učitanim rezultatima",
+      "Poništi odabir nekompatibilnih datoteka"
     ]
   ],
   [
@@ -127,7 +131,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "PNG · Originalgröße",
       "PNG · bis 1280 px",
       "WebP · bis 1920 px",
-      "Bildvorlagen benötigen PNG-, JPEG- oder WebP-Screenshots (bis 64 MiB und 24 Megapixel je Bild). Keine Vergrößerung; Videos benötigen Originaldateien. Originale bleiben erhalten."
+      "Bildvorlagen benötigen PNG-, JPEG- oder WebP-Screenshots (bis 64 MiB und 24 Megapixel je Bild). Keine Vergrößerung; Videos benötigen Originaldateien. Originale bleiben erhalten.",
+      "Inkompatible ausgewählte Dateien in geladenen Ergebnissen",
+      "Inkompatible Dateien abwählen"
     ]
   ],
   [
@@ -169,7 +175,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "PNG · tamaño original",
       "PNG · hasta 1280 px",
       "WebP · hasta 1920 px",
-      "Las plantillas requieren capturas PNG, JPEG o WebP (hasta 64 MiB y 24 megapíxeles por imagen). No se amplían; los vídeos requieren archivos originales. Se conservan los originales."
+      "Las plantillas requieren capturas PNG, JPEG o WebP (hasta 64 MiB y 24 megapíxeles por imagen). No se amplían; los vídeos requieren archivos originales. Se conservan los originales.",
+      "Archivos seleccionados incompatibles en los resultados cargados",
+      "Deseleccionar archivos incompatibles"
     ]
   ],
   [
@@ -211,7 +219,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "PNG · dimensions originales",
       "PNG · jusqu’à 1280 px",
       "WebP · jusqu’à 1920 px",
-      "Les préréglages nécessitent des captures PNG, JPEG ou WebP (64 Mio et 24 mégapixels maximum par image). Aucun agrandissement ; les vidéos nécessitent les fichiers originaux. Les originaux sont conservés."
+      "Les préréglages nécessitent des captures PNG, JPEG ou WebP (64 Mio et 24 mégapixels maximum par image). Aucun agrandissement ; les vidéos nécessitent les fichiers originaux. Les originaux sont conservés.",
+      "Fichiers sélectionnés incompatibles dans les résultats chargés",
+      "Désélectionner les fichiers incompatibles"
     ]
   ],
   [
@@ -253,7 +263,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "PNG · dimensioni originali",
       "PNG · fino a 1280 px",
       "WebP · fino a 1920 px",
-      "I preset richiedono schermate PNG, JPEG o WebP (fino a 64 MiB e 24 megapixel per immagine). Nessun ingrandimento; per i video usare i file originali. Gli originali sono conservati."
+      "I preset richiedono schermate PNG, JPEG o WebP (fino a 64 MiB e 24 megapixel per immagine). Nessun ingrandimento; per i video usare i file originali. Gli originali sono conservati.",
+      "File selezionati incompatibili nei risultati caricati",
+      "Deseleziona file incompatibili"
     ]
   ],
   [
@@ -295,7 +307,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "PNG · dimensões originais",
       "PNG · até 1280 px",
       "WebP · até 1920 px",
-      "As predefinições exigem capturas PNG, JPEG ou WebP (até 64 MiB e 24 megapíxeis por imagem). Sem ampliação; os vídeos requerem ficheiros originais. Os originais são preservados."
+      "As predefinições exigem capturas PNG, JPEG ou WebP (até 64 MiB e 24 megapíxeis por imagem). Sem ampliação; os vídeos requerem ficheiros originais. Os originais são preservados.",
+      "Ficheiros selecionados incompatíveis nos resultados carregados",
+      "Desselecionar ficheiros incompatíveis"
     ]
   ],
   [
@@ -337,7 +351,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "PNG · originele afmetingen",
       "PNG · tot 1280 px",
       "WebP · tot 1920 px",
-      "Presets vereisen PNG-, JPEG- of WebP-screenshots (maximaal 64 MiB en 24 megapixels per afbeelding). Geen vergroting; video's vereisen originele bestanden. Originelen blijven behouden."
+      "Presets vereisen PNG-, JPEG- of WebP-screenshots (maximaal 64 MiB en 24 megapixels per afbeelding). Geen vergroting; video's vereisen originele bestanden. Originelen blijven behouden.",
+      "Incompatibele geselecteerde bestanden in geladen resultaten",
+      "Incompatibele bestanden deselecteren"
     ]
   ],
   [
@@ -379,7 +395,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "PNG · oryginalny rozmiar",
       "PNG · do 1280 px",
       "WebP · do 1920 px",
-      "Ustawienia wymagają zrzutów PNG, JPEG lub WebP (do 64 MiB i 24 megapikseli na obraz). Bez powiększania; filmy wymagają plików oryginalnych. Oryginały pozostają zachowane."
+      "Ustawienia wymagają zrzutów PNG, JPEG lub WebP (do 64 MiB i 24 megapikseli na obraz). Bez powiększania; filmy wymagają plików oryginalnych. Oryginały pozostają zachowane.",
+      "Niezgodne wybrane pliki we wczytanych wynikach",
+      "Odznacz niezgodne pliki"
     ]
   ],
   [
@@ -421,7 +439,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "PNG · původní rozměry",
       "PNG · do 1280 px",
       "WebP · do 1920 px",
-      "Předvolby vyžadují snímky PNG, JPEG nebo WebP (do 64 MiB a 24 megapixelů na obrázek). Bez zvětšování; videa vyžadují původní soubory. Originály zůstávají zachovány."
+      "Předvolby vyžadují snímky PNG, JPEG nebo WebP (do 64 MiB a 24 megapixelů na obrázek). Bez zvětšování; videa vyžadují původní soubory. Originály zůstávají zachovány.",
+      "Nekompatibilní vybrané soubory v načtených výsledcích",
+      "Zrušit výběr nekompatibilních souborů"
     ]
   ],
   [
@@ -463,7 +483,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "PNG · pôvodné rozmery",
       "PNG · do 1280 px",
       "WebP · do 1920 px",
-      "Predvoľby vyžadujú snímky PNG, JPEG alebo WebP (do 64 MiB a 24 megapixelov na obrázok). Bez zväčšovania; videá vyžadujú pôvodné súbory. Originály zostávajú zachované."
+      "Predvoľby vyžadujú snímky PNG, JPEG alebo WebP (do 64 MiB a 24 megapixelov na obrázok). Bez zväčšovania; videá vyžadujú pôvodné súbory. Originály zostávajú zachované.",
+      "Nekompatibilné vybrané súbory v načítaných výsledkoch",
+      "Zrušiť výber nekompatibilných súborov"
     ]
   ],
   [
@@ -505,7 +527,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "PNG · izvirne mere",
       "PNG · do 1280 px",
       "WebP · do 1920 px",
-      "Prednastavitve zahtevajo posnetke PNG, JPEG ali WebP (do 64 MiB in 24 milijonov slikovnih pik na sliko). Brez povečevanja; videi zahtevajo izvirne datoteke. Izvirniki ostanejo ohranjeni."
+      "Prednastavitve zahtevajo posnetke PNG, JPEG ali WebP (do 64 MiB in 24 milijonov slikovnih pik na sliko). Brez povečevanja; videi zahtevajo izvirne datoteke. Izvirniki ostanejo ohranjeni.",
+      "Nezdružljive izbrane datoteke v naloženih rezultatih",
+      "Prekliči izbiro nezdružljivih datotek"
     ]
   ]
 ]
