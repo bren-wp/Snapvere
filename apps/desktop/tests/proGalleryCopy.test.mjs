@@ -9,7 +9,7 @@ test("Pro gallery selection/exports have complete translations", () => {
   assert.equal(LANGUAGES.length, 12);
   for (const { code } of LANGUAGES) {
     const copy = proGalleryCopy(code);
-    for (const key of ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools"]) {
+    for (const key of ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools","recent","tagged"]) {
       assert.ok(copy[key].trim(), code + " missing " + key);
     }
     assert.match(copy.count(3), /3 \/ 100/);
@@ -35,4 +35,21 @@ test("Pro selection actions preserve unrelated items and obey 100-item export ca
   assert.equal(selectProBatch(full, items, "all").size, PRO_BATCH_LIMIT);
   const almost = new Set(Array.from({length: PRO_BATCH_LIMIT - 1}, (_, i) => "old-" + i));
   assert.equal(selectProBatch(almost, items, "all").size, PRO_BATCH_LIMIT);
+});
+
+
+test("Pro smart selection filters by recent captures and user tags", () => {
+  const now = 1_800_000_000_000;
+  const gallery = [
+    { id: "recent", createdAt: now - 60_000, tags: [] },
+    { id: "old", createdAt: now - 2 * 86400000, tags: ["  project alpha  "] },
+    { id: "future", createdAt: now + 60000, tags: ["team"] },
+    { id: "boundary", createdAt: now - 86400000, tags: [] },
+    { id: "bad-date", createdAt: Number.NaN, tags: [""] },
+  ];
+  const recent = selectProBatch(new Set(), gallery, "recent", now);
+  assert.deepEqual([...recent], ["recent"]);
+  const tagged = selectProBatch(new Set(), gallery, "tagged", now);
+  assert.deepEqual([...tagged], ["old", "future"]);
+  assert.deepEqual([...selectProBatch(recent, gallery, "tagged", now)], ["recent","old","future"]);
 });
