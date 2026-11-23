@@ -1,6 +1,6 @@
 // Snapvere by Brendigo
 import type { Language } from "./i18n";
-const keys = ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","exportedSuffix","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools"] as const;
+const keys = ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","exportedSuffix","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools","recent","tagged"] as const;
 type Copy = Record<(typeof keys)[number], string>;
 const translations: Record<Language, Copy> = Object.fromEntries(
 [
@@ -23,7 +23,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Professional capture studio",
       "Eight recording presets, six saved profiles and private batch export.",
       "Recording profiles",
-      "Batch workspace"
+      "Batch workspace",
+      "Last 24 hours",
+      "With tags"
     ]
   ],
   [
@@ -45,7 +47,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Profesionalni studio snimanja",
       "Osam postavki snimanja, šest profila i privatni skupni izvoz.",
       "Profili snimanja",
-      "Skupni rad"
+      "Skupni rad",
+      "Zadnja 24 sata",
+      "S oznakama"
     ]
   ],
   [
@@ -67,7 +71,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Professionelles Aufnahmestudio",
       "Acht Vorlagen, sechs Profile und privater Sammelexport.",
       "Aufnahmeprofile",
-      "Stapelexport"
+      "Stapelexport",
+      "Letzte 24 Stunden",
+      "Mit Tags"
     ]
   ],
   [
@@ -89,7 +95,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Estudio profesional de captura",
       "Ocho ajustes, seis perfiles y exportación local por lotes.",
       "Perfiles de grabación",
-      "Exportación en lote"
+      "Exportación en lote",
+      "Últimas 24 horas",
+      "Con etiquetas"
     ]
   ],
   [
@@ -111,7 +119,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Studio de capture professionnel",
       "Huit préréglages, six profils et export local par lots.",
       "Profils d'enregistrement",
-      "Export par lots"
+      "Export par lots",
+      "Dernières 24 heures",
+      "Avec étiquettes"
     ]
   ],
   [
@@ -133,7 +143,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Studio di acquisizione professionale",
       "Otto preset, sei profili ed esportazione locale in gruppo.",
       "Profili di registrazione",
-      "Esportazione multipla"
+      "Esportazione multipla",
+      "Ultime 24 ore",
+      "Con etichette"
     ]
   ],
   [
@@ -155,7 +167,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Estúdio de captura profissional",
       "Oito predefinições, seis perfis e exportação local em lote.",
       "Perfis de gravação",
-      "Exportação em lote"
+      "Exportação em lote",
+      "Últimas 24 horas",
+      "Com etiquetas"
     ]
   ],
   [
@@ -177,7 +191,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Professionele opnamestudio",
       "Acht presets, zes profielen en lokale bulkexport.",
       "Opnameprofielen",
-      "Bulkexport"
+      "Bulkexport",
+      "Laatste 24 uur",
+      "Met labels"
     ]
   ],
   [
@@ -199,7 +215,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Profesjonalne studio nagrań",
       "Osiem ustawień, sześć profili i lokalny eksport zbiorczy.",
       "Profile nagrywania",
-      "Eksport zbiorczy"
+      "Eksport zbiorczy",
+      "Ostatnie 24 godziny",
+      "Z tagami"
     ]
   ],
   [
@@ -221,7 +239,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Profesionální studio záznamu",
       "Osm předvoleb, šest profilů a místní dávkový export.",
       "Profily nahrávání",
-      "Dávkový export"
+      "Dávkový export",
+      "Posledních 24 hodin",
+      "Se štítky"
     ]
   ],
   [
@@ -243,7 +263,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Profesionálne štúdio záznamu",
       "Osem predvolieb, šesť profilov a lokálny dávkový export.",
       "Profily nahrávania",
-      "Dávkový export"
+      "Dávkový export",
+      "Posledných 24 hodín",
+      "So značkami"
     ]
   ],
   [
@@ -265,7 +287,9 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Profesionalni studio zajema",
       "Osem prednastavitev, šest profilov in lokalni paketni izvoz.",
       "Profili snemanja",
-      "Paketni izvoz"
+      "Paketni izvoz",
+      "Zadnjih 24 ur",
+      "Z oznakami"
     ]
   ]
 ]
