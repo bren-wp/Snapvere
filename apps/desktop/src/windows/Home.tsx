@@ -393,13 +393,13 @@ export default function Home() {
   return (
     <WindowFrame title={APP_NAME}>
       {/* Keep native capture commands unchanged; only their visual priority changes. */}
-      <header className="snapvere-workspace-header shrink-0 px-5 pb-5 pt-5">
+      <header className={`snapvere-workspace-header shrink-0 px-5 pb-5 pt-5 ${IS_PRO ? "snapvere-pro-header" : ""}`}>
         <div className="snapvere-workspace-heading">
           <div className="min-w-0">
-            <p className="snapvere-section-eyebrow">SNAPVERE</p>
-            <h1 className="snapvere-workspace-title">{t("Capture what matters.")}</h1>
+            <p className="snapvere-section-eyebrow">{IS_PRO ? "SNAPVERE PRO · STUDIO" : "SNAPVERE"}</p>
+            <h1 className="snapvere-workspace-title">{IS_PRO ? proText.studioTitle : t("Capture what matters.")}</h1>
             <p className="snapvere-workspace-subtitle">
-              {t("Capture, record, and annotate your screen.")}
+              {IS_PRO ? proText.studioSubtitle : t("Capture, record, and annotate your screen.")}
             </p>
           </div>
           <button
@@ -456,6 +456,15 @@ export default function Home() {
             <ArrowUpRight className="snapvere-action-arrow" size={17} aria-hidden="true" />
           </button>
         </div>
+        {IS_PRO && (
+          <div className="snapvere-pro-ribbon" role="group" aria-label={proText.studioTitle}>
+            <span className="snapvere-pro-ribbon-label">PRO STUDIO</span>
+            <button type="button" className="snapvere-pro-ribbon-action"
+              onClick={() => void openSettings()}>{proText.profiles}</button>
+            <button type="button" className="snapvere-pro-ribbon-action"
+              onClick={() => { setProBatchMode(true); setProSelected(new Set()); }}>{proText.batchTools}</button>
+          </div>
+        )}
       </header>
 
       <section className="snapvere-gallery-controls shrink-0 px-5 py-4" aria-label={t("Gallery controls")}>
