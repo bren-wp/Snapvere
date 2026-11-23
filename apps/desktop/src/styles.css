@@ -794,3 +794,41 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 @media (prefers-reduced-motion: reduce) {
   .snapvere-pro-ribbon-action { transition: none; }
 }
+
+
+/* Pro identity extends to Settings and Editor without modifying capture overlays. */
+.snapvere-pro-shell .snapvere-app-brandbar {
+  background: linear-gradient(105deg, rgba(57, 34, 83, .93), rgba(26, 24, 57, .95));
+  border-bottom: 1px solid rgba(228, 184, 108, .36);
+}
+.snapvere-pro-shell .snapvere-app-wordmark {
+  color: #f7dfa8;
+  letter-spacing: .06em;
+}
+.snapvere-pro-edition-mark {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  border: 1px solid rgba(235, 193, 116, .48);
+  border-radius: 7px;
+  padding: 3px 9px;
+  color: #f5d59e;
+  background: rgba(185, 132, 56, .11);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .10em;
+}
+[data-theme="light"] .snapvere-pro-shell .snapvere-app-brandbar {
+  background: linear-gradient(105deg, #f3eafc, #fff6e4);
+  border-bottom-color: rgba(133, 91, 31, .3);
+}
+[data-theme="light"] .snapvere-pro-shell .snapvere-app-wordmark,
+[data-theme="light"] .snapvere-pro-edition-mark { color: #754719; }
+[data-theme="light"] .snapvere-pro-edition-mark {
+  background: rgba(185, 132, 56, .12);
+  border-color: rgba(133, 91, 31, .4);
+}
+@media (max-width: 600px) {
+  .snapvere-pro-shell .snapvere-app-brandbar-end { flex-wrap: wrap; justify-content: flex-end; }
+  .snapvere-pro-edition-mark { font-size: 9px; }
+}
