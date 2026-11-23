@@ -4,7 +4,8 @@ import { normalizeSettings } from "../windows/settings/preferences.ts";
 export const PRO_PROFILE_KEY = "proRecordingProfilesV1";
 export const PROFILE_KEYS = ["recordFormat", "recordFps", "recordQuality", "recordCursor", "recordMic", "recordSystemAudio", "recordMaxSeconds"] as const;
 export type Profile = Pick<AppSettings, (typeof PROFILE_KEYS)[number]>;
-export type PresetName = "tutorial" | "presentation" | "compact";
+export const PRO_PRESET_NAMES = ["tutorial", "presentation", "compact", "webinar", "smooth", "archive", "social", "detailedGif"] as const;
+export type PresetName = (typeof PRO_PRESET_NAMES)[number];
 export function safeProfile(raw: unknown, linux = false): Profile | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const obj = raw as Record<string, unknown>;
@@ -22,13 +23,19 @@ export function safeProfile(raw: unknown, linux = false): Profile | null {
 }
 export function profileSlots(raw: unknown): (Profile | null)[] {
   const entries = Array.isArray(raw) ? raw : [];
-  return Array.from({ length: 3 }, (_, i) => safeProfile(entries[i]));
+  // Keep the first three positions unchanged for users upgrading from Pro v0.2.28.
+  return Array.from({ length: 6 }, (_, i) => safeProfile(entries[i]));
 }
 export function presetProfile(name: PresetName, linux = false): Profile {
   const settings: Record<PresetName, Partial<Profile>> = {
     tutorial: { recordFormat:"mp4",recordFps:30,recordQuality:95,recordCursor:true,recordMic:true,recordSystemAudio:false,recordMaxSeconds:1800 },
     presentation: { recordFormat:"mp4",recordFps:24,recordQuality:85,recordCursor:true,recordMic:false,recordSystemAudio:false,recordMaxSeconds:7200 },
     compact: { recordFormat:"gif",recordFps:15,recordQuality:45,recordCursor:false,recordMic:false,recordSystemAudio:false,recordMaxSeconds:300 },
+    webinar: { recordFormat:"mp4",recordFps:30,recordQuality:90,recordCursor:false,recordMic:true,recordSystemAudio:true,recordMaxSeconds:7200 },
+    smooth: { recordFormat:"mp4",recordFps:60,recordQuality:95,recordCursor:true,recordMic:false,recordSystemAudio:false,recordMaxSeconds:1800 },
+    archive: { recordFormat:"mp4",recordFps:30,recordQuality:100,recordCursor:true,recordMic:false,recordSystemAudio:false,recordMaxSeconds:7200 },
+    social: { recordFormat:"mp4",recordFps:30,recordQuality:80,recordCursor:false,recordMic:false,recordSystemAudio:false,recordMaxSeconds:300 },
+    detailedGif: { recordFormat:"gif",recordFps:24,recordQuality:100,recordCursor:true,recordMic:false,recordSystemAudio:false,recordMaxSeconds:300 },
   };
   return safeProfile({ ...normalizeSettings(null), ...settings[name] }, linux)!;
 }
