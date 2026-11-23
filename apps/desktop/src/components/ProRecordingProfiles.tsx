@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { Store } from "@tauri-apps/plugin-store";
 import type { AppSettings } from "../windows/settings/preferences";
 import type { Language } from "../lib/i18n";
-import { PRO_PROFILE_KEY, profileSlots, safeProfile, presetProfile, type Profile, type PresetName } from "../lib/proProfiles";
+import { PRO_PROFILE_KEY, PRO_PRESET_NAMES, profileSlots, safeProfile, presetProfile, type Profile } from "../lib/proProfiles";
 import { proProfileCopy } from "../lib/proProfileCopy";
 
 export default function ProRecordingProfiles({ store, current, linux, language, apply }: {
@@ -42,13 +42,13 @@ export default function ProRecordingProfiles({ store, current, linux, language, 
       </div>
       <p className="mb-3 text-xs leading-relaxed text-muted">{copy.description}</p>
       <div className="flex flex-wrap gap-2">
-        {(["tutorial","presentation","compact"] as PresetName[]).map(p => (
+        {PRO_PRESET_NAMES.map(p => (
           <button type="button" key={p} disabled={!store || busy}
             onClick={() => void perform(async () => { await apply(presetProfile(p,linux)); return copy.applied; })}
             className="rounded-lg border border-border px-3 py-2 text-xs font-medium hover:border-accent disabled:opacity-50">{copy[p]}</button>
         ))}
       </div>
-      <div className="mt-4 grid gap-2">
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
         {slots.map((item,i) => (
           <div key={i} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 px-3 py-2">
             <span className="text-xs text-muted">{i+1} · {item ? "✓" : copy.empty}</span>
