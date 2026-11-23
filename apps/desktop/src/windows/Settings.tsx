@@ -536,7 +536,7 @@ export default function Settings() {
                   </p>
                   <button
                     type="button"
-                    onClick={() => void openUrl(OFFICIAL_DOWNLOAD_URL).catch(() => setNotice(t("Cannot open data folder:")))}
+                    onClick={() => void openUrl(OFFICIAL_DOWNLOAD_URL).catch(() => setNotice(t("Could not open the page.")))}
                     className="mt-3 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:border-accent focus-visible:ring-2 focus-visible:ring-accent"
                     aria-label={t("Official website")}
                   >
@@ -545,7 +545,7 @@ export default function Settings() {
                 </div>
               ) : (
                 <UpdateNotice mode="settings" onAction={() => {
-                  void openUrl(OFFICIAL_DOWNLOAD_URL).catch(() => setNotice(t("Cannot open data folder:")));
+                  void openUrl(OFFICIAL_DOWNLOAD_URL).catch(() => setNotice(t("Could not open the page.")));
                 }} />
               )}
             </div>
