@@ -1,0 +1,39 @@
+name: Audit unsigned Snapvere release preview labels
+on:
+  workflow_dispatch:
+  schedule:
+    # Publishing and editing releases can happen outside the build workflow.
+    # Keep unsigned, unvalidated Tauri releases clearly marked as previews.
+    - cron: '17 5 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: snapvere-release-preview-integrity
+  cancel-in-progress: false
+jobs:
+  audit-unsigned-preview-metadata:
+    name: Reconcile unsigned v0.2.25 and v0.2.26 release labels
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Require prerelease metadata for legacy unsigned releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for tag in v0.2.25 v0.2.26; do
+            value="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" --jq '.prerelease')"
+            if [[ "$value" != true ]]; then
+              echo "::warning::Unsigned ${tag} is incorrectly marked stable"
+              gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --prerelease
+            fi
+            after="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" --jq '.prerelease')"
+            if [[ "$after" != true ]]; then
+              echo "::error::Unable to verify prerelease status for ${tag}"
+              exit 1
+            fi
+            echo "${tag}: unsigned preview status verified"
+          done
