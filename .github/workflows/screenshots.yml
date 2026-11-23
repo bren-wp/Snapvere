@@ -12,6 +12,11 @@ on:
       - 'site/favicon.svg'
       - 'site/config.js'
   workflow_dispatch:
+# Only the newest commit needs screenshot previews. Rapid UI changes must not
+# leave dozens of stale, queued screenshot jobs consuming CI runner capacity.
+concurrency:
+  group: snapvere-visual-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
