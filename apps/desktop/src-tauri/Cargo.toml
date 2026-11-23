@@ -68,6 +68,8 @@ windows = { version = "0.62", features = [
 [features]
 # Default produkcijski profil.
 default = []
+# Native-only feature, not a user-switchable frontend flag.
+pro = []
 
 [profile.release]
 opt-level = "s"   # optimiziraj za veličinu binarya (premium = mali footprint)

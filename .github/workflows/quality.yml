@@ -280,7 +280,7 @@ jobs:
         shell: pwsh
         run: |
           $env:VITE_SNAPVERE_EDITION = 'pro'
-          npm run tauri -- build --bundles nsis,msi --config src-tauri/tauri.pro.conf.json
+          npm run tauri -- build --bundles nsis,msi --features pro --config src-tauri/tauri.pro.conf.json
           if ($LASTEXITCODE -ne 0) { throw 'Pro native Windows build failed' }
       - name: Stage and check both Windows editions
         shell: pwsh
@@ -393,7 +393,7 @@ jobs:
         working-directory: apps/desktop
         env:
           VITE_SNAPVERE_EDITION: pro
-        run: npm run tauri -- build --bundles deb,rpm,appimage --config src-tauri/tauri.pro.conf.json
+        run: npm run tauri -- build --bundles deb,rpm,appimage --features pro --config src-tauri/tauri.pro.conf.json
       - name: Validate both Linux editions and SHA-256
         shell: bash
         run: |
