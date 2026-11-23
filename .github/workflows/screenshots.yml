@@ -46,11 +46,12 @@ jobs:
       - name: Serve real frontend and website
         shell: bash
         run: |
-          (cd apps/desktop && npm run dev -- --host 127.0.0.1 > /tmp/snapvere-vite.log 2>&1 &)
+          (cd apps/desktop && VITE_SNAPVERE_EDITION=free npm run dev -- --host 127.0.0.1 > /tmp/snapvere-vite.log 2>&1 &)
+          (cd apps/desktop && VITE_SNAPVERE_EDITION=pro npm run dev -- --host 127.0.0.1 --port 1421 > /tmp/snapvere-pro-vite.log 2>&1 &)
           (cd site && python -m http.server 4173 --bind 127.0.0.1 > /tmp/snapvere-site.log 2>&1 &)
           python - <<'PY'
           import time, urllib.request
-          for url in ['http://127.0.0.1:1420/', 'http://127.0.0.1:4173/']:
+          for url in ['http://127.0.0.1:1420/', 'http://127.0.0.1:1421/', 'http://127.0.0.1:4173/']:
               for attempt in range(40):
                   try:
                       urllib.request.urlopen(url, timeout=2).read(200)

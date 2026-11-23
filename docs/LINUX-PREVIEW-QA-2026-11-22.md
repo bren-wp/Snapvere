@@ -83,3 +83,9 @@ The recorder also syncs finalized MP4/GIF output to disk before inserting a
 SQLite gallery row; failed syncs are recorded as failures rather than falsely
 reported as completed media. Gallery registration rejects zero-byte/truncated
 outputs and symlinks, without deleting any original file supplied to it.
+
+## v0.2.31 cross-platform parity gate
+
+Both editions must use the same components per edition across Windows and Linux, including uncropped gallery previews, localized metadata and missing-thumbnail recovery. Pro must use the same native image export presets, limits and local preset preferences. Release readiness requires physical Windows and Linux tests in both editions, not only shared React previews. Linux MP4/H.264 recording, microphone, system audio and recorded cursor remain unavailable; these are explicit blockers for claiming 1:1 functionality. Keep the capability checks enabled until native implementations and recording tests pass. Validate X11 and Wayland separately, and capture actual Windows and Linux screen evidence at the same viewport and scale for both themes.
+
+The visual workflow now serves separate Free and Pro React builds and compares the shared gallery card geometry and pixels in Windows/Linux IPC fixtures for both themes. This checks actual rendered components, missing-thumbnail fallback and recording placeholders; it does not substitute for native WebView2/WebKitGTK or physical capture tests.

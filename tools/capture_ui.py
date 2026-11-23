@@ -51,7 +51,10 @@ TAURI_PREVIEW = r"""
   }
   window.__TAURI_INTERNALS__ = {
     metadata: { currentWindow: { label: "home" }, windows: [{ label: "home" }] },
-    convertFileSrc(path) { return window.__SNAPVERE_EDITOR_IMAGE || "http://127.0.0.1:4173/screenshots/home.png"; },
+    convertFileSrc(path) {
+      if (String(path).endsWith("parity-broken-thumb.png")) return "data:image/png;base64,broken";
+      return window.__SNAPVERE_EDITOR_IMAGE || "http://127.0.0.1:4173/screenshots/home.png";
+    },
     transformCallback(cb) { const id = nextCallback++; callbacks.set(id, cb); return id; },
     unregisterCallback(id) { callbacks.delete(id); },
     previewListenerReady() { return eventCallbacks.has("snapvere:capture"); },
@@ -84,7 +87,18 @@ TAURI_PREVIEW = r"""
         throw new Error("Simulated empty clipboard — no OS clipboard is accessed in CI");
       }
       if (command === "plugin:window|scale_factor") return 1;
-      if (command === "list_screenshots" || command === "search_screenshots" || command === "list_monitors") return [];
+      if (command === "list_screenshots" || command === "search_screenshots") {
+        if (!new URL(window.location.href).searchParams.has("previewGalleryParity")) return [];
+        return [
+          { id:"parity-image", name:"Parity capture", filePath:"/preview/original.png",
+            thumbPath:"/preview/parity-broken-thumb.png", format:"png", width:1920, height:1080,
+            sizeBytes:1048576, source:"region", createdAt:1747300800000, isUploaded:false, tags:["preview"] },
+          { id:"parity-recording", name:"Parity recording", filePath:"/preview/recording.gif",
+            thumbPath:null, format:"gif", width:1280, height:720, sizeBytes:2684354560,
+            source:"recording", createdAt:1747300800000, isUploaded:false, tags:[] }
+        ];
+      }
+      if (command === "list_monitors") return [];
       if (command === "active_hotkeys") return window.location.search.includes("previewPrintScreenTaken")
         ? ["Ctrl+Shift+1", "Ctrl+Shift+R"] : ["PrintScreen", "Ctrl+Shift+R"];
       if (command === "update_hotkey" && window.location.search.includes("previewPrintScreenTaken")) {
@@ -442,6 +456,73 @@ with sync_playwright() as p:
     compact_page.get_by_role("banner").get_by_role("button", name="Capture region").wait_for(timeout=30000)
     compact_page.screenshot(path=str(OUTPUT / "home-compact.png"))
     compact.close()
+    # Compare each edition with the same platform-specific IPC contract at the
+    # same viewport. These are deterministic Chromium fixtures, NOT real OS QA.
+    parity_report = []
+    for edition, port in (("free", 1420), ("pro", 1421)):
+        for theme in ("dark", "light"):
+            card_paths = []
+            geometry = []
+            for platform in ("windows", "linux"):
+                context = browser.new_context(
+                    viewport={"width": 1120, "height": 740},
+                    device_scale_factor=1, color_scheme=theme, reduced_motion="reduce",
+                )
+                context.add_init_script(
+                    "localStorage.setItem('snapvere-theme', " + json.dumps(theme) + ")"
+                )
+                context.add_init_script("window.__SNAPVERE_EDITOR_IMAGE = " + json.dumps(editor_uri))
+                context.add_init_script(TAURI_PREVIEW)
+                gallery = context.new_page()
+                gallery.goto(
+                    f"http://127.0.0.1:{port}/?previewGalleryParity=1"
+                    + ("&previewLinux=1" if platform == "linux" else ""),
+                    wait_until="networkidle",
+                )
+                gallery.wait_for_function(
+                    "(theme) => document.documentElement.dataset.theme === theme",
+                    arg=theme,
+                )
+                image_card = gallery.get_by_role("group", name="Parity capture", exact=True)
+                video_card = gallery.get_by_role("group", name="Parity recording", exact=True)
+                image_card.wait_for(timeout=30000)
+                video_card.wait_for(timeout=30000)
+                gallery.wait_for_function(
+                    "() => { const img = document.querySelector('img[alt=\"Parity capture\"]'); "
+                    "return img && img.complete && img.naturalWidth > 0; }"
+                )
+                image = image_card.locator("img")
+                assert image.evaluate("(img) => getComputedStyle(img).objectFit") == "contain"
+                assert video_card.get_by_role("img", name="Preview unavailable").count() == 1
+                assert video_card.get_by_text("2.5 GB", exact=False).count() == 1
+                assert not gallery.evaluate("() => document.documentElement.scrollWidth > innerWidth + 2")
+                assert gallery.get_by_role("button", name="Batch workspace", exact=True).count() == (
+                    1 if edition == "pro" else 0
+                )
+                geometry.append([image_card.bounding_box(), video_card.bounding_box()])
+                gallery.screenshot(path=str(OUTPUT / f"parity-{edition}-{platform}-{theme}.png"))
+                card_path = OUTPUT / f"parity-card-{edition}-{platform}-{theme}.png"
+                image_card.screenshot(path=str(card_path), animations="disabled")
+                card_paths.append(card_path)
+                context.close()
+            assert geometry[0] == geometry[1], (edition, theme, geometry)
+            with Image.open(card_paths[0]) as first, Image.open(card_paths[1]) as second:
+                assert first.size == second.size
+                assert ImageChops.difference(first.convert("RGB"), second.convert("RGB")).getbbox() is None, (
+                    f"Shared gallery card differs in {edition}/{theme} platform fixtures"
+                )
+            parity_report.append({"edition": edition, "theme": theme, "mock_geometry_equal": True,
+                                  "mock_card_pixels_equal": True, "native_qa": False})
+            # Small cropped evidence is not a full-screen preview; don't mix it
+            # with the existing minimum-size screenshot inventory.
+            for card_path in card_paths:
+                card_path.unlink()
+    report_dir = ROOT / "docs" / "visual-audit"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    (report_dir / "cross-edition-platform-fixtures.json").write_text(
+        json.dumps({"kind": "chromium-mocked-platform-contracts", "checks": parity_report}, indent=2) + "\n",
+        encoding="utf-8",
+    )
     site = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
     page = site.new_page()
     page.goto("http://127.0.0.1:4173/", wait_until="networkidle")

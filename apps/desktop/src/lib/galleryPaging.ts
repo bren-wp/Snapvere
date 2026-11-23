@@ -63,3 +63,10 @@ export function mergeUniqueById<T extends { id: string }>(
     }),
   );
 }
+
+// Prefer the small thumbnail. Only still images may fall back to their
+// registered original; do not feed a recording into an image decoder.
+export function galleryPreviewPaths(thumbPath: string | null, filePath: string, video: boolean): string[] {
+  const candidates = video ? [thumbPath] : [thumbPath, filePath];
+  return [...new Set(candidates.filter((path): path is string => typeof path === "string" && path.trim().length > 0))];
+}
