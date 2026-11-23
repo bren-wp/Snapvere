@@ -307,23 +307,21 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $dist = Join-Path $PWD "dist-installers"
-          New-Item -Path $dist -ItemType Directory -Force | Out-Null
-          $target = Join-Path $PWD "apps/desktop/src-tauri/target/release"
-          $portable = Join-Path $target "snapvere.exe"
-          if (-not (Test-Path $portable)) { throw "Portable app executable is missing: $portable" }
-          $nsis = Get-ChildItem -Path (Join-Path $target 'bundle/nsis') -Filter '*.exe' -File | Select-Object -First 1
-          if (-not $nsis) { throw "NSIS setup.exe is missing" }
-          $msi = Get-ChildItem -Path (Join-Path $target 'bundle/msi') -Filter '*.msi' -File | Select-Object -First 1
-          if (-not $msi) { throw "WiX setup.msi is missing" }
-          Copy-Item $portable (Join-Path $dist "Snapvere-Portable.exe")
-          Copy-Item $nsis.FullName (Join-Path $dist "Snapvere-Setup.exe")
-          Copy-Item $msi.FullName (Join-Path $dist "Snapvere-Setup.msi")
-          $linuxNames = @('Snapvere-Linux-amd64.deb','Snapvere-Linux-x86_64.AppImage')
+          $windowsNames = @('Snapvere-Portable.exe','Snapvere-Setup.exe','Snapvere-Setup.msi',
+                            'Snapvere-Pro-Portable.exe','Snapvere-Pro-Setup.exe','Snapvere-Pro-Setup.msi')
+          foreach ($name in $windowsNames) {
+            $file = Join-Path $dist $name
+            if (!(Test-Path $file) -or (Get-Item $file).Length -lt 1000000) {
+              throw "Missing or invalid Windows edition: $name"
+            }
+          }
+          $linuxNames = @('Snapvere-Linux-amd64.deb','Snapvere-Linux-x86_64.AppImage',
+                          'Snapvere-Pro-Linux-amd64.deb','Snapvere-Pro-Linux-x86_64.AppImage')
           $linuxHashes = @{}
           $linuxManifest = Join-Path $PWD 'dist-linux/SHA256SUMS-Linux.txt'
           if (-not (Test-Path $linuxManifest)) { throw 'Missing Linux QA checksum manifest' }
           foreach ($line in @(Get-Content $linuxManifest)) {
-            if ($line -notmatch '^([0-9a-f]{64})  (Snapvere-Linux-(?:amd64\.deb|x86_64\.AppImage))$') {
+            if ($line -notmatch '^([0-9a-f]{64})  (Snapvere(?:-Pro)?-Linux-(?:amd64\.deb|x86_64\.AppImage))$') {
               throw "Unexpected Linux checksum entry: $line"
             }
             if ($linuxHashes.ContainsKey($Matches[2])) { throw "Duplicate Linux package: $($Matches[2])" }
@@ -361,7 +359,7 @@ jobs:
               $feed.download_url -ne 'https://snapvere.com/download/tauri/') {
             throw 'Invalid release version manifest; refusing publication'
           }
-          $expected = @('Snapvere-Portable.exe','Snapvere-Setup.exe','Snapvere-Setup.msi') + $linuxNames
+          $expected = $windowsNames + $linuxNames
           foreach ($name in $expected) {
             $f = Join-Path $dist $name
             if (-not (Test-Path $f)) { throw "Required Windows artifact missing: $name" }
@@ -383,23 +381,22 @@ jobs:
           path: dist-installers/*
           if-no-files-found: error
           retention-days: 90
-      - name: Reconcile metadata of previously mislabelled unsigned preview v0.2.25
+      - name: Ensure legacy unsigned release metadata remains prerelease
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $tag = 'v0.2.25'
           $repo = '${{ github.repository }}'
-          $existing = gh api "repos/$repo/releases/tags/$tag" | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0 -or !$existing.id) { throw "Cannot inspect previous release $tag" }
-          if (-not $existing.draft -and -not $existing.prerelease) {
-            gh release edit $tag --repo $repo --prerelease
-            if ($LASTEXITCODE -ne 0) { throw "Cannot restore prerelease status for $tag" }
-          }
-          $verified = gh api "repos/$repo/releases/tags/$tag" | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0 -or -not $verified.prerelease) {
-            throw "Previous unsigned preview $tag still appears stable"
+          foreach ($tag in @('v0.2.25','v0.2.26','v0.2.27')) {
+            $existing = gh api "repos/$repo/releases/tags/$tag" | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0 -or !$existing.id) { throw "Cannot inspect previous release $tag" }
+            if (-not $existing.draft -and -not $existing.prerelease) {
+              gh release edit $tag --repo $repo --prerelease
+              if ($LASTEXITCODE -ne 0) { throw "Cannot restore prerelease status for $tag" }
+            }
+            $verified = gh api "repos/$repo/releases/tags/$tag" | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0 -or -not $verified.prerelease) { throw "Unsigned release $tag is still marked stable" }
           }
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -421,6 +418,10 @@ jobs:
             - **Snapvere-Setup.msi** — MSI installer
             - **Snapvere-Linux-amd64.deb** — Linux amd64 preview; install on compatible Debian/Ubuntu distributions
             - **Snapvere-Linux-x86_64.AppImage** — Linux x86_64 preview AppImage (requires compatible system libraries)
+            - **Snapvere-Pro-Portable.exe / Snapvere-Pro-Setup.exe / Snapvere-Pro-Setup.msi** — separate Pro Windows x64 build and installers
+            - **Snapvere-Pro-Linux-amd64.deb / Snapvere-Pro-Linux-x86_64.AppImage** — separate Pro Linux x64 preview packages
+            - **Snapvere Pro features** — professional recording presets, three local saved profiles and native-only batch export to a folder selected by the user
+            - **Pro preview** — not a paid, entitlement-enforced release. No activation or account backend is implemented.
             - **SHA256SUMS.txt** — integrity checksums for all packages and the dependency inventory
             - **Snapvere-SBOM.cdx.json** — reproducible CycloneDX 1.6 dependency inventory from npm and Cargo lockfiles
             - **Seven browser extension ZIP packages v0.2.2** — Chrome, Firefox, Edge, Brave, Opera, Vivaldi and Safari independently bundled source packages (Safari requires Apple packaging/signing)
@@ -429,7 +430,7 @@ jobs:
             All Windows and Linux installers, the seven browser extensions, the SBOM and the update manifest are covered by SHA256SUMS.txt.
             The browser ZIPs are developer/source packages, not approved or signed browser-store distributions.
 
-            All three Windows executables and both Linux bundles are compiled from the **same Git revision**; the seven extension ZIPs are generated from audited source at that commit.
+            All six Windows packages and four Linux packages are compiled from the **same Git revision** using distinct Free/Pro bundle identifiers; the seven extension ZIPs are generated from audited source at that commit.
 
             ### Changes in v${{ steps.version.outputs.value }}
             - Separate Tauri/Rust update notices from incompatible WinUI/.NET website installers.
@@ -491,8 +492,13 @@ jobs:
             'Snapvere-Portable.exe',
             'Snapvere-Setup.exe',
             'Snapvere-Setup.msi',
+            'Snapvere-Pro-Portable.exe',
+            'Snapvere-Pro-Setup.exe',
+            'Snapvere-Pro-Setup.msi',
             'Snapvere-Linux-amd64.deb',
             'Snapvere-Linux-x86_64.AppImage',
+            'Snapvere-Pro-Linux-amd64.deb',
+            'Snapvere-Pro-Linux-x86_64.AppImage',
             'Snapvere-SBOM.cdx.json',
             'Snapvere-update-stable.json',
             'SHA256SUMS.txt'
@@ -519,4 +525,4 @@ jobs:
           if ($unhashed.Count -ne 0 -or $checksumFiles.Count -ne ($requiredAssets.Count - 1)) {
             throw "Published release assets are not fully covered by SHA256SUMS.txt"
           }
-          Write-Host "Verified $($requiredAssets.Count) assets including Linux packages, seven browser extensions, and Windows installers."
+          Write-Host "Verified $($requiredAssets.Count) assets: Free and Pro Windows/Linux installers, seven browser extensions, SBOM, hashes and Free update feed."
