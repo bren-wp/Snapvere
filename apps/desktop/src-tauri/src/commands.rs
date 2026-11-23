@@ -325,7 +325,12 @@ fn write_new_capture(path: &Path, bytes: &[u8]) -> Result<(), String> {
         .create_new(true)
         .open(path)
         .map_err(estr)?;
-    if let Err(error) = file.write_all(bytes) {
+    // A successful write() only places data in operating-system buffers.
+    // Flush the complete new image before creating its SQLite gallery row.
+    // If the filesystem refuses to persist it (e.g. full disk), remove only
+    // the file created exclusively above, leaving existing media untouched.
+    let result = file.write_all(bytes).and_then(|_| file.sync_all());
+    if let Err(error) = result {
         drop(file);
         if let Err(cleanup) = fs::remove_file(path) {
             log(&format!(
@@ -333,7 +338,7 @@ fn write_new_capture(path: &Path, bytes: &[u8]) -> Result<(), String> {
                 path.display()
             ));
         }
-        return Err(format!("Could not write capture: {error}"));
+        return Err(format!("Could not persist capture: {error}"));
     }
     Ok(())
 }
@@ -1803,6 +1808,17 @@ mod export_safety_tests {
         assert!(validate_export_path(&jpg.to_string_lossy(), ImageFormat::Png).is_err());
         assert!(validate_export_path(&exe.to_string_lossy(), ImageFormat::Png).is_err());
         assert!(validate_export_path("capture.png", ImageFormat::Png).is_err());
+    }
+
+    #[test]
+    fn capture_is_persisted_before_it_is_listed_in_gallery() {
+        let path = std::env::temp_dir().join(format!("snapvere-durable-{}.png", Uuid::new_v4()));
+        let bytes = b"Snapvere exclusive persistence regression";
+        write_new_capture(&path, bytes).expect("durable write");
+        assert_eq!(fs::read(&path).expect("read persisted capture"), bytes);
+        assert!(write_new_capture(&path, b"other bytes").is_err());
+        assert_eq!(fs::read(&path).expect("read unchanged capture"), bytes);
+        fs::remove_file(&path).expect("cleanup");
     }
 
     #[test]

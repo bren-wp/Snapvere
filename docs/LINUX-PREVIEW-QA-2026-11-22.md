@@ -47,3 +47,16 @@ Linux MP4 and audio parity is a separate native implementation objective.
 Never silently export GIF when a user explicitly selects MP4; treat explicit
 MP4/audio requests as unsupported. Legacy saved Windows preferences are
 normalized to GIF for the Linux tray/overlay only.
+
+## Durable local capture and safe file identity
+
+Image creation now syncs each exclusive new capture to disk before indexing it
+in SQLite; interrupted or full-disk persistence errors remove only the freshly
+created file. Recorded filenames use the full UUID rather than a shortened
+32-bit suffix to reduce collision risk in shared/local folders. The native
+Save As flow continues to use a user-approved file picker and a same-folder
+staged write. Regression tests reject overwriting pre-existing media.
+
+This is not a promise of power-loss-proof storage across all filesystem drivers;
+run physical NTFS/ext4/Btrfs and full-disk/interrupted-process tests before
+claiming durability on every platform.

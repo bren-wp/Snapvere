@@ -656,11 +656,14 @@ fn finish_session(
 fn output_path(app: &AppHandle, format: RecordFormat) -> Result<PathBuf, String> {
     let dir = crate::commands::gallery_dir(app)?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("ne mogu kreirati galeriju: {e}"))?;
+    // Keep the full UUID: the former eight-character/32-bit suffix could
+    // collide during long recording sessions or across shared folders.
+    // Never intentionally target an existing user's recording.
     let suffix = uuid::Uuid::new_v4().simple().to_string();
     let name = format!(
         "Snapvere {} - {}.{}",
         chrono::Local::now().format("%Y-%m-%d %H.%M.%S"),
-        &suffix[..8],
+        suffix,
         format.ext()
     );
     Ok(dir.join(name))
