@@ -410,7 +410,14 @@ pub(crate) fn register_media(
     ext: &str,
     thumb: Option<&image::RgbaImage>,
 ) -> Result<Screenshot, String> {
-    let size_bytes = fs::metadata(path).map(|m| m.len()).map_err(estr)?;
+    // Refuse zero-byte / truncated outputs and symlinks masquerading as
+    // recordings; no database entry should point to an invalid or redirected
+    // file. The user's original file is not deleted by this validation.
+    let metadata = fs::symlink_metadata(path).map_err(estr)?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() || metadata.len() < 12 {
+        return Err("The recording file is missing, truncated, or not a regular file".into());
+    }
+    let size_bytes = metadata.len();
     let id = Uuid::new_v4().to_string();
     let name = path
         .file_stem()

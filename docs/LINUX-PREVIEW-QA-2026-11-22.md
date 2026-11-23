@@ -78,3 +78,8 @@ and ARM64 are separate future build targets and cannot be delivered by
 renaming the x86_64 executable. An AppImage is portable across many compatible
 Linux environments but still requires the right CPU, glibc, WebKitGTK and
 capture/portal support. Avoid promising it works on every distribution.
+
+The recorder also syncs finalized MP4/GIF output to disk before inserting a
+SQLite gallery row; failed syncs are recorded as failures rather than falsely
+reported as completed media. Gallery registration rejects zero-byte/truncated
+outputs and symlinks, without deleting any original file supplied to it.
