@@ -137,6 +137,25 @@ mod tests {
         assert!(validate_ids(&too_many).is_err());
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn symbolic_links_cannot_be_batch_exported() {
+        use std::os::unix::fs::symlink;
+        let dir = std::env::temp_dir().join(format!(
+            "snapvere-pro-links-{}",
+            uuid::Uuid::new_v4()
+        ));
+        fs::create_dir(&dir).expect("create test directory");
+        let secret = dir.join("secret.png");
+        let link = dir.join("gallery.png");
+        let dest = dir.join("export.png");
+        fs::write(&secret, b"private data").expect("seed secret");
+        symlink(&secret, &link).expect("symlink fixture");
+        assert!(copy_exclusively(&link, &dest).is_err());
+        assert!(!dest.exists());
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
     #[test]
     fn source_overwrite_is_rejected_and_only_whitelisted_media_exports() {
         let dir = std::env::temp_dir().join(format!("snapvere-pro-batch-{}", uuid::Uuid::new_v4()));

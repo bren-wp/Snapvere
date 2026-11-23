@@ -84,6 +84,8 @@ jobs:
         run: python tools/check_public_distribution.py
       - name: Verify all frontend IPC commands are registered by Rust
         run: python tools/check_ipc_contract.py
+      - name: Enforce separate Free/Pro identity, package and native security contracts
+        run: python tools/check_edition_distribution.py
       - name: Enforce per-window Tauri capability isolation
         run: python tools/check_tauri_capabilities.py
       - name: Reject unsafe dependency updater permissions and version drift

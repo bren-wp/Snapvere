@@ -302,3 +302,20 @@ The separately deployed public snapvere.com currently serves a different impleme
 - Harden crash-recovery of deleted media: reject a staged file replaced with a directory or symlink before restoring it into the gallery, leave the durable journal pending, and recover normally once the valid staged file returns. Add a portable restart/recovery regression test.
 
 - Polish Viewer accessibility: modal overlay now receives initial keyboard focus, keeps Tab/Shift+Tab inside its controls, restores focus to the launching gallery card after close, and honors Escape even while the recording scrubber is focused. This changes no visible layout; add focused-dialog boundary regression tests.
+
+## Edition package and security hardening — v0.2.28 preview
+
+Pro adds native-only multi-selection and local batch gallery export with an
+OS folder picker, a maximum of 100 registered UUIDs, exclusive destination
+creation, format and symlink checks, local streaming copy and durable sync.
+The existing Free executable always rejects the Pro native IPC, independent
+of a modified WebView or user-configurable settings. Pro also includes its
+own title and app-data identifier; it has no cloud access or activation server.
+
+The v0.2.28 release job now builds and runs native tests for **both** editions
+and stages six Windows and four Linux artifacts. The release remains a private
+**draft** until actual assets, dependency inventory and SHA-256 manifest have
+been checked. Only then is it published as an **unsigned prerelease**. The
+legacy Free updater remains version-notification-only; Pro has no dedicated
+remote updater. Fedora RPM remains internal QA-only and 32-bit/ARM64 require
+new binaries, not renamed files.
