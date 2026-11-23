@@ -286,7 +286,8 @@ mod tests {
 
     #[test]
     fn image_presets_resize_without_upscaling_or_overwriting_sources() {
-        let dir = std::env::temp_dir().join(format!("snapvere-pro-images-{}", uuid::Uuid::new_v4()));
+        let dir =
+            std::env::temp_dir().join(format!("snapvere-pro-images-{}", uuid::Uuid::new_v4()));
         fs::create_dir(&dir).expect("create fixture");
         let source = dir.join("source.png");
         let target = dir.join("resized.png");
@@ -312,13 +313,10 @@ mod tests {
         let decoded = image::open(&webp).unwrap().to_rgba8();
         assert_eq!(decoded.dimensions(), (1600, 800));
         assert_eq!(*decoded.get_pixel(0, 0), image::Rgba([25, 50, 75, 128]));
-        assert!(transform_exclusively(
-            &source,
-            &target,
-            image::ImageFormat::Png,
-            BatchPreset::Png,
-        )
-        .is_err());
+        assert!(
+            transform_exclusively(&source, &target, image::ImageFormat::Png, BatchPreset::Png,)
+                .is_err()
+        );
         assert_eq!(fs::read(&source).unwrap(), before);
         assert!(BatchPreset::parse("arbitrary-path").is_err());
         assert!(still_format("gif").is_err());
