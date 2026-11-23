@@ -479,16 +479,18 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $tag = 'v${{ steps.version.outputs.value }}'
           $repo = '${{ github.repository }}'
-          $release = gh api "repos/$repo/releases/tags/$tag" | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0) { throw "Cannot read release $tag" }
-          if (-not $release.prerelease) {
-            gh release edit $tag --repo $repo --prerelease
-            if ($LASTEXITCODE -ne 0) { throw "Cannot correct prerelease flag $tag" }
-            $release = gh api "repos/$repo/releases/tags/$tag" | ConvertFrom-Json
-            if ($LASTEXITCODE -ne 0) { throw "Cannot verify prerelease flag $tag" }
-          }
+          # GitHub's tag-based release endpoint may return HTTP 404 for drafts
+          # that do not yet have a published tag ref. Locate the private draft
+          # by its tag_name in the authenticated release collection instead.
+          $releases = @(gh api "repos/$repo/releases?per_page=100" | ConvertFrom-Json)
+          if ($LASTEXITCODE -ne 0) { throw "Cannot inspect draft releases for $repo" }
+          $matches = @($releases | Where-Object { $_.tag_name -eq $tag })
+          if ($matches.Count -ne 1) { throw "Expected exactly one draft release for $tag; found $($matches.Count)" }
+          $release = $matches[0]
+          $releaseId = [long]$release.id
+          if ($releaseId -le 0) { throw "Invalid draft release ID for $tag" }
           if (-not $release.draft -or -not $release.prerelease) {
-            throw "Release $tag must remain a private draft until asset verification completes"
+            throw "Release $tag must remain a private prerelease draft until asset verification completes"
           }
           # Publishing an installer-only release is a failure: every browser
           # extension, the update notice, the SBOM and the hashes must ship.
@@ -532,10 +534,17 @@ jobs:
             throw "Published release assets are not fully covered by SHA256SUMS.txt"
           }
           Write-Host "Verified $($requiredAssets.Count) draft assets and SHA-256 coverage"
-          gh release edit $tag --repo $repo --draft=false --prerelease
+          # Publish exactly the already-verified draft ID, never an accidentally
+          # created release with the same name or an unverified asset set.
+          $published = gh api --method PATCH "repos/$repo/releases/$releaseId" -F draft=false -F prerelease=true | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0) { throw "Unable to publish verified prerelease $tag" }
-          $published = gh api "repos/$repo/releases/tags/$tag" | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0 -or $published.draft -or -not $published.prerelease) {
-            throw "Published release must remain a prerelease, not stable"
+          if ($published.id -ne $releaseId -or $published.tag_name -ne $tag -or
+              $published.draft -or -not $published.prerelease) {
+            throw "Published release identity or prerelease status is incorrect"
           }
-          Write-Host "Published verified Free and Pro prerelease packages: $tag"
+          $verified = gh api "repos/$repo/releases/$releaseId" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $verified.id -ne $releaseId -or
+              $verified.tag_name -ne $tag -or $verified.draft -or -not $verified.prerelease) {
+            throw "Published release cannot be verified by immutable release ID"
+          }
+          Write-Host "Published verified Free and Pro prerelease packages: $tag (id=$releaseId)"
