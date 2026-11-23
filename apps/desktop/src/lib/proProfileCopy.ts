@@ -1,6 +1,6 @@
 // Snapvere by Brendigo
 import type { Language } from "./i18n";
-const names = ["title","description","tutorial","presentation","compact","save","apply","clear","empty","saved","applied","cleared","failed","linux"] as const;
+const names = ["title","description","tutorial","presentation","compact","save","apply","clear","empty","saved","applied","cleared","failed","linux","webinar","smooth","archive","social","detailedGif"] as const;
 type Texts = Record<(typeof names)[number], string>;
 const strings: Record<Language, Texts> = Object.fromEntries(
 [
@@ -8,7 +8,7 @@ const strings: Record<Language, Texts> = Object.fromEntries(
     "en",
     [
       "Recording profiles",
-      "Built-in presets and three private profiles stored only on this device.",
+      "Eight recording presets and six private profiles stored only on this device.",
       "Tutorial",
       "Presentation",
       "Compact GIF",
@@ -20,14 +20,19 @@ const strings: Record<Language, Texts> = Object.fromEntries(
       "Profile applied.",
       "Profile removed.",
       "Unable to save profile.",
-      "On Linux only silent GIF recording is available."
+      "On Linux only silent GIF recording is available.",
+      "Webinar",
+      "Smooth 60 FPS",
+      "Maximum detail",
+      "Social clip",
+      "Detailed GIF"
     ]
   ],
   [
     "hr",
     [
       "Profili snimanja",
-      "Gotove postavke i tri privatna profila spremljena samo na uređaju.",
+      "Osam postavki snimanja i šest privatnih profila na uređaju.",
       "Vodič",
       "Prezentacija",
       "Mali GIF",
@@ -39,14 +44,19 @@ const strings: Record<Language, Texts> = Object.fromEntries(
       "Profil primijenjen.",
       "Profil uklonjen.",
       "Profil nije moguće spremiti.",
-      "Na Linuxu je dostupno samo GIF snimanje bez zvuka."
+      "Na Linuxu je dostupno samo GIF snimanje bez zvuka.",
+      "Webinar",
+      "Glatko 60 FPS",
+      "Najviša kvaliteta",
+      "Kratki video",
+      "Detaljni GIF"
     ]
   ],
   [
     "de",
     [
       "Aufnahmeprofile",
-      "Vorlagen und drei private Profile nur auf diesem Gerät.",
+      "Acht Vorlagen und sechs private Profile nur auf diesem Gerät.",
       "Anleitung",
       "Präsentation",
       "Kompaktes GIF",
@@ -58,14 +68,19 @@ const strings: Record<Language, Texts> = Object.fromEntries(
       "Profil angewendet.",
       "Profil gelöscht.",
       "Profil konnte nicht gespeichert werden.",
-      "Unter Linux ist nur GIF ohne Ton verfügbar."
+      "Unter Linux ist nur GIF ohne Ton verfügbar.",
+      "Webinar",
+      "Flüssig 60 FPS",
+      "Maximale Qualität",
+      "Social Clip",
+      "Detail-GIF"
     ]
   ],
   [
     "es",
     [
       "Perfiles de grabación",
-      "Ajustes predefinidos y tres perfiles privados guardados en este dispositivo.",
+      "Ocho ajustes y seis perfiles privados guardados en este dispositivo.",
       "Tutorial",
       "Presentación",
       "GIF compacto",
@@ -77,14 +92,19 @@ const strings: Record<Language, Texts> = Object.fromEntries(
       "Perfil aplicado.",
       "Perfil borrado.",
       "No se pudo guardar el perfil.",
-      "En Linux solo está disponible GIF sin sonido."
+      "En Linux solo está disponible GIF sin sonido.",
+      "Seminario web",
+      "Fluido 60 FPS",
+      "Máxima calidad",
+      "Clip social",
+      "GIF detallado"
     ]
   ],
   [
     "fr",
     [
       "Profils d’enregistrement",
-      "Préréglages et trois profils privés conservés sur cet appareil.",
+      "Huit préréglages et six profils privés sur cet appareil.",
       "Tutoriel",
       "Présentation",
       "GIF compact",
@@ -96,14 +116,19 @@ const strings: Record<Language, Texts> = Object.fromEntries(
       "Profil appliqué.",
       "Profil effacé.",
       "Impossible d’enregistrer le profil.",
-      "Sous Linux, seul le GIF sans son est disponible."
+      "Sous Linux, seul le GIF sans son est disponible.",
+      "Webinaire",
+      "Fluide 60 FPS",
+      "Qualité maximale",
+      "Clip social",
+      "GIF détaillé"
     ]
   ],
   [
     "it",
     [
       "Profili di registrazione",
-      "Preimpostazioni e tre profili privati salvati solo sul dispositivo.",
+      "Otto preset e sei profili privati salvati sul dispositivo.",
       "Tutorial",
       "Presentazione",
       "GIF compatto",
@@ -115,14 +140,19 @@ const strings: Record<Language, Texts> = Object.fromEntries(
       "Profilo applicato.",
       "Profilo cancellato.",
       "Impossibile salvare il profilo.",
-      "Su Linux è disponibile solo GIF senza audio."
+      "Su Linux è disponibile solo GIF senza audio.",
+      "Webinar",
+      "Fluido 60 FPS",
+      "Qualità massima",
+      "Clip social",
+      "GIF dettagliata"
     ]
   ],
   [
     "pt",
     [
       "Perfis de gravação",
-      "Predefinições e três perfis privados guardados neste dispositivo.",
+      "Oito predefinições e seis perfis privados guardados neste dispositivo.",
       "Tutorial",
       "Apresentação",
       "GIF compacto",
@@ -134,14 +164,19 @@ const strings: Record<Language, Texts> = Object.fromEntries(
       "Perfil aplicado.",
       "Perfil removido.",
       "Não foi possível guardar o perfil.",
-      "No Linux só existe gravação GIF sem som."
+      "No Linux só existe gravação GIF sem som.",
+      "Webinar",
+      "Fluido 60 FPS",
+      "Qualidade máxima",
+      "Clipe social",
+      "GIF detalhado"
     ]
   ],
   [
     "nl",
     [
       "Opnameprofielen",
-      "Voorinstellingen en drie privéprofielen, alleen lokaal opgeslagen.",
+      "Acht voorinstellingen en zes privéprofielen, alleen lokaal opgeslagen.",
       "Handleiding",
       "Presentatie",
       "Compacte GIF",
@@ -153,14 +188,19 @@ const strings: Record<Language, Texts> = Object.fromEntries(
       "Profiel toegepast.",
       "Profiel gewist.",
       "Kan profiel niet opslaan.",
-      "Op Linux is alleen GIF zonder geluid beschikbaar."
+      "Op Linux is alleen GIF zonder geluid beschikbaar.",
+      "Webinar",
+      "Vloeiend 60 FPS",
+      "Maximale kwaliteit",
+      "Sociale clip",
+      "Gedetailleerde GIF"
     ]
   ],
   [
     "pl",
     [
       "Profile nagrywania",
-      "Gotowe ustawienia i trzy prywatne profile zapisane na urządzeniu.",
+      "Osiem ustawień i sześć prywatnych profili zapisanych na urządzeniu.",
       "Samouczek",
       "Prezentacja",
       "Mały GIF",
@@ -172,14 +212,19 @@ const strings: Record<Language, Texts> = Object.fromEntries(
       "Profil zastosowany.",
       "Profil usunięty.",
       "Nie można zapisać profilu.",
-      "Na Linuxie dostępny jest tylko GIF bez dźwięku."
+      "Na Linuxie dostępny jest tylko GIF bez dźwięku.",
+      "Webinarium",
+      "Płynne 60 FPS",
+      "Maksymalna jakość",
+      "Klip społecznościowy",
+      "Szczegółowy GIF"
     ]
   ],
   [
     "cs",
     [
       "Profily nahrávání",
-      "Předvolby a tři soukromé profily uložené pouze v zařízení.",
+      "Osm předvoleb a šest soukromých profilů uložených v zařízení.",
       "Návod",
       "Prezentace",
       "Malý GIF",
@@ -191,14 +236,19 @@ const strings: Record<Language, Texts> = Object.fromEntries(
       "Profil použit.",
       "Profil smazán.",
       "Profil nelze uložit.",
-      "V Linuxu je dostupný jen GIF bez zvuku."
+      "V Linuxu je dostupný jen GIF bez zvuku.",
+      "Webinář",
+      "Plynulých 60 FPS",
+      "Maximální kvalita",
+      "Krátký klip",
+      "Detailní GIF"
     ]
   ],
   [
     "sk",
     [
       "Profily nahrávania",
-      "Predvoľby a tri súkromné profily uložené iba v zariadení.",
+      "Osem predvolieb a šesť súkromných profilov v zariadení.",
       "Návod",
       "Prezentácia",
       "Malý GIF",
@@ -210,14 +260,19 @@ const strings: Record<Language, Texts> = Object.fromEntries(
       "Profil použitý.",
       "Profil vymazaný.",
       "Profil sa nedá uložiť.",
-      "V Linuxe je dostupný iba GIF bez zvuku."
+      "V Linuxe je dostupný iba GIF bez zvuku.",
+      "Webinár",
+      "Plynulých 60 FPS",
+      "Maximálna kvalita",
+      "Krátky klip",
+      "Detailný GIF"
     ]
   ],
   [
     "sl",
     [
       "Profili snemanja",
-      "Prednastavitve in trije zasebni profili, shranjeni samo v napravi.",
+      "Osem prednastavitev in šest zasebnih profilov v napravi.",
       "Vodič",
       "Predstavitev",
       "Majhen GIF",
@@ -229,7 +284,12 @@ const strings: Record<Language, Texts> = Object.fromEntries(
       "Profil uporabljen.",
       "Profil počiščen.",
       "Profila ni mogoče shraniti.",
-      "V Linuxu je na voljo samo GIF brez zvoka."
+      "V Linuxu je na voljo samo GIF brez zvoka.",
+      "Spletni seminar",
+      "Gladko 60 FPS",
+      "Najvišja kakovost",
+      "Kratek posnetek",
+      "Podroben GIF"
     ]
   ]
 ]
