@@ -832,3 +832,31 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .snapvere-pro-shell .snapvere-app-brandbar-end { flex-wrap: wrap; justify-content: flex-end; }
   .snapvere-pro-edition-mark { font-size: 9px; }
 }
+
+
+/* Compact, read-only Pro insights: statistics always describe loaded gallery items. */
+.snapvere-pro-insights {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  min-height: 40px;
+  padding: 9px 13px;
+  border: 1px solid rgba(228, 184, 108, .25);
+  border-radius: 12px;
+  background: rgba(228, 184, 108, .06);
+  color: rgb(var(--snapvere-muted));
+  font-size: 11px;
+}
+.snapvere-pro-insights-title {
+  font-weight: 800;
+  color: #f2cf93;
+  letter-spacing: .03em;
+}
+.snapvere-pro-insights strong { color: rgb(var(--snapvere-text)); font-variant-numeric: tabular-nums; }
+[data-theme="light"] .snapvere-pro-insights { border-color: rgba(130, 92, 34, .22); background: rgba(228, 184, 108, .1); }
+[data-theme="light"] .snapvere-pro-insights-title { color: #77501b; }
+@media (max-width: 620px) {
+  .snapvere-pro-insights { gap: 6px 12px; }
+  .snapvere-pro-insights-title { flex-basis: 100%; }
+}
