@@ -33,6 +33,7 @@ import type { RecordDone, Screenshot } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
 import { APP_NAME, IS_PRO } from "../lib/edition";
 import { proGalleryCopy } from "../lib/proGalleryCopy";
+import { selectProBatch } from "../lib/proSelection";
 import Viewer from "../components/Viewer";
 import CaptureCard from "../components/home/CaptureCard";
 import EmptyGallery from "../components/home/EmptyGallery";
@@ -568,11 +569,16 @@ export default function Home() {
           <span className="mr-auto font-medium" aria-live="polite">{proText.count(proSelected.size)}</span>
           <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
             disabled={proExportBusy || visible.length === 0}
-            onClick={() => {
-              const next = new Set(proSelected);
-              for (const item of visible) { if (next.size >= 100) break; next.add(item.id); }
-              setProSelected(next);
-            }}>{proText.selectLoaded}</button>
+            onClick={() => setProSelected(current => selectProBatch(current, visible, "all"))}>{proText.selectLoaded}</button>
+          <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
+            disabled={proExportBusy || visible.length === 0}
+            onClick={() => setProSelected(current => selectProBatch(current, visible, "images"))}>{proText.imagesOnly}</button>
+          <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
+            disabled={proExportBusy || visible.length === 0}
+            onClick={() => setProSelected(current => selectProBatch(current, visible, "videos"))}>{proText.videosOnly}</button>
+          <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
+            disabled={proExportBusy || visible.length === 0}
+            onClick={() => setProSelected(current => selectProBatch(current, visible, "invert"))}>{proText.invert}</button>
           <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
             disabled={proExportBusy || proSelected.size === 0}
             onClick={() => setProSelected(new Set())}>{proText.clear}</button>
