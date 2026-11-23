@@ -426,7 +426,7 @@ jobs:
             - **Snapvere-Linux-x86_64.AppImage** — Linux x86_64 preview AppImage (requires compatible system libraries)
             - **Snapvere-Pro-Portable.exe / Snapvere-Pro-Setup.exe / Snapvere-Pro-Setup.msi** — separate Pro Windows x64 build and installers
             - **Snapvere-Pro-Linux-amd64.deb / Snapvere-Pro-Linux-x86_64.AppImage** — separate Pro Linux x64 preview packages
-            - **Snapvere Pro features** — professional recording presets, three local saved profiles and native-only batch export to a folder selected by the user
+            - **Snapvere Pro features** — eight recording presets, six locally saved profiles, a distinct Pro Studio workspace, type-filtered gallery selection and native-only batch export of up to 100 captures
             - **Pro preview** — not a paid, entitlement-enforced release. No activation or account backend is implemented.
             - **SHA256SUMS.txt** — integrity checksums for all packages and the dependency inventory
             - **Snapvere-SBOM.cdx.json** — reproducible CycloneDX 1.6 dependency inventory from npm and Cargo lockfiles
