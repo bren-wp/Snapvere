@@ -462,7 +462,7 @@ export default function Home() {
         </div>
         {IS_PRO && (
           <div className="snapvere-pro-ribbon" role="group" aria-label={proText.studioTitle}>
-            <span className="snapvere-pro-ribbon-label">PRO STUDIO</span>
+            <span className="snapvere-pro-ribbon-label">{APP_NAME}</span>
             <button type="button" className="snapvere-pro-ribbon-action"
               onClick={() => void openSettings("recording")}>{proText.profiles}</button>
             <button type="button" className="snapvere-pro-ribbon-action"
