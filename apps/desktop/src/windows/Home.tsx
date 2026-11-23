@@ -5,7 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { readCapturePreferences } from "../lib/capturePreferencesStore";
 import { clipboardImportCopy } from "../lib/clipboardImportCopy";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import {
   ArrowUpRight,
   Crop,
@@ -361,16 +361,17 @@ export default function Home() {
       setToast(t("Cannot open capture folder:"));
     }
   };
-  const openSettings = async () => {
+  const openSettings = async (tab: "capture" | "recording" = "capture") => {
     try {
       const existing = await WebviewWindow.getByLabel("settings");
       if (existing) {
         await existing.show();
         await existing.setFocus();
+        await emit("snapvere:settings-tab", tab);
         return;
       }
       const settingsWindow = new WebviewWindow("settings", {
-        url: "index.html#settings",
+        url: `index.html#settings?tab=${tab}`,
         title: `Snapvere — ${t("Settings")}`,
         width: 860,
         height: 660,
@@ -404,7 +405,7 @@ export default function Home() {
           </div>
           <button
             type="button"
-            onClick={openSettings}
+            onClick={() => void openSettings()}
             aria-label={t("Settings")}
             className="snapvere-btn-secondary snapvere-workspace-settings"
           >
@@ -460,7 +461,7 @@ export default function Home() {
           <div className="snapvere-pro-ribbon" role="group" aria-label={proText.studioTitle}>
             <span className="snapvere-pro-ribbon-label">PRO STUDIO</span>
             <button type="button" className="snapvere-pro-ribbon-action"
-              onClick={() => void openSettings()}>{proText.profiles}</button>
+              onClick={() => void openSettings("recording")}>{proText.profiles}</button>
             <button type="button" className="snapvere-pro-ribbon-action"
               onClick={() => { setProBatchMode(true); setProSelected(new Set()); }}>{proText.batchTools}</button>
           </div>
