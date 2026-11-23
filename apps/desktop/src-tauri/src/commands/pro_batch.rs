@@ -98,16 +98,22 @@ fn transform_exclusively(
     preset: BatchPreset,
 ) -> Result<(), String> {
     let mut decoded = read_bounded_image(source, source_format)?;
-    if let Some(edge) = preset.max_edge() {
-        if decoded.width() > edge || decoded.height() > edge {
-            decoded = decoded.resize(edge, edge, image::imageops::FilterType::Lanczos3);
-        }
+    if let Some(edge) = preset
+        .max_edge()
+        .filter(|edge| decoded.width() > *edge || decoded.height() > *edge)
+    {
+        decoded = decoded.resize(edge, edge, image::imageops::FilterType::Lanczos3);
     }
     let format = match preset {
         BatchPreset::Png | BatchPreset::Png1280 => image::ImageFormat::Png,
         BatchPreset::Webp1920 => image::ImageFormat::WebP,
         BatchPreset::Original => return Err("Original preset requires byte-for-byte copy".into()),
     };
+    // WebP accepts RGB/RGBA8, not grayscale or 16-bit source buffers.
+    // Normalize only for WebP so PNG exports retain their original bit depth.
+    if format == image::ImageFormat::WebP {
+        decoded = image::DynamicImage::ImageRgba8(decoded.into_rgba8());
+    }
     let file = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -310,12 +316,34 @@ mod tests {
             &source,
             &target,
             image::ImageFormat::Png,
-            BatchPreset::Png
+            BatchPreset::Png,
         )
         .is_err());
         assert_eq!(fs::read(&source).unwrap(), before);
         assert!(BatchPreset::parse("arbitrary-path").is_err());
         assert!(still_format("gif").is_err());
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn grayscale_png_is_supported_by_the_webp_preset() {
+        let dir = std::env::temp_dir().join(format!("snapvere-pro-gray-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&dir).expect("create fixture");
+        let source = dir.join("gray.png");
+        let output = dir.join("gray.webp");
+        image::GrayImage::from_pixel(8, 4, image::Luma([123]))
+            .save(&source)
+            .expect("create grayscale source");
+        transform_exclusively(
+            &source,
+            &output,
+            image::ImageFormat::Png,
+            BatchPreset::Webp1920,
+        )
+        .expect("convert grayscale");
+        let decoded = image::open(&output).unwrap().to_rgba8();
+        assert_eq!(decoded.dimensions(), (8, 4));
+        assert_eq!(*decoded.get_pixel(0, 0), image::Rgba([123, 123, 123, 255]));
         fs::remove_dir_all(dir).expect("cleanup");
     }
 
