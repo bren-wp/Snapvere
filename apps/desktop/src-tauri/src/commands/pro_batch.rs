@@ -141,10 +141,7 @@ mod tests {
     #[test]
     fn symbolic_links_cannot_be_batch_exported() {
         use std::os::unix::fs::symlink;
-        let dir = std::env::temp_dir().join(format!(
-            "snapvere-pro-links-{}",
-            uuid::Uuid::new_v4()
-        ));
+        let dir = std::env::temp_dir().join(format!("snapvere-pro-links-{}", uuid::Uuid::new_v4()));
         fs::create_dir(&dir).expect("create test directory");
         let secret = dir.join("secret.png");
         let link = dir.join("gallery.png");
