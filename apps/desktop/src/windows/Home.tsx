@@ -34,6 +34,8 @@ import WindowFrame from "../components/WindowFrame";
 import { APP_NAME, IS_PRO } from "../lib/edition";
 import { proGalleryCopy } from "../lib/proGalleryCopy";
 import { selectProBatch } from "../lib/proSelection";
+import { summarizeProGallery } from "../lib/proInsights";
+import { formatMediaSize } from "../lib/mediaFormatting";
 import Viewer from "../components/Viewer";
 import CaptureCard from "../components/home/CaptureCard";
 import EmptyGallery from "../components/home/EmptyGallery";
@@ -212,6 +214,7 @@ export default function Home() {
   // SQL applies the selected category before LIMIT/OFFSET, so older media
   // cannot disappear merely because recent captures belong to another kind.
   const visible = items;
+  const proInsights = IS_PRO ? summarizeProGallery(visible) : null;
 
   const toggleProItem = (id: string) => {
     if (!IS_PRO) return;
@@ -574,6 +577,15 @@ export default function Home() {
         </div>
       </section>
 
+      {IS_PRO && proInsights && !proBatchMode && (
+        <section className="snapvere-pro-insights mx-5 mb-3" aria-label={proText.insightsTitle}>
+          <span className="snapvere-pro-insights-title">{proText.insightsTitle}</span>
+          <span>{proText.insightsImages}: <strong>{proInsights.images}</strong></span>
+          <span>{proText.insightsVideos}: <strong>{proInsights.recordings}</strong></span>
+          <span>{proText.insightsTagged}: <strong>{proInsights.tagged}</strong></span>
+          <span>{proText.insightsSize}: <strong>{formatMediaSize(proInsights.sizeBytes, language)}</strong></span>
+        </section>
+      )}
       {IS_PRO && proBatchMode && (
         <div className="mx-5 mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-elevated/85 px-4 py-3 text-sm">
           <span className="mr-auto font-medium" aria-live="polite">{proText.count(proSelected.size)}</span>
