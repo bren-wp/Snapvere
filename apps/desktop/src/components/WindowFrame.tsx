@@ -2,7 +2,7 @@
 import React from "react";
 import BrandMark from "./BrandMark";
 import { useLanguage } from "../lib/LanguageProvider";
-import { IS_PRO } from "../lib/edition";
+import { APP_NAME, IS_PRO } from "../lib/edition";
 
 /**
  * Shared brand shell for Home, Settings and Editor.
@@ -27,7 +27,7 @@ export default function WindowFrame({
           </div>
         </div>
         <div className="snapvere-app-brandbar-end">
-          {IS_PRO && <span className="snapvere-pro-edition-mark" aria-label="Snapvere Pro edition">PRO STUDIO</span>}
+          {IS_PRO && <span className="snapvere-pro-edition-mark" aria-label={APP_NAME}>{APP_NAME}</span>}
           <span className="snapvere-app-context">{context}</span>
 
         </div>
