@@ -1,5 +1,13 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.30 — Pro batch workspace (development)
+
+- Add Pro selection of captures from the last seven days, files of at least 10 MiB, and items without tags; all twelve locales supported.
+- Show known selected loaded bytes and selected IDs outside the current loaded gallery, with explicit keep-loaded-only action. No disk or network scan.
+- Fix inversion at the 100-item cap by freeing old loaded slots before selecting replacements. Duplicate gallery IDs no longer toggle twice.
+- Guard batch export with an immediate lock; prevent duplicate export requests, batch exit and selection changes during export. Block gallery deletion while the export dialog or copy is active.
+- Preserve Free workflows, native Pro gating, offline export, and all ten platform packages. CI and native QA required before publication.
+
 
 ## v0.2.29 — Pro Studio and release reliability (preview)
 

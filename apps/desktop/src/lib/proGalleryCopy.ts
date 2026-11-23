@@ -1,6 +1,6 @@
 // Snapvere by Brendigo
 import type { Language } from "./i18n";
-const keys = ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","exportedSuffix","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools","recent","tagged","insightsTitle","insightsImages","insightsVideos","insightsTagged","insightsSize"] as const;
+const keys = ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","exportedSuffix","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools","recent","tagged","insightsTitle","insightsImages","insightsVideos","insightsTagged","insightsSize","advancedSelection","lastWeek","largeFiles","untagged","hiddenSelection","keepLoaded","loadedSelectionSize"] as const;
 type Copy = Record<(typeof keys)[number], string>;
 const translations: Record<Language, Copy> = Object.fromEntries(
 [
@@ -30,7 +30,14 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Images",
       "Recordings",
       "Tagged",
-      "Storage"
+      "Storage",
+      "More selection options",
+      "Last 7 days",
+      "10 MiB or larger",
+      "Without tags",
+      "Outside loaded results",
+      "Keep loaded only",
+      "Known loaded selection size"
     ]
   ],
   [
@@ -59,7 +66,14 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Slike",
       "Snimke",
       "S oznakama",
-      "Prostor"
+      "Prostor",
+      "Dodatne mogućnosti odabira",
+      "Zadnjih 7 dana",
+      "10 MiB ili više",
+      "Bez oznaka",
+      "Izvan učitanih rezultata",
+      "Zadrži samo učitane",
+      "Poznata veličina učitanog odabira"
     ]
   ],
   [
@@ -88,7 +102,14 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Bilder",
       "Aufnahmen",
       "Markiert",
-      "Speicher"
+      "Speicher",
+      "Weitere Auswahloptionen",
+      "Letzte 7 Tage",
+      "10 MiB oder größer",
+      "Ohne Tags",
+      "Außerhalb geladener Ergebnisse",
+      "Nur geladene behalten",
+      "Bekannte Größe der geladenen Auswahl"
     ]
   ],
   [
@@ -117,7 +138,14 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Imágenes",
       "Grabaciones",
       "Etiquetadas",
-      "Espacio"
+      "Espacio",
+      "Más opciones de selección",
+      "Últimos 7 días",
+      "10 MiB o más",
+      "Sin etiquetas",
+      "Fuera de resultados cargados",
+      "Conservar solo cargadas",
+      "Tamaño conocido de la selección cargada"
     ]
   ],
   [
@@ -146,7 +174,14 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Images",
       "Enregistrements",
       "Étiquetés",
-      "Stockage"
+      "Stockage",
+      "Autres options de sélection",
+      "7 derniers jours",
+      "10 Mio ou plus",
+      "Sans étiquette",
+      "Hors résultats chargés",
+      "Garder uniquement les éléments chargés",
+      "Taille connue de la sélection chargée"
     ]
   ],
   [
@@ -175,7 +210,14 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Immagini",
       "Registrazioni",
       "Etichettati",
-      "Spazio"
+      "Spazio",
+      "Altre opzioni di selezione",
+      "Ultimi 7 giorni",
+      "10 MiB o più",
+      "Senza etichette",
+      "Fuori dai risultati caricati",
+      "Mantieni solo le caricate",
+      "Dimensione nota della selezione caricata"
     ]
   ],
   [
@@ -204,7 +246,14 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Imagens",
       "Gravações",
       "Etiquetados",
-      "Espaço"
+      "Espaço",
+      "Mais opções de seleção",
+      "Últimos 7 dias",
+      "10 MiB ou mais",
+      "Sem etiquetas",
+      "Fora dos resultados carregados",
+      "Manter apenas carregadas",
+      "Tamanho conhecido da seleção carregada"
     ]
   ],
   [
@@ -233,7 +282,14 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Afbeeldingen",
       "Opnames",
       "Labels",
-      "Opslag"
+      "Opslag",
+      "Meer selectieopties",
+      "Laatste 7 dagen",
+      "10 MiB of groter",
+      "Zonder labels",
+      "Buiten geladen resultaten",
+      "Alleen geladen behouden",
+      "Bekende grootte van geladen selectie"
     ]
   ],
   [
@@ -262,7 +318,14 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Obrazy",
       "Nagrania",
       "Oznaczone",
-      "Miejsce"
+      "Miejsce",
+      "Więcej opcji wyboru",
+      "Ostatnie 7 dni",
+      "10 MiB lub więcej",
+      "Bez tagów",
+      "Poza wczytanymi wynikami",
+      "Zachowaj tylko wczytane",
+      "Znany rozmiar wczytanego wyboru"
     ]
   ],
   [
@@ -291,7 +354,14 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Obrázky",
       "Nahrávky",
       "Se štítky",
-      "Místo"
+      "Místo",
+      "Další možnosti výběru",
+      "Posledních 7 dní",
+      "10 MiB nebo více",
+      "Bez štítků",
+      "Mimo načtené výsledky",
+      "Ponechat jen načtené",
+      "Známá velikost načteného výběru"
     ]
   ],
   [
@@ -320,7 +390,14 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Obrázky",
       "Nahrávky",
       "Označené",
-      "Miesto"
+      "Miesto",
+      "Ďalšie možnosti výberu",
+      "Posledných 7 dní",
+      "10 MiB alebo viac",
+      "Bez značiek",
+      "Mimo načítaných výsledkov",
+      "Ponechať len načítané",
+      "Známa veľkosť načítaného výberu"
     ]
   ],
   [
@@ -349,7 +426,14 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Slike",
       "Posnetki",
       "Z oznakami",
-      "Prostor"
+      "Prostor",
+      "Več možnosti izbire",
+      "Zadnjih 7 dni",
+      "10 MiB ali več",
+      "Brez oznak",
+      "Zunaj naloženih rezultatov",
+      "Obdrži samo naložene",
+      "Znana velikost naložene izbire"
     ]
   ]
 ]
