@@ -1,6 +1,6 @@
 // Snapvere by Brendigo
 import type { Language } from "./i18n";
-const keys = ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","exportedSuffix","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools","recent","tagged","insightsTitle","insightsImages","insightsVideos","insightsTagged","insightsSize","advancedSelection","lastWeek","largeFiles","untagged","hiddenSelection","keepLoaded","loadedSelectionSize"] as const;
+const keys = ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","exportedSuffix","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools","recent","tagged","insightsTitle","insightsImages","insightsVideos","insightsTagged","insightsSize","advancedSelection","lastWeek","largeFiles","untagged","hiddenSelection","keepLoaded","loadedSelectionSize","exportPreset","originalPreset","pngPreset","png1280Preset","webp1920Preset","imagePresetHelp"] as const;
 type Copy = Record<(typeof keys)[number], string>;
 const translations: Record<Language, Copy> = Object.fromEntries(
 [
@@ -37,7 +37,13 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Without tags",
       "Outside loaded results",
       "Keep loaded only",
-      "Known loaded selection size"
+      "Known loaded selection size",
+      "Export preset",
+      "Original files",
+      "PNG · original dimensions",
+      "PNG · up to 1280 px",
+      "WebP · up to 1920 px",
+      "Image presets require PNG, JPEG or WebP screenshots (up to 64 MiB and 24 megapixels each). No enlargement; recordings require Original files. Originals are preserved."
     ]
   ],
   [
@@ -73,7 +79,13 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Bez oznaka",
       "Izvan učitanih rezultata",
       "Zadrži samo učitane",
-      "Poznata veličina učitanog odabira"
+      "Poznata veličina učitanog odabira",
+      "Predložak izvoza",
+      "Izvorne datoteke",
+      "PNG · izvorne dimenzije",
+      "PNG · do 1280 px",
+      "WebP · do 1920 px",
+      "Predlošci podržavaju PNG, JPEG ili WebP snimke zaslona (do 64 MiB i 24 megapiksela po slici). Bez povećavanja; videozapisi zahtijevaju izvorne datoteke. Izvornici ostaju sačuvani."
     ]
   ],
   [
@@ -109,7 +121,13 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Ohne Tags",
       "Außerhalb geladener Ergebnisse",
       "Nur geladene behalten",
-      "Bekannte Größe der geladenen Auswahl"
+      "Bekannte Größe der geladenen Auswahl",
+      "Exportvorlage",
+      "Originaldateien",
+      "PNG · Originalgröße",
+      "PNG · bis 1280 px",
+      "WebP · bis 1920 px",
+      "Bildvorlagen benötigen PNG-, JPEG- oder WebP-Screenshots (bis 64 MiB und 24 Megapixel je Bild). Keine Vergrößerung; Videos benötigen Originaldateien. Originale bleiben erhalten."
     ]
   ],
   [
@@ -145,7 +163,13 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Sin etiquetas",
       "Fuera de resultados cargados",
       "Conservar solo cargadas",
-      "Tamaño conocido de la selección cargada"
+      "Tamaño conocido de la selección cargada",
+      "Preajuste de exportación",
+      "Archivos originales",
+      "PNG · tamaño original",
+      "PNG · hasta 1280 px",
+      "WebP · hasta 1920 px",
+      "Las plantillas requieren capturas PNG, JPEG o WebP (hasta 64 MiB y 24 megapíxeles por imagen). No se amplían; los vídeos requieren archivos originales. Se conservan los originales."
     ]
   ],
   [
@@ -181,7 +205,13 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Sans étiquette",
       "Hors résultats chargés",
       "Garder uniquement les éléments chargés",
-      "Taille connue de la sélection chargée"
+      "Taille connue de la sélection chargée",
+      "Préréglage d’export",
+      "Fichiers originaux",
+      "PNG · dimensions originales",
+      "PNG · jusqu’à 1280 px",
+      "WebP · jusqu’à 1920 px",
+      "Les préréglages nécessitent des captures PNG, JPEG ou WebP (64 Mio et 24 mégapixels maximum par image). Aucun agrandissement ; les vidéos nécessitent les fichiers originaux. Les originaux sont conservés."
     ]
   ],
   [
@@ -217,7 +247,13 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Senza etichette",
       "Fuori dai risultati caricati",
       "Mantieni solo le caricate",
-      "Dimensione nota della selezione caricata"
+      "Dimensione nota della selezione caricata",
+      "Preset di esportazione",
+      "File originali",
+      "PNG · dimensioni originali",
+      "PNG · fino a 1280 px",
+      "WebP · fino a 1920 px",
+      "I preset richiedono schermate PNG, JPEG o WebP (fino a 64 MiB e 24 megapixel per immagine). Nessun ingrandimento; per i video usare i file originali. Gli originali sono conservati."
     ]
   ],
   [
@@ -253,7 +289,13 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Sem etiquetas",
       "Fora dos resultados carregados",
       "Manter apenas carregadas",
-      "Tamanho conhecido da seleção carregada"
+      "Tamanho conhecido da seleção carregada",
+      "Predefinição de exportação",
+      "Ficheiros originais",
+      "PNG · dimensões originais",
+      "PNG · até 1280 px",
+      "WebP · até 1920 px",
+      "As predefinições exigem capturas PNG, JPEG ou WebP (até 64 MiB e 24 megapíxeis por imagem). Sem ampliação; os vídeos requerem ficheiros originais. Os originais são preservados."
     ]
   ],
   [
@@ -289,7 +331,13 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Zonder labels",
       "Buiten geladen resultaten",
       "Alleen geladen behouden",
-      "Bekende grootte van geladen selectie"
+      "Bekende grootte van geladen selectie",
+      "Exportpreset",
+      "Originele bestanden",
+      "PNG · originele afmetingen",
+      "PNG · tot 1280 px",
+      "WebP · tot 1920 px",
+      "Presets vereisen PNG-, JPEG- of WebP-screenshots (maximaal 64 MiB en 24 megapixels per afbeelding). Geen vergroting; video's vereisen originele bestanden. Originelen blijven behouden."
     ]
   ],
   [
@@ -325,7 +373,13 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Bez tagów",
       "Poza wczytanymi wynikami",
       "Zachowaj tylko wczytane",
-      "Znany rozmiar wczytanego wyboru"
+      "Znany rozmiar wczytanego wyboru",
+      "Ustawienie eksportu",
+      "Pliki oryginalne",
+      "PNG · oryginalny rozmiar",
+      "PNG · do 1280 px",
+      "WebP · do 1920 px",
+      "Ustawienia wymagają zrzutów PNG, JPEG lub WebP (do 64 MiB i 24 megapikseli na obraz). Bez powiększania; filmy wymagają plików oryginalnych. Oryginały pozostają zachowane."
     ]
   ],
   [
@@ -361,7 +415,13 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Bez štítků",
       "Mimo načtené výsledky",
       "Ponechat jen načtené",
-      "Známá velikost načteného výběru"
+      "Známá velikost načteného výběru",
+      "Předvolba exportu",
+      "Původní soubory",
+      "PNG · původní rozměry",
+      "PNG · do 1280 px",
+      "WebP · do 1920 px",
+      "Předvolby vyžadují snímky PNG, JPEG nebo WebP (do 64 MiB a 24 megapixelů na obrázek). Bez zvětšování; videa vyžadují původní soubory. Originály zůstávají zachovány."
     ]
   ],
   [
@@ -397,7 +457,13 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Bez značiek",
       "Mimo načítaných výsledkov",
       "Ponechať len načítané",
-      "Známa veľkosť načítaného výberu"
+      "Známa veľkosť načítaného výberu",
+      "Predvoľba exportu",
+      "Pôvodné súbory",
+      "PNG · pôvodné rozmery",
+      "PNG · do 1280 px",
+      "WebP · do 1920 px",
+      "Predvoľby vyžadujú snímky PNG, JPEG alebo WebP (do 64 MiB a 24 megapixelov na obrázok). Bez zväčšovania; videá vyžadujú pôvodné súbory. Originály zostávajú zachované."
     ]
   ],
   [
@@ -433,7 +499,13 @@ const translations: Record<Language, Copy> = Object.fromEntries(
       "Brez oznak",
       "Zunaj naloženih rezultatov",
       "Obdrži samo naložene",
-      "Znana velikost naložene izbire"
+      "Znana velikost naložene izbire",
+      "Prednastavitev izvoza",
+      "Izvirne datoteke",
+      "PNG · izvirne mere",
+      "PNG · do 1280 px",
+      "WebP · do 1920 px",
+      "Prednastavitve zahtevajo posnetke PNG, JPEG ali WebP (do 64 MiB in 24 milijonov slikovnih pik na sliko). Brez povečevanja; videi zahtevajo izvirne datoteke. Izvirniki ostanejo ohranjeni."
     ]
   ]
 ]

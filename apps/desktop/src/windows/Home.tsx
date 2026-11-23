@@ -53,6 +53,7 @@ export default function Home() {
   const [proBatchMode, setProBatchMode] = useState(false);
   const [proSelected, setProSelected] = useState<Set<string>>(() => new Set());
   const [proExportBusy, setProExportBusy] = useState(false);
+  const [proExportPreset, setProExportPreset] = useState<"original" | "png" | "png1280" | "webp1920">("original");
   const proExportLock = useRef(false);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -234,7 +235,7 @@ export default function Home() {
     proExportLock.current = true;
     setProExportBusy(true);
     try {
-      const count = await ipc.proExportBatch([...proSelected]);
+      const count = await ipc.proExportBatch([...proSelected], proExportPreset);
       if (count > 0) {
         setToast(proText.exported(count));
         setProSelected(new Set());
@@ -640,6 +641,26 @@ export default function Home() {
           <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
             disabled={proExportBusy || proSelected.size === 0}
             onClick={() => setProSelected(new Set())}>{proText.clear}</button>
+          <label className="flex flex-wrap items-center gap-2 text-sm">
+            {proText.exportPreset}
+            <select value={proExportPreset} disabled={proExportBusy}
+              className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
+              onChange={(event) => {
+                const value = event.target.value;
+                if (proExportLock.current) return;
+                if (value === "original" || value === "png" || value === "png1280" || value === "webp1920") {
+                  setProExportPreset(value);
+                }
+              }}>
+              <option value="original">{proText.originalPreset}</option>
+              <option value="png">{proText.pngPreset}</option>
+              <option value="png1280">{proText.png1280Preset}</option>
+              <option value="webp1920">{proText.webp1920Preset}</option>
+            </select>
+          </label>
+          {proExportPreset !== "original" && (
+            <p className="basis-full text-xs text-muted">{proText.imagePresetHelp}</p>
+          )}
           <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm font-semibold"
             disabled={proExportBusy || proSelected.size === 0}
             onClick={() => void exportProSelection()}>
