@@ -93,6 +93,16 @@ An optional update check retrieves version information only.
 Italiano, Português, Nederlands, Polski, Čeština, Slovenčina and Slovenščina.
 The Windows notification-area menu follows the selected language.
 
+## Available native packages and privacy
+
+Snapvere v0.2.26 already has a versioned Windows x86_64 Portable/Setup/MSI
+and Linux x86_64 DEB/AppImage release. Experimental Fedora/RPM packaging is
+under QA in the development branch and is not a supported download yet.
+The app's default mode keeps captures local, without automatic cloud uploads.
+See [platform and transfer security](docs/DISTRIBUTION-PRIVACY-AND-TRANSFERS.md)
+for x86/ARM64 support boundaries and the policy for any future opt-in
+SFTP/cloud transfers.
+
 ## Linux preview (development)
 
 Snapvere now shares the same **React/Tauri UI, theme and localization** on
