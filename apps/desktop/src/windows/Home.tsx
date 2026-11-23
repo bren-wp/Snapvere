@@ -588,6 +588,12 @@ export default function Home() {
             onClick={() => setProSelected(current => selectProBatch(current, visible, "videos"))}>{proText.videosOnly}</button>
           <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
             disabled={proExportBusy || visible.length === 0}
+            onClick={() => setProSelected(current => selectProBatch(current, visible, "recent"))}>{proText.recent}</button>
+          <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
+            disabled={proExportBusy || visible.length === 0}
+            onClick={() => setProSelected(current => selectProBatch(current, visible, "tagged"))}>{proText.tagged}</button>
+          <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
+            disabled={proExportBusy || visible.length === 0}
             onClick={() => setProSelected(current => selectProBatch(current, visible, "invert"))}>{proText.invert}</button>
           <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
             disabled={proExportBusy || proSelected.size === 0}
