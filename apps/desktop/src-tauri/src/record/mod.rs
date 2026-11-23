@@ -701,7 +701,10 @@ mod recorder_start_tests {
         ));
         std::fs::write(&path, b"original recording").expect("seed existing file");
         remove_owned_recording(&path, false);
-        assert_eq!(std::fs::read(&path).expect("existing recording"), b"original recording");
+        assert_eq!(
+            std::fs::read(&path).expect("existing recording"),
+            b"original recording"
+        );
         remove_owned_recording(&path, true);
         assert!(!path.exists());
     }
