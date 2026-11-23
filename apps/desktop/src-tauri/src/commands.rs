@@ -1708,15 +1708,16 @@ pub async fn pro_export_batch(
     app: AppHandle,
     window: tauri::WebviewWindow,
     ids: Vec<String>,
+    preset: String,
 ) -> Result<u32, String> {
     require_window_label(window.label(), &["home"])?;
     #[cfg(feature = "pro")]
     {
-        pro_batch::export(app, window, ids).await
+        pro_batch::export(app, window, ids, preset).await
     }
     #[cfg(not(feature = "pro"))]
     {
-        let _ = (app, ids);
+        let _ = (app, ids, preset);
         Err("Batch export is available in Snapvere Pro".into())
     }
 }

@@ -33,7 +33,7 @@ import type { RecordDone, Screenshot } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
 import { APP_NAME, IS_PRO } from "../lib/edition";
 import { proGalleryCopy } from "../lib/proGalleryCopy";
-import { selectProBatch } from "../lib/proSelection";
+import { PRO_BATCH_LIMIT, incompatibleProImageIds, removeIncompatibleProImages, retainLoadedProSelection, selectProBatch, summarizeProSelection } from "../lib/proSelection";
 import { summarizeProGallery } from "../lib/proInsights";
 import { formatMediaSize } from "../lib/mediaFormatting";
 import Viewer from "../components/Viewer";
@@ -53,6 +53,8 @@ export default function Home() {
   const [proBatchMode, setProBatchMode] = useState(false);
   const [proSelected, setProSelected] = useState<Set<string>>(() => new Set());
   const [proExportBusy, setProExportBusy] = useState(false);
+  const [proExportPreset, setProExportPreset] = useState<"original" | "png" | "png1280" | "webp1920">("original");
+  const proExportLock = useRef(false);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -215,23 +217,27 @@ export default function Home() {
   // cannot disappear merely because recent captures belong to another kind.
   const visible = items;
   const proInsights = IS_PRO ? summarizeProGallery(visible) : null;
+  const proBatchSummary = IS_PRO && proBatchMode ? summarizeProSelection(proSelected, visible) : null;
+  const incompatibleCount = IS_PRO && proBatchMode && proExportPreset !== "original"
+    ? incompatibleProImageIds(proSelected, visible).size : 0;
 
   const toggleProItem = (id: string) => {
-    if (!IS_PRO) return;
+    if (!IS_PRO || proExportLock.current) return;
     setProSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
-      else if (next.size < 100) next.add(id);
+      else if (next.size < PRO_BATCH_LIMIT) next.add(id);
       else setToast(proText.limit);
       return next;
     });
   };
 
   const exportProSelection = async () => {
-    if (!IS_PRO || proExportBusy || !proSelected.size) return;
+    if (!IS_PRO || proExportLock.current || !proSelected.size || incompatibleCount > 0) return;
+    proExportLock.current = true;
     setProExportBusy(true);
     try {
-      const count = await ipc.proExportBatch([...proSelected]);
+      const count = await ipc.proExportBatch([...proSelected], proExportPreset);
       if (count > 0) {
         setToast(proText.exported(count));
         setProSelected(new Set());
@@ -241,18 +247,20 @@ export default function Home() {
       console.error("Local Pro batch export failed", error);
       setToast(proText.failed);
     } finally {
+      proExportLock.current = false;
       setProExportBusy(false);
     }
   };
 
   const onDelete = useCallback(async (s: Screenshot) => {
+    if (proExportLock.current) return false;
     const ok = await ask(`"${s.name}" — ${t("This item will be removed from the gallery and deleted from disk.")}`, {
       title: t(isVideo(s) ? "Delete recording?" : "Delete screenshot?"),
       kind: "warning",
       okLabel: t("Delete"),
       cancelLabel: t("Cancel"),
     });
-    if (!ok) return false;
+    if (!ok || proExportLock.current) return false;
     try {
       await ipc.deleteScreenshot(s.id);
       setProSelected((prev) => { const next = new Set(prev); next.delete(s.id); return next; });
@@ -534,7 +542,8 @@ export default function Home() {
           <div className="snapvere-gallery-actions">
             {IS_PRO && (
               <button type="button"
-                onClick={() => { setProBatchMode((prev) => !prev); setProSelected(new Set()); }}
+                onClick={() => { if (!proExportLock.current) { setProBatchMode((prev) => !prev); setProSelected(new Set()); } }}
+                disabled={proExportBusy}
                 aria-pressed={proBatchMode}
                 className="snapvere-btn-secondary inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm"
               >
@@ -586,9 +595,13 @@ export default function Home() {
           <span>{proText.insightsSize}: <strong>{formatMediaSize(proInsights.sizeBytes, language)}</strong></span>
         </section>
       )}
-      {IS_PRO && proBatchMode && (
+      {IS_PRO && proBatchMode && proBatchSummary && (
         <div className="mx-5 mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-elevated/85 px-4 py-3 text-sm">
-          <span className="mr-auto font-medium" aria-live="polite">{proText.count(proSelected.size)}</span>
+          <div className="basis-full flex flex-wrap items-center gap-x-4 gap-y-1" aria-live="polite">
+            <span className="font-medium">{proText.count(proSelected.size)}</span>
+            <span className="text-muted">{proText.loadedSelectionSize}: {formatMediaSize(proBatchSummary.sizeBytes, language)}</span>
+            {proBatchSummary.hidden > 0 && <span>{proText.hiddenSelection}: {proBatchSummary.hidden}</span>}
+          </div>
           <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
             disabled={proExportBusy || visible.length === 0}
             onClick={() => setProSelected(current => selectProBatch(current, visible, "all"))}>{proText.selectLoaded}</button>
@@ -604,14 +617,64 @@ export default function Home() {
           <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
             disabled={proExportBusy || visible.length === 0}
             onClick={() => setProSelected(current => selectProBatch(current, visible, "tagged"))}>{proText.tagged}</button>
+          <select value="" aria-label={proText.advancedSelection}
+            className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
+            disabled={proExportBusy || loading || visible.length === 0}
+            onChange={(event) => {
+              const action = event.target.value;
+              if (proExportLock.current) return;
+              if (action === "week" || action === "large" || action === "untagged") {
+                setProSelected(current => selectProBatch(current, visible, action));
+              }
+            }}>
+            <option value="">{proText.advancedSelection}</option>
+            <option value="week">{proText.lastWeek}</option>
+            <option value="large">{proText.largeFiles}</option>
+            <option value="untagged">{proText.untagged}</option>
+          </select>
           <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
             disabled={proExportBusy || visible.length === 0}
             onClick={() => setProSelected(current => selectProBatch(current, visible, "invert"))}>{proText.invert}</button>
+          {proBatchSummary.hidden > 0 && (
+            <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
+              disabled={proExportBusy || loading || galleryError}
+              onClick={() => setProSelected(current => retainLoadedProSelection(current, visible))}>{proText.keepLoaded}</button>
+          )}
           <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
             disabled={proExportBusy || proSelected.size === 0}
             onClick={() => setProSelected(new Set())}>{proText.clear}</button>
+          <label className="flex flex-wrap items-center gap-2 text-sm">
+            {proText.exportPreset}
+            <select value={proExportPreset} disabled={proExportBusy}
+              className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
+              onChange={(event) => {
+                const value = event.target.value;
+                if (proExportLock.current) return;
+                if (value === "original" || value === "png" || value === "png1280" || value === "webp1920") {
+                  setProExportPreset(value);
+                }
+              }}>
+              <option value="original">{proText.originalPreset}</option>
+              <option value="png">{proText.pngPreset}</option>
+              <option value="png1280">{proText.png1280Preset}</option>
+              <option value="webp1920">{proText.webp1920Preset}</option>
+            </select>
+          </label>
+          {proExportPreset !== "original" && (
+            <p className="basis-full text-xs text-muted">{proText.imagePresetHelp}</p>
+          )}
+          {incompatibleCount > 0 && (
+            <div className="basis-full flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2">
+              <span role="status" className="text-sm">{proText.incompatibleImages}: {incompatibleCount}</span>
+              <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
+                disabled={proExportBusy || loading || galleryError}
+                onClick={() => {
+                  if (!proExportLock.current) setProSelected(current => removeIncompatibleProImages(current, visible));
+                }}>{proText.removeIncompatible}</button>
+            </div>
+          )}
           <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm font-semibold"
-            disabled={proExportBusy || proSelected.size === 0}
+            disabled={proExportBusy || proSelected.size === 0 || incompatibleCount > 0}
             onClick={() => void exportProSelection()}>
             {proExportBusy ? proText.exporting : proText.export}
           </button>
@@ -661,7 +724,7 @@ export default function Home() {
                 onCopyPath={() => void copyPath(s)}
                 onDelete={() => void onDelete(s)}
                 selected={proSelected.has(s.id)}
-                onToggleSelect={IS_PRO && proBatchMode ? () => toggleProItem(s.id) : undefined}
+                onToggleSelect={IS_PRO && proBatchMode && !proExportBusy ? () => toggleProItem(s.id) : undefined}
                 selectLabel={proText.select}
               />
             ))}

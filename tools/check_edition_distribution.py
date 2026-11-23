@@ -62,13 +62,19 @@ pro_settings = read("apps/desktop/src/windows/Settings.tsx")
 for preset in ("tutorial", "presentation", "compact", "webinar", "smooth", "archive", "social", "detailedGif"):
     assert f'"{preset}"' in pro_profiles, f"Missing professional preset: {preset}"
 assert "length: 6" in pro_profiles, "Pro must retain six local custom profiles"
-for action in ("all", "images", "videos", "recent", "tagged", "invert"):
+for action in ("all", "images", "videos", "recent", "tagged", "invert", "week", "large", "untagged"):
     assert f'"{action}"' in pro_selection, f"Missing Pro smart selection: {action}"
 assert "PRO_BATCH_LIMIT = 100" in pro_selection
 assert "IS_PRO ? \"snapvere-pro-shell\" : \"\"" in pro_frame, "Pro branding must appear on every main window"
 assert 'openSettings("recording")' in pro_home, "Pro recording profiles shortcut must open the real settings tab"
 assert 'snapvere:settings-tab' in pro_settings, "Pro settings must honor tab navigation"
 assert "selectProBatch" in pro_home, "Pro smart selection must be accessible"
+for feature in ("summarizeProSelection", "retainLoadedProSelection", "proExportLock.current"):
+    assert feature in pro_home, f"Missing Pro batch workspace safeguard: {feature}"
+for required in ("BatchPreset", "MAX_IMAGE_PIXELS", "MAX_IMAGE_BYTES", "transform_exclusively", "SaveAsGuard::acquire", "still_format"):
+    assert required in native, f"Missing Pro image export safeguard: {required}"
+for preset in ("original", "png", "png1280", "webp1920"):
+    assert f'"{preset}"' in native and f'value="{preset}"' in pro_home, f"Missing export preset: {preset}"
 frontend = read("apps/desktop/src/lib/edition.ts")
 assert 'VITE_SNAPVERE_EDITION === "pro"' in frontend
 assert "import.meta" in frontend

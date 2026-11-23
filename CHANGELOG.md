@@ -1,5 +1,17 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.30 — Pro batch workspace (development)
+
+- Warn about known incompatible selected files before image-preset export and offer explicit deselection of incompatible loaded files. Keep hidden selection intact for native validation; no original file is deleted. Localized feedback in all 12 languages and regression coverage.
+
+- Add native Pro batch export presets: original files, original-size PNG, PNG up to 1280 px, and lossless WebP up to 1920 px. Resize without upscaling; keep originals, alpha and aspect ratio. Reject recordings in image-only presets before any export, cap input at 64 MiB/24 megapixels per image, validate formats and use exclusive synchronized output writes. Native picker and Free gating remain mandatory. All 12 locales updated.
+
+- Add Pro selection of captures from the last seven days, files of at least 10 MiB, and items without tags; all twelve locales supported.
+- Show known selected loaded bytes and selected IDs outside the current loaded gallery, with explicit keep-loaded-only action. No disk or network scan.
+- Fix inversion at the 100-item cap by freeing old loaded slots before selecting replacements. Duplicate gallery IDs no longer toggle twice.
+- Guard batch export with an immediate lock; prevent duplicate export requests, batch exit and selection changes during export. Block gallery deletion while the export dialog or copy is active.
+- Preserve Free workflows, native Pro gating, offline export, and all ten platform packages. CI and native QA required before publication.
+
 
 ## v0.2.29 — Pro Studio and release reliability (preview)
 
