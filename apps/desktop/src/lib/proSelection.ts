@@ -1,6 +1,6 @@
 // Snapvere by Brendigo
 // Pro-only gallery productivity actions. Never mutate a selection owned by React.
-import { isVideo, type Screenshot } from "./types";
+import { isVideo, type Screenshot } from "./types.ts";
 
 export const PRO_BATCH_LIMIT = 100;
 export type ProSelectionAction = "all" | "images" | "videos" | "invert";
