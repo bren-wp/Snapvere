@@ -1,0 +1,26 @@
+{
+  "productName": "Snapvere Pro",
+  "identifier": "com.brendigo.snapvere.pro",
+  "app": {
+    "windows": [
+      {
+        "label": "home",
+        "title": "Snapvere Pro",
+        "width": 1120,
+        "height": 740,
+        "minWidth": 880,
+        "minHeight": 560,
+        "resizable": true,
+        "center": true,
+        "decorations": true,
+        "transparent": false,
+        "visible": false,
+        "url": "index.html"
+      }
+    ]
+  },
+  "bundle": {
+    "shortDescription": "Professional offline capture and recording workflows",
+    "longDescription": "Snapvere Pro by Brendigo: private screenshots, local professional recording profiles and gallery."
+  }
+}

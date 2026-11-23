@@ -1,6 +1,7 @@
 // Snapvere by Brendigo
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BellRing } from "lucide-react";
+import { IS_PRO } from "../lib/edition";
 import { ipc } from "../lib/ipc";
 import type { Language } from "../lib/i18n";
 import { useLanguage } from "../lib/LanguageProvider";
@@ -107,7 +108,7 @@ export default function UpdateNotice({
   const lastAttemptAt = useRef(0);
 
   const check = useCallback(async () => {
-    if (!canCheckWindowsUpdates(platformOs)) {
+    if (IS_PRO || !canCheckWindowsUpdates(platformOs)) {
       controller.current?.abort();
       setAvailable(null);
       setState("idle");
@@ -135,7 +136,7 @@ export default function UpdateNotice({
     }
   }, [platformOs]);
   useEffect(() => {
-    if (!canCheckWindowsUpdates(platformOs)) {
+    if (IS_PRO || !canCheckWindowsUpdates(platformOs)) {
       controller.current?.abort();
       setAvailable(null);
       setState("idle");
@@ -216,7 +217,7 @@ export default function UpdateNotice({
   // Linux previews do not consume the Windows-only version feed.
   // Until there is a separate authenticated Linux feed, use manual
   // GitHub Releases navigation via Settings / About instead.
-  if (!canCheckWindowsUpdates(platformOs)) return null;
+  if (IS_PRO || !canCheckWindowsUpdates(platformOs)) return null;
   if (mode === "home" && !shouldShowReleaseNotice(available, dismissedVersion)) return null;
   return (
     <section

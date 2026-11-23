@@ -1,5 +1,14 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.28 — Free and Pro editions (unreleased; native build and QA pending)
+
+- Publish **two separate build flavors** from one audited Tauri/Rust codebase: Snapvere Free (`com.brendigo.snapvere`) and Snapvere Pro (`com.brendigo.snapvere.pro`), without restricting any existing Free features.
+- Pro adds Tutorial, Presentation and Compact GIF recording presets plus three private, locally persisted custom recording profiles, translated for twelve languages. Linux applies GIF-only safe profiles; unsupported MP4/audio paths stay disabled.
+- Pro update checks are offline/manual-only until a dedicated Pro-signed feed exists; no Free installer is proposed as a Pro upgrade. No accounts, payment processing or cloud uploads are added.
+- Keep robust GIF static-frame coalescing and exclusive recording-file creation tests.
+- Enforce distinct Windows Portable/Setup/MSI and Linux DEB/AppImage assets for both editions in CI and release, including SHA-256 verification. No unsupported 32-bit/ARM64 label.
+- **The Pro build is not yet a paid, license-enforced product**. A secure entitlement and customer delivery process require additional audited work.
+
 ## v0.2.27 — Local storage durability and distribution compatibility (unreleased, pending CI/physical QA)
 
 - Sync newly created PNG/JPEG/WebP captures to disk before indexing them in SQLite; reject failed persistence, preserve existing media, and add regression tests.

@@ -1,7 +1,7 @@
 {
   "name": "snapvere-desktop",
   "private": true,
-  "version": "0.2.27",
+  "version": "0.2.28",
   "type": "module",
   "description": "Snapvere — brzi, privatni screenshot i screen-recording alat (desktop)",
   "scripts": {

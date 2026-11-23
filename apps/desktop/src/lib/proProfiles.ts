@@ -1,6 +1,6 @@
 // Snapvere by Brendigo
-import type { AppSettings } from "../windows/settings/preferences";
-import { normalizeSettings } from "../windows/settings/preferences";
+import type { AppSettings } from "../windows/settings/preferences.ts";
+import { normalizeSettings } from "../windows/settings/preferences.ts";
 export const PRO_PROFILE_KEY = "proRecordingProfilesV1";
 export const PROFILE_KEYS = ["recordFormat", "recordFps", "recordQuality", "recordCursor", "recordMic", "recordSystemAudio", "recordMaxSeconds"] as const;
 export type Profile = Pick<AppSettings, (typeof PROFILE_KEYS)[number]>;

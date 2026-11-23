@@ -543,18 +543,20 @@ export default function Settings() {
               </button>
             </div>
             <div className="mt-4">
-              {linuxGifOnly ? (
+              {linuxGifOnly || IS_PRO ? (
                 <div className="rounded-xl border border-border bg-elevated/80 px-4 py-3">
-                  <p className="text-sm text-muted">
-                    {t("On Linux, silent GIF recording is available. MP4, audio and recorded cursor are not supported.")}
-                  </p>
+                  {linuxGifOnly && (
+                    <p className="text-sm text-muted">
+                      {t("On Linux, silent GIF recording is available. MP4, audio and recorded cursor are not supported.")}
+                    </p>
+                  )}
                   <button
                     type="button"
-                    onClick={() => void openUrl(OFFICIAL_DOWNLOAD_URL).catch(() => setNotice(t("Could not open the page.")))}
+                    onClick={() => void openUrl(IS_PRO ? "https://github.com/bren-wp/Snapvere/releases" : OFFICIAL_DOWNLOAD_URL).catch(() => setNotice(t("Could not open the page.")))}
                     className="mt-3 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:border-accent focus-visible:ring-2 focus-visible:ring-accent"
                     aria-label={t("Official website")}
                   >
-                    {t("Official website")}: snapvere.com/download/tauri/
+                    {t("Official website")}: {IS_PRO ? "GitHub Releases" : "snapvere.com/download/tauri/"}
                   </button>
                 </div>
               ) : (
