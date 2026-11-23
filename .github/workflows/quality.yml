@@ -289,7 +289,7 @@ jobs:
   linux:
     name: Linux x86_64 native tests and preview packages
     runs-on: ubuntu-24.04
-    timeout-minutes: 100
+    timeout-minutes: 120
     permissions:
       contents: read
     steps:
@@ -303,7 +303,7 @@ jobs:
             build-essential pkg-config libssl-dev libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev \
             libclang-dev libxcb1-dev libxrandr-dev libdbus-1-dev \
-            libpipewire-0.3-dev libwayland-dev libegl-dev libgbm-dev libfuse2t64
+            libpipewire-0.3-dev libwayland-dev libegl-dev libgbm-dev libfuse2t64 rpm
       - name: Verify required GBM development linker library
         run: |
           pkg-config --exists gbm
@@ -334,26 +334,37 @@ jobs:
       - name: Linux Clippy (warnings treated as errors)
         working-directory: apps/desktop/src-tauri
         run: cargo clippy --all-targets --locked -- -D warnings
-      - name: Build Linux Debian and AppImage previews
+      - name: Build Linux Debian, Fedora/RPM and AppImage QA packages
         working-directory: apps/desktop
-        run: npm run tauri -- build --bundles deb,appimage
+        run: npm run tauri -- build --bundles deb,rpm,appimage
       - name: Verify exactly one Linux package of each type and SHA-256
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist-linux
+          shopt -s nullglob
           deb=(apps/desktop/src-tauri/target/release/bundle/deb/*.deb)
+          rpm=(apps/desktop/src-tauri/target/release/bundle/rpm/*.rpm)
           appimage=(apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage)
           [[ ${#deb[@]} == 1 && -s "${deb[0]}" ]] || { echo "::error::Expected exactly one .deb"; exit 1; }
+          [[ ${#rpm[@]} == 1 && -s "${rpm[0]}" ]] || { echo "::error::Expected exactly one .rpm"; exit 1; }
           [[ ${#appimage[@]} == 1 && -s "${appimage[0]}" ]] || { echo "::error::Expected exactly one .AppImage"; exit 1; }
-          test "$(stat -c%s "${deb[0]}")" -gt 1000000
-          test "$(stat -c%s "${appimage[0]}")" -gt 1000000
+          for artifact in "${deb[0]}" "${rpm[0]}" "${appimage[0]}"; do
+            test "$(stat -c%s "$artifact")" -gt 1000000
+          done
+          rpm -qp --queryformat '%{ARCH}\n' "${rpm[0]}" | grep -qx 'x86_64'
+          # Do not distribute an RPM with Ubuntu/Debian-specific dependency names.
+          if rpm -qp --requires "${rpm[0]}" | grep -E '(^|[^[:alnum:]])(libwebkit2gtk-4\.1-0|libayatana-appindicator3-1|libgtk-3-0)([[:space:]]|$)'; then
+            echo "::error::RPM contains Debian package names; Fedora runtime dependency review required"
+            exit 1
+          fi
           cp -- "${deb[0]}" dist-linux/Snapvere-Linux-amd64.deb
+          cp -- "${rpm[0]}" dist-linux/Snapvere-Linux-x86_64-UNTESTED.rpm
           cp -- "${appimage[0]}" dist-linux/Snapvere-Linux-x86_64.AppImage
           chmod 755 dist-linux/Snapvere-Linux-x86_64.AppImage
-          (cd dist-linux && sha256sum Snapvere-Linux-amd64.deb Snapvere-Linux-x86_64.AppImage > SHA256SUMS-Linux.txt)
+          (cd dist-linux && sha256sum Snapvere-Linux-amd64.deb Snapvere-Linux-x86_64-UNTESTED.rpm Snapvere-Linux-x86_64.AppImage > SHA256SUMS-Linux.txt)
           (cd dist-linux && sha256sum --check SHA256SUMS-Linux.txt)
-      - name: Upload PRIVATE untested Linux previews for QA
+      - name: Upload untested Linux preview and RPM QA artifacts (not public release)
         uses: actions/upload-artifact@v4
         with:
           name: Snapvere-Linux-QA-${{ github.sha }}

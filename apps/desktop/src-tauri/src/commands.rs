@@ -325,7 +325,12 @@ fn write_new_capture(path: &Path, bytes: &[u8]) -> Result<(), String> {
         .create_new(true)
         .open(path)
         .map_err(estr)?;
-    if let Err(error) = file.write_all(bytes) {
+    // A successful write() only places data in operating-system buffers.
+    // Flush the complete new image before creating its SQLite gallery row.
+    // If the filesystem refuses to persist it (e.g. full disk), remove only
+    // the file created exclusively above, leaving existing media untouched.
+    let result = file.write_all(bytes).and_then(|_| file.sync_all());
+    if let Err(error) = result {
         drop(file);
         if let Err(cleanup) = fs::remove_file(path) {
             log(&format!(
@@ -333,7 +338,7 @@ fn write_new_capture(path: &Path, bytes: &[u8]) -> Result<(), String> {
                 path.display()
             ));
         }
-        return Err(format!("Could not write capture: {error}"));
+        return Err(format!("Could not persist capture: {error}"));
     }
     Ok(())
 }
@@ -405,7 +410,14 @@ pub(crate) fn register_media(
     ext: &str,
     thumb: Option<&image::RgbaImage>,
 ) -> Result<Screenshot, String> {
-    let size_bytes = fs::metadata(path).map(|m| m.len()).map_err(estr)?;
+    // Refuse zero-byte / truncated outputs and symlinks masquerading as
+    // recordings; no database entry should point to an invalid or redirected
+    // file. The user's original file is not deleted by this validation.
+    let metadata = fs::symlink_metadata(path).map_err(estr)?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() || metadata.len() < 12 {
+        return Err("The recording file is missing, truncated, or not a regular file".into());
+    }
+    let size_bytes = metadata.len();
     let id = Uuid::new_v4().to_string();
     let name = path
         .file_stem()
@@ -1803,6 +1815,17 @@ mod export_safety_tests {
         assert!(validate_export_path(&jpg.to_string_lossy(), ImageFormat::Png).is_err());
         assert!(validate_export_path(&exe.to_string_lossy(), ImageFormat::Png).is_err());
         assert!(validate_export_path("capture.png", ImageFormat::Png).is_err());
+    }
+
+    #[test]
+    fn capture_is_persisted_before_it_is_listed_in_gallery() {
+        let path = std::env::temp_dir().join(format!("snapvere-durable-{}.png", Uuid::new_v4()));
+        let bytes = b"Snapvere exclusive persistence regression";
+        write_new_capture(&path, bytes).expect("durable write");
+        assert_eq!(fs::read(&path).expect("read persisted capture"), bytes);
+        assert!(write_new_capture(&path, b"other bytes").is_err());
+        assert_eq!(fs::read(&path).expect("read unchanged capture"), bytes);
+        fs::remove_file(&path).expect("cleanup");
     }
 
     #[test]

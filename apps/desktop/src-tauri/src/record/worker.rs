@@ -293,7 +293,18 @@ pub(super) fn run(
     // Finalize to release native file handles, but never commit a partial recording.
     let finalize_result = encoder.finish();
     drop(encoder);
-    recording_completion(recording_error, finalize_result)?;
+    // The encoder's close/flush does not guarantee its bytes reached the
+    // filesystem. Persist the finalized MP4/GIF before it is indexed in the
+    // gallery; disk-full or interrupted writes must not report success.
+    // Open with write access for Windows FlushFileBuffers compatibility.
+    let durable_result = finalize_result.and_then(|()| {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(path)
+            .and_then(|file| file.sync_all())
+            .map_err(|error| format!("Could not persist recording: {error}"))
+    });
+    recording_completion(recording_error, durable_result)?;
 
     Ok(Recorded {
         cancelled,
