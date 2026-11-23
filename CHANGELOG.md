@@ -1,5 +1,15 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.27 — Local storage durability and distribution compatibility (unreleased, pending CI/physical QA)
+
+- Sync newly created PNG/JPEG/WebP captures to disk before indexing them in SQLite; reject failed persistence, preserve existing media, and add regression tests.
+- Sync finalized MP4/GIF recordings and reject non-regular/symlink or truncated outputs before gallery registration.
+- Name new recordings using a full 128-bit UUID instead of an abbreviated filename suffix.
+- Add an explicitly user-initiated Linux link to official release downloads; do not silently activate the Windows-only update feed.
+- Attempt x86_64 RPM builds in Linux quality CI as private **UNTESTED** artifacts, alongside current Debian and AppImage bundles, with CPU/dependency/checksum checks. Fedora-native installation is not yet certified.
+- Document x86_64 versus 32-bit x86 and ARM64 packaging limits, and strict privacy requirements for potential opt-in SFTP/HTTPS or hosted cloud integrations. Do not enable any upload/telemetry.
+- Update Cargo, Tauri, npm and lockfile versions together. Production release awaits full CI and real-device acceptance; previews must not be misrepresented as signed/stable.
+
 ## v0.2.26 — Windows/Linux parity work and release-channel hardening (unreleased, pending CI/QA)
 
 - Avoid duplicate full Windows/Linux CI builds for one commit by running quality on PRs and post-merge main, with manual branch dispatch preserved.
