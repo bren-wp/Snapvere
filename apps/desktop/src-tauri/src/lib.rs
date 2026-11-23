@@ -158,6 +158,7 @@ pub fn run() {
             commands::reveal_media,
             commands::copy_media_image,
             commands::copy_media_path,
+            commands::pro_export_batch,
             commands::show_home,
             commands::log_file_path,
             commands::open_capture_folder,

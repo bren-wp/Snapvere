@@ -12,12 +12,18 @@ export default function CaptureCard({
   onReveal,
   onCopyPath,
   onDelete,
+  selected,
+  onToggleSelect,
+  selectLabel,
 }: {
   shot: Screenshot;
   onOpen: () => void;
   onReveal: () => void;
   onCopyPath: () => void;
   onDelete: () => void;
+  selected?: boolean;
+  onToggleSelect?: () => void;
+  selectLabel?: string;
 }) {
   const { t, language } = useLanguage();
   const video = isVideo(shot);
@@ -29,6 +35,13 @@ export default function CaptureCard({
       aria-label={shot.name}
       className="snapvere-gallery-card group relative overflow-hidden outline-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card focus-within:ring-2 focus-within:ring-accent"
     >
+      {onToggleSelect && (
+        <button type="button" onClick={(event) => { event.stopPropagation(); onToggleSelect(); }}
+          aria-pressed={!!selected} aria-label={`${selectLabel ?? "Select"}: ${shot.name}`}
+          className={`absolute left-2 top-2 z-20 grid h-8 w-8 place-items-center rounded-lg border text-sm font-semibold focus-visible:ring-2 focus-visible:ring-accent ${selected ? "border-accent bg-accent text-black" : "border-white/50 bg-black/70 text-white hover:border-accent"}`}>
+          {selected ? "✓" : "+"}
+        </button>
+      )}
       {/* A real focusable button; utility buttons are siblings, never nested in it. */}
       <button
         type="button"

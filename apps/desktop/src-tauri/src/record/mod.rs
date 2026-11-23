@@ -99,6 +99,8 @@ pub struct Ctl {
     /// Što se od zvuka STVARNO snima (postavlja recorder nakon otvaranja izvora).
     mic: AtomicBool,
     system_audio: AtomicBool,
+    /// Set only when this session has successfully opened its own output file.
+    output_owned: AtomicBool,
 }
 
 impl Ctl {
@@ -260,6 +262,7 @@ pub fn start(
         started: Instant::now(),
         mic: AtomicBool::new(false),
         system_audio: AtomicBool::new(false),
+        output_owned: AtomicBool::new(false),
     });
 
     let out_path = output_path(app, opts.format)?;
@@ -551,6 +554,14 @@ fn open_encoder(
     }
 }
 
+// A failed exclusive encoder open must never delete a different recording
+// already present at the output path. Cleanup is limited to this session's file.
+fn remove_owned_recording(path: &Path, owned: bool) {
+    if owned {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
 /// Zatvori sesiju: spremi u galeriju ili obriši datoteku, javi frontendu, očisti slot.
 fn finish_session(
     app: &AppHandle,
@@ -566,9 +577,10 @@ fn finish_session(
         cancelled: bool,
     }
 
+    let owned = ctl.output_owned.load(Ordering::Acquire);
     let payload = match outcome {
         Err(e) => {
-            let _ = std::fs::remove_file(path);
+            remove_owned_recording(path, owned);
             log(&format!("snimanje neuspješno: {e}"));
             Done {
                 screenshot: None,
@@ -577,7 +589,7 @@ fn finish_session(
             }
         }
         Ok(rec) if rec.cancelled => {
-            let _ = std::fs::remove_file(path);
+            remove_owned_recording(path, owned);
             log("snimanje otkazano, datoteka obrisana");
             Done {
                 screenshot: None,
@@ -588,7 +600,7 @@ fn finish_session(
         Ok(rec) => {
             let frames = ctl.frames.load(Ordering::Relaxed);
             if frames == 0 {
-                let _ = std::fs::remove_file(path);
+                remove_owned_recording(path, owned);
                 Done {
                     screenshot: None,
                     error: Some("Snimka nema nijedan frame".into()),
@@ -679,5 +691,21 @@ mod recorder_start_tests {
         assert!(RecorderStartGuard::acquire().is_err());
         drop(first);
         assert!(RecorderStartGuard::acquire().is_ok());
+    }
+
+    #[test]
+    fn failed_encoder_open_preserves_an_existing_recording() {
+        let path = std::env::temp_dir().join(format!(
+            "snapvere-existing-recording-{}.gif",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::write(&path, b"original recording").expect("seed existing file");
+        remove_owned_recording(&path, false);
+        assert_eq!(
+            std::fs::read(&path).expect("existing recording"),
+            b"original recording"
+        );
+        remove_owned_recording(&path, true);
+        assert!(!path.exists());
     }
 }

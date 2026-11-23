@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   audit-unsigned-preview-metadata:
-    name: Reconcile unsigned v0.2.25 and v0.2.26 release labels
+    name: Reconcile unsigned v0.2.25, v0.2.26 and v0.2.27 release labels
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -24,7 +24,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          for tag in v0.2.25 v0.2.26; do
+          for tag in v0.2.25 v0.2.26 v0.2.27; do
             value="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" --jq '.prerelease')"
             if [[ "$value" != true ]]; then
               echo "::warning::Unsigned ${tag} is incorrectly marked stable"

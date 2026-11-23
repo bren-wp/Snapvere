@@ -9,6 +9,8 @@
 
 mod gallery_helpers;
 mod image_export;
+#[cfg(feature = "pro")]
+mod pro_batch;
 mod record_windows;
 
 use record_windows::{resolve_target, show_rec_draw, show_rec_frame, show_rec_hud};
@@ -1699,6 +1701,26 @@ pub fn add_tag(
     lock(&state.db).add_tag(&id, tag.trim()).map_err(estr)
 }
 
+/// Export selected registered gallery items to a folder chosen in the OS
+/// picker. Free builds reject the IPC even if a modified WebView calls it.
+#[tauri::command]
+pub async fn pro_export_batch(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    ids: Vec<String>,
+) -> Result<u32, String> {
+    require_window_label(window.label(), &["home"])?;
+    #[cfg(feature = "pro")]
+    {
+        pro_batch::export(app, window, ids).await
+    }
+    #[cfg(not(feature = "pro"))]
+    {
+        let _ = (app, ids);
+        Err("Batch export is available in Snapvere Pro".into())
+    }
+}
+
 /// Otvori glavni prozor / galeriju (tray, hotkey, single-instance).
 /// Na zatvaranje (X) prozor se SAMO sakrije (vidi `on_window_event` u lib.rs),
 /// pa ga ovdje obično samo prikažemo. Sigurnosna mreža: ako je "home" ipak
@@ -1713,7 +1735,11 @@ pub fn show_home(app: AppHandle) -> Result<(), String> {
         return Ok(());
     }
     WebviewWindowBuilder::new(&app, "home", WebviewUrl::App("index.html".into()))
-        .title("Snapvere")
+        .title(if cfg!(feature = "pro") {
+            "Snapvere Pro"
+        } else {
+            "Snapvere"
+        })
         .inner_size(1120.0, 740.0)
         .min_inner_size(880.0, 560.0)
         .center()
@@ -1735,7 +1761,11 @@ pub fn open_settings(app: &AppHandle) -> Result<(), String> {
         "settings",
         WebviewUrl::App("index.html#settings".into()),
     )
-    .title("Snapvere — Settings")
+    .title(if cfg!(feature = "pro") {
+        "Snapvere Pro — Settings"
+    } else {
+        "Snapvere — Settings"
+    })
     .inner_size(880.0, 680.0)
     .center()
     .build()

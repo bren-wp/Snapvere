@@ -1,7 +1,7 @@
 # Snapvere by Brendigo
 [package]
 name = "snapvere"
-version = "0.2.27"
+version = "0.2.28"
 description = "Snapvere — brzi, privatni screenshot i screen-recording alat"
 authors = ["Brendigo <https://brendigo.com>"]
 edition = "2021"
@@ -68,6 +68,8 @@ windows = { version = "0.62", features = [
 [features]
 # Default produkcijski profil.
 default = []
+# Native-only feature, not a user-switchable frontend flag.
+pro = []
 
 [profile.release]
 opt-level = "s"   # optimiziraj za veličinu binarya (premium = mali footprint)

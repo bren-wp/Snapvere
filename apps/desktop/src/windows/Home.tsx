@@ -31,6 +31,8 @@ import { galleryStatusCopy } from "../lib/galleryStatusCopy";
 import { galleryKeyboardShortcut } from "../lib/galleryKeyboard";
 import type { RecordDone, Screenshot } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
+import { APP_NAME, IS_PRO } from "../lib/edition";
+import { proGalleryCopy } from "../lib/proGalleryCopy";
 import Viewer from "../components/Viewer";
 import CaptureCard from "../components/home/CaptureCard";
 import EmptyGallery from "../components/home/EmptyGallery";
@@ -43,7 +45,11 @@ export default function Home() {
   const { t, language } = useLanguage();
   const clipboardText = clipboardImportCopy(language);
   const galleryText = galleryStatusCopy(language);
+  const proText = proGalleryCopy(language);
   const [items, setItems] = useState<Screenshot[]>([]);
+  const [proBatchMode, setProBatchMode] = useState(false);
+  const [proSelected, setProSelected] = useState<Set<string>>(() => new Set());
+  const [proExportBusy, setProExportBusy] = useState(false);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -206,6 +212,35 @@ export default function Home() {
   // cannot disappear merely because recent captures belong to another kind.
   const visible = items;
 
+  const toggleProItem = (id: string) => {
+    if (!IS_PRO) return;
+    setProSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else if (next.size < 100) next.add(id);
+      else setToast(proText.limit);
+      return next;
+    });
+  };
+
+  const exportProSelection = async () => {
+    if (!IS_PRO || proExportBusy || !proSelected.size) return;
+    setProExportBusy(true);
+    try {
+      const count = await ipc.proExportBatch([...proSelected]);
+      if (count > 0) {
+        setToast(proText.exported(count));
+        setProSelected(new Set());
+        setProBatchMode(false);
+      }
+    } catch (error) {
+      console.error("Local Pro batch export failed", error);
+      setToast(proText.failed);
+    } finally {
+      setProExportBusy(false);
+    }
+  };
+
   const onDelete = useCallback(async (s: Screenshot) => {
     const ok = await ask(`"${s.name}" — ${t("This item will be removed from the gallery and deleted from disk.")}`, {
       title: t(isVideo(s) ? "Delete recording?" : "Delete screenshot?"),
@@ -216,6 +251,7 @@ export default function Home() {
     if (!ok) return false;
     try {
       await ipc.deleteScreenshot(s.id);
+      setProSelected((prev) => { const next = new Set(prev); next.delete(s.id); return next; });
       const currentlyLoaded = loadedItems.current;
       if (currentlyLoaded.some((item) => item.id === s.id)) {
         // Discard in-flight pages; their SQL offsets predate the deletion.
@@ -354,7 +390,7 @@ export default function Home() {
   };
 
   return (
-    <WindowFrame title="Snapvere">
+    <WindowFrame title={APP_NAME}>
       {/* Keep native capture commands unchanged; only their visual priority changes. */}
       <header className="snapvere-workspace-header shrink-0 px-5 pb-5 pt-5">
         <div className="snapvere-workspace-heading">
@@ -482,6 +518,15 @@ export default function Home() {
             ))}
           </div>
           <div className="snapvere-gallery-actions">
+            {IS_PRO && (
+              <button type="button"
+                onClick={() => { setProBatchMode((prev) => !prev); setProSelected(new Set()); }}
+                aria-pressed={proBatchMode}
+                className="snapvere-btn-secondary inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm"
+              >
+                {proBatchMode ? proText.done : proText.select}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => void load()}
@@ -518,6 +563,26 @@ export default function Home() {
         </div>
       </section>
 
+      {IS_PRO && proBatchMode && (
+        <div className="mx-5 mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-elevated/85 px-4 py-3 text-sm">
+          <span className="mr-auto font-medium" aria-live="polite">{proText.count(proSelected.size)}</span>
+          <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
+            disabled={proExportBusy || visible.length === 0}
+            onClick={() => {
+              const next = new Set(proSelected);
+              for (const item of visible) { if (next.size >= 100) break; next.add(item.id); }
+              setProSelected(next);
+            }}>{proText.selectLoaded}</button>
+          <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm"
+            disabled={proExportBusy || proSelected.size === 0}
+            onClick={() => setProSelected(new Set())}>{proText.clear}</button>
+          <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm font-semibold"
+            disabled={proExportBusy || proSelected.size === 0}
+            onClick={() => void exportProSelection()}>
+            {proExportBusy ? proText.exporting : proText.export}
+          </button>
+        </div>
+      )}
       {/* Keep older results visible after a failed refresh, but clearly label
           them as stale and provide an explicit retry action. */}
       {galleryError && visible.length > 0 && (
@@ -561,6 +626,9 @@ export default function Home() {
                 onReveal={() => void reveal(s)}
                 onCopyPath={() => void copyPath(s)}
                 onDelete={() => void onDelete(s)}
+                selected={proSelected.has(s.id)}
+                onToggleSelect={IS_PRO && proBatchMode ? () => toggleProItem(s.id) : undefined}
+                selectLabel={proText.select}
               />
             ))}
           </div>

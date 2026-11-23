@@ -84,6 +84,8 @@ jobs:
         run: python tools/check_public_distribution.py
       - name: Verify all frontend IPC commands are registered by Rust
         run: python tools/check_ipc_contract.py
+      - name: Enforce separate Free/Pro identity, package and native security contracts
+        run: python tools/check_edition_distribution.py
       - name: Enforce per-window Tauri capability isolation
         run: python tools/check_tauri_capabilities.py
       - name: Reject unsafe dependency updater permissions and version drift
@@ -202,7 +204,7 @@ jobs:
   native:
     name: Rust tests and all Windows packages
     runs-on: windows-latest
-    timeout-minutes: 85
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v7
         with:
@@ -254,26 +256,68 @@ jobs:
       - name: Enforce Clippy correctness and dead-code checks
         working-directory: apps/desktop/src-tauri
         run: cargo clippy --all-targets --locked -- -D warnings
-      - name: Build portable / NSIS / MSI
+      - name: Build Free Windows Portable / NSIS / MSI
         working-directory: apps/desktop
         run: npm run tauri -- build --bundles nsis,msi
-      - name: Verify packages and generate SHA256
+      - name: Stage verified Free Windows packages before second build
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $target = Join-Path $PWD 'apps/desktop/src-tauri/target/release'
+          $base = Join-Path $PWD 'apps/desktop/src-tauri/target/release'
           $out = Join-Path $PWD 'dist-installers'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
-          $exe = Join-Path $target 'snapvere.exe'
-          $nsis = Get-ChildItem (Join-Path $target 'bundle/nsis') -Filter '*.exe' -File | Select-Object -First 1
-          $msi = Get-ChildItem (Join-Path $target 'bundle/msi') -Filter '*.msi' -File | Select-Object -First 1
-          if (!(Test-Path $exe) -or !$nsis -or !$msi) { throw 'Missing a required Windows package' }
+          $exe = Join-Path $base 'snapvere.exe'
+          $nsis = @(Get-ChildItem (Join-Path $base 'bundle/nsis') -Filter '*.exe' -File)
+          $msi = @(Get-ChildItem (Join-Path $base 'bundle/msi') -Filter '*.msi' -File)
+          if (!(Test-Path $exe) -or $nsis.Count -ne 1 -or $msi.Count -ne 1) {
+            throw 'Missing or ambiguous Free Windows artifact'
+          }
           Copy-Item $exe (Join-Path $out 'Snapvere-Portable.exe')
-          Copy-Item $nsis.FullName (Join-Path $out 'Snapvere-Setup.exe')
-          Copy-Item $msi.FullName (Join-Path $out 'Snapvere-Setup.msi')
-          @('Snapvere-Portable.exe','Snapvere-Setup.exe','Snapvere-Setup.msi') | ForEach-Object {
-            $path = Join-Path $out $_
-            if ((Get-Item $path).Length -lt 1000000) { throw "Invalid package: $_" }
+          Copy-Item $nsis[0].FullName (Join-Path $out 'Snapvere-Setup.exe')
+          Copy-Item $msi[0].FullName (Join-Path $out 'Snapvere-Setup.msi')
+          Remove-Item (Join-Path $base 'bundle/nsis') -Recurse -Force
+          Remove-Item (Join-Path $base 'bundle/msi') -Recurse -Force
+      - name: Test native Pro Rust commands and filesystem security
+        working-directory: apps/desktop/src-tauri
+        run: |
+          cargo test --features pro --locked
+          cargo clippy --all-targets --features pro --locked -- -D warnings
+      - name: Build Pro Windows Portable / NSIS / MSI from same audited source
+        working-directory: apps/desktop
+        shell: pwsh
+        run: |
+          $env:VITE_SNAPVERE_EDITION = 'pro'
+          npm run tauri -- build --bundles nsis,msi --features pro --config src-tauri/tauri.pro.conf.json
+          if ($LASTEXITCODE -ne 0) { throw 'Pro native Windows build failed' }
+      - name: Stage and check both Windows editions
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = Join-Path $PWD 'apps/desktop/src-tauri/target/release'
+          $out = Join-Path $PWD 'dist-installers'
+          $exe = Join-Path $base 'snapvere.exe'
+          $nsis = @(Get-ChildItem (Join-Path $base 'bundle/nsis') -Filter '*.exe' -File)
+          $msi = @(Get-ChildItem (Join-Path $base 'bundle/msi') -Filter '*.msi' -File)
+          if (!(Test-Path $exe) -or $nsis.Count -ne 1 -or $msi.Count -ne 1) {
+            throw 'Missing or ambiguous Pro Windows artifact'
+          }
+          if ($nsis[0].Name -notmatch 'Pro' -or $msi[0].Name -notmatch 'Pro') {
+            throw 'Pro installers must embed the Pro product identity'
+          }
+          Copy-Item $exe (Join-Path $out 'Snapvere-Pro-Portable.exe')
+          Copy-Item $nsis[0].FullName (Join-Path $out 'Snapvere-Pro-Setup.exe')
+          Copy-Item $msi[0].FullName (Join-Path $out 'Snapvere-Pro-Setup.msi')
+          $all = @('Snapvere-Portable.exe','Snapvere-Setup.exe','Snapvere-Setup.msi',
+                   'Snapvere-Pro-Portable.exe','Snapvere-Pro-Setup.exe','Snapvere-Pro-Setup.msi')
+          foreach ($name in $all) {
+            $file = Join-Path $out $name
+            if (!(Test-Path $file) -or (Get-Item $file).Length -lt 1000000) {
+              throw "Missing or invalid edition package: $name"
+            }
+          }
+          if ((Get-FileHash (Join-Path $out 'Snapvere-Portable.exe')).Hash -eq
+              (Get-FileHash (Join-Path $out 'Snapvere-Pro-Portable.exe')).Hash) {
+            throw 'Free/Pro executables are identical; edition configuration not applied'
           }
           Get-ChildItem $out -File | Get-FileHash -Algorithm SHA256 | ForEach-Object {
             "$($_.Hash.ToLowerInvariant())  $(Split-Path $_.Path -Leaf)"
@@ -289,7 +333,7 @@ jobs:
   linux:
     name: Linux x86_64 native tests and preview packages
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 180
     permissions:
       contents: read
     steps:
@@ -334,35 +378,68 @@ jobs:
       - name: Linux Clippy (warnings treated as errors)
         working-directory: apps/desktop/src-tauri
         run: cargo clippy --all-targets --locked -- -D warnings
-      - name: Build Linux Debian, Fedora/RPM and AppImage QA packages
+      - name: Build Free Linux DEB, RPM and AppImage for QA
         working-directory: apps/desktop
         run: npm run tauri -- build --bundles deb,rpm,appimage
-      - name: Verify exactly one Linux package of each type and SHA-256
+      - name: Stage Free Linux packages before building Pro
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist-linux
           shopt -s nullglob
-          deb=(apps/desktop/src-tauri/target/release/bundle/deb/*.deb)
-          rpm=(apps/desktop/src-tauri/target/release/bundle/rpm/*.rpm)
-          appimage=(apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage)
-          [[ ${#deb[@]} == 1 && -s "${deb[0]}" ]] || { echo "::error::Expected exactly one .deb"; exit 1; }
-          [[ ${#rpm[@]} == 1 && -s "${rpm[0]}" ]] || { echo "::error::Expected exactly one .rpm"; exit 1; }
-          [[ ${#appimage[@]} == 1 && -s "${appimage[0]}" ]] || { echo "::error::Expected exactly one .AppImage"; exit 1; }
-          for artifact in "${deb[0]}" "${rpm[0]}" "${appimage[0]}"; do
-            test "$(stat -c%s "$artifact")" -gt 1000000
-          done
-          rpm -qp --queryformat '%{ARCH}\n' "${rpm[0]}" | grep -qx 'x86_64'
-          # Do not distribute an RPM with Ubuntu/Debian-specific dependency names.
-          if rpm -qp --requires "${rpm[0]}" | grep -E '(^|[^[:alnum:]])(libwebkit2gtk-4\.1-0|libayatana-appindicator3-1|libgtk-3-0)([[:space:]]|$)'; then
-            echo "::error::RPM contains Debian package names; Fedora runtime dependency review required"
-            exit 1
-          fi
+          root=apps/desktop/src-tauri/target/release/bundle
+          mkdir -p dist-linux
+          deb=("$root"/deb/*.deb)
+          rpm=("$root"/rpm/*.rpm)
+          image=("$root"/appimage/*.AppImage)
+          [[ ${#deb[@]} == 1 && ${#rpm[@]} == 1 && ${#image[@]} == 1 ]]
           cp -- "${deb[0]}" dist-linux/Snapvere-Linux-amd64.deb
           cp -- "${rpm[0]}" dist-linux/Snapvere-Linux-x86_64-UNTESTED.rpm
-          cp -- "${appimage[0]}" dist-linux/Snapvere-Linux-x86_64.AppImage
-          chmod 755 dist-linux/Snapvere-Linux-x86_64.AppImage
-          (cd dist-linux && sha256sum Snapvere-Linux-amd64.deb Snapvere-Linux-x86_64-UNTESTED.rpm Snapvere-Linux-x86_64.AppImage > SHA256SUMS-Linux.txt)
+          cp -- "${image[0]}" dist-linux/Snapvere-Linux-x86_64.AppImage
+          rm -rf -- "$root/deb" "$root/rpm" "$root/appimage"
+      - name: Test native Pro Linux batch export and recording operations
+        working-directory: apps/desktop/src-tauri
+        run: |
+          cargo test --features pro --locked
+          cargo clippy --all-targets --features pro --locked -- -D warnings
+      - name: Build Pro Linux DEB, RPM and AppImage from same source
+        working-directory: apps/desktop
+        env:
+          VITE_SNAPVERE_EDITION: pro
+        run: npm run tauri -- build --bundles deb,rpm,appimage --features pro --config src-tauri/tauri.pro.conf.json
+      - name: Validate both Linux editions and SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          root=apps/desktop/src-tauri/target/release/bundle
+          deb=("$root"/deb/*.deb)
+          rpm=("$root"/rpm/*.rpm)
+          image=("$root"/appimage/*.AppImage)
+          [[ ${#deb[@]} == 1 && ${#rpm[@]} == 1 && ${#image[@]} == 1 ]]
+          [[ "${deb[0]}" == *Pro* && "${rpm[0]}" == *Pro* && "${image[0]}" == *Pro* ]] || {
+            echo "::error::Pro Linux archives must contain the Pro product identity"
+            exit 1
+          }
+          cp -- "${deb[0]}" dist-linux/Snapvere-Pro-Linux-amd64.deb
+          cp -- "${rpm[0]}" dist-linux/Snapvere-Pro-Linux-x86_64-UNTESTED.rpm
+          cp -- "${image[0]}" dist-linux/Snapvere-Pro-Linux-x86_64.AppImage
+          for name in Snapvere-Linux-amd64.deb Snapvere-Linux-x86_64.AppImage \
+                      Snapvere-Pro-Linux-amd64.deb Snapvere-Pro-Linux-x86_64.AppImage; do
+            test "$(stat -c%s "dist-linux/$name")" -gt 1000000
+          done
+          for name in Snapvere-Linux-x86_64-UNTESTED.rpm Snapvere-Pro-Linux-x86_64-UNTESTED.rpm; do
+            rpm -qp --queryformat '%{ARCH}\n' "dist-linux/$name" | grep -qx 'x86_64'
+            if rpm -qp --requires "dist-linux/$name" | grep -E '(^|[^[:alnum:]])(libwebkit2gtk-4\.1-0|libayatana-appindicator3-1|libgtk-3-0)([[:space:]]|$)'; then
+              echo "::error::RPM requires a Debian package: $name"
+              exit 1
+            fi
+          done
+          chmod 755 dist-linux/*.AppImage
+          if cmp -s dist-linux/Snapvere-Linux-amd64.deb dist-linux/Snapvere-Pro-Linux-amd64.deb; then
+            echo "::error::Free and Pro Linux DEBs are identical"
+            exit 1
+          fi
+          (cd dist-linux && sha256sum ./* > SHA256SUMS-Linux.txt)
           (cd dist-linux && sha256sum --check SHA256SUMS-Linux.txt)
       - name: Upload untested Linux preview and RPM QA artifacts (not public release)
         uses: actions/upload-artifact@v4

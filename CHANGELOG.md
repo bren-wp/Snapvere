@@ -1,5 +1,14 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.28 — Free and Pro editions (unreleased; native build and QA pending)
+
+- Publish **two separate build flavors** from one audited Tauri/Rust codebase: Snapvere Free (`com.brendigo.snapvere`) and Snapvere Pro (`com.brendigo.snapvere.pro`), without restricting any existing Free features.
+- Pro adds Tutorial, Presentation and Compact GIF recording presets plus three private, locally persisted custom recording profiles, translated for twelve languages. Linux applies GIF-only safe profiles; unsupported MP4/audio paths stay disabled.
+- Pro update checks are offline/manual-only until a dedicated Pro-signed feed exists; no Free installer is proposed as a Pro upgrade. No accounts, payment processing or cloud uploads are added.
+- Keep robust GIF static-frame coalescing and exclusive recording-file creation tests.
+- Enforce distinct Windows Portable/Setup/MSI and Linux DEB/AppImage assets for both editions in CI and release, including SHA-256 verification. No unsupported 32-bit/ARM64 label.
+- **The Pro build is not yet a paid, license-enforced product**. A secure entitlement and customer delivery process require additional audited work.
+
 ## v0.2.27 — Local storage durability and distribution compatibility (unreleased, pending CI/physical QA)
 
 - Sync newly created PNG/JPEG/WebP captures to disk before indexing them in SQLite; reject failed persistence, preserve existing media, and add regression tests.
@@ -293,3 +302,20 @@ The separately deployed public snapvere.com currently serves a different impleme
 - Harden crash-recovery of deleted media: reject a staged file replaced with a directory or symlink before restoring it into the gallery, leave the durable journal pending, and recover normally once the valid staged file returns. Add a portable restart/recovery regression test.
 
 - Polish Viewer accessibility: modal overlay now receives initial keyboard focus, keeps Tab/Shift+Tab inside its controls, restores focus to the launching gallery card after close, and honors Escape even while the recording scrubber is focused. This changes no visible layout; add focused-dialog boundary regression tests.
+
+## Edition package and security hardening — v0.2.28 preview
+
+Pro adds native-only multi-selection and local batch gallery export with an
+OS folder picker, a maximum of 100 registered UUIDs, exclusive destination
+creation, format and symlink checks, local streaming copy and durable sync.
+The existing Free executable always rejects the Pro native IPC, independent
+of a modified WebView or user-configurable settings. Pro also includes its
+own title and app-data identifier; it has no cloud access or activation server.
+
+The v0.2.28 release job now builds and runs native tests for **both** editions
+and stages six Windows and four Linux artifacts. The release remains a private
+**draft** until actual assets, dependency inventory and SHA-256 manifest have
+been checked. Only then is it published as an **unsigned prerelease**. The
+legacy Free updater remains version-notification-only; Pro has no dedicated
+remote updater. Fedora RPM remains internal QA-only and 32-bit/ARM64 require
+new binaries, not renamed files.
