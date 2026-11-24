@@ -1,5 +1,12 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.32 — Release integrity (development)
+
+- Gate preview publication on successful quality and frontend visual checks for the exact main commit.
+- Reconcile unsigned Tauri release metadata from v0.2.25 onward, including future releases, without touching drafts or the legacy channel.
+- Keep all ten native packages as unsigned previews until signing and real native acceptance are verified.
+- Native device QA, commercial Pro entitlement, four isolated update channels and Linux recording parity remain open.
+
 ## v0.2.31 — Shared gallery reliability and Pro export preferences (development)
 
 - Both Windows and Linux, Free and Pro: uncropped gallery previews, lazy asynchronous decoding, safe fallback from a failed thumbnail to a registered still image, and localized unavailable-preview state. Recording files never become still-image fallback paths.

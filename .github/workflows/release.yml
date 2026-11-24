@@ -15,7 +15,45 @@ concurrency:
   group: snapvere-desktop-release-main
   cancel-in-progress: false
 jobs:
+  release-gate:
+    name: Require successful quality and visual checks for this main commit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 185
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Wait for exact main revision checks
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == refs/heads/main ]] || { echo "::error::Releases require main"; exit 1; }
+          for attempt in $(seq 1 360); do
+            ready=true
+            for workflow in quality.yml screenshots.yml; do
+              runs="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs" -f head_sha="$GITHUB_SHA" -f branch=main -f event=push -F per_page=100)"
+              run="$(jq -c --arg sha "$GITHUB_SHA" '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == "main" and .event == "push")] | max_by(.id) // {}' <<< "$runs")"
+              status="$(jq -r '.status // "missing"' <<< "$run")"
+              conclusion="$(jq -r '.conclusion // ""' <<< "$run")"
+              if [[ "$status" == completed ]]; then
+                [[ "$conclusion" == success ]] || { echo "::error::$workflow failed for $GITHUB_SHA ($conclusion)"; exit 1; }
+              else
+                ready=false
+              fi
+            done
+            if [[ "$ready" == true ]]; then
+              echo "Quality and frontend visual checks passed for $GITHUB_SHA"
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "::error::Required checks did not finish for $GITHUB_SHA"
+          exit 1
+
   linux-build:
+    needs: release-gate
     name: Build Linux preview .deb and AppImage from release revision
     runs-on: ubuntu-24.04
     timeout-minutes: 180
