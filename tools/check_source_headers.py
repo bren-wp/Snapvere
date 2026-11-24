@@ -12,10 +12,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 TARGETS = [
     (ROOT / "apps/desktop/src-tauri", {".rs"}),
+    (ROOT / "apps/desktop/src-tauri/native", {".c", ".h"}),
     (ROOT / "apps/desktop/src", {".ts", ".tsx", ".css"}),
     (ROOT / "apps/desktop/tests", {".mjs"}),
     (ROOT / "site", {".js", ".css"}),
     (ROOT / "tools", {".py", ".mjs", ".ps1"}),
+    (ROOT / "tools/native", {".c", ".h", ".sh"}),
 ]
 EXTRA_FILES = (
     ROOT / "apps/desktop/postcss.config.js",

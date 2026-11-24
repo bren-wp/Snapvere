@@ -12,6 +12,224 @@ const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 const MAX_IMAGE_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_IMAGE_PIXELS: u64 = 24_000_000;
 
+// Hold each Linux directory by descriptor; do not follow any path-component
+// symlink. On Windows, hold ancestor directory handles without delete sharing
+// and reject reparse points. The picker and initial open are still separate.
+struct PinnedDirectory {
+    path: PathBuf,
+    #[cfg(target_os = "linux")]
+    _directory: File,
+    #[cfg(windows)]
+    _ancestors: Vec<File>,
+}
+
+impl PinnedDirectory {
+    fn open(path: &Path) -> Result<Self, String> {
+        if !path.is_absolute() {
+            return Err("Export requires an absolute directory".into());
+        }
+        #[cfg(target_os = "linux")]
+        {
+            use rustix::fs::{open, openat, Mode, OFlags};
+            use std::os::fd::AsRawFd;
+            use std::path::Component;
+
+            let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
+            let mut directory = open("/", flags, Mode::empty()).map_err(estr)?;
+            for component in path.components() {
+                match component {
+                    Component::RootDir => {}
+                    Component::Normal(name) => {
+                        directory = openat(&directory, name, flags, Mode::empty()).map_err(estr)?;
+                    }
+                    _ => return Err("Invalid directory component".into()),
+                }
+            }
+            let directory = File::from(directory);
+            let path = PathBuf::from(format!("/proc/self/fd/{}", directory.as_raw_fd()));
+            Ok(Self {
+                path,
+                _directory: directory,
+            })
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+            let mut ancestors = Vec::new();
+            for ancestor in path.ancestors().collect::<Vec<_>>().into_iter().rev() {
+                if !ancestor.is_absolute() {
+                    continue;
+                }
+                let directory = OpenOptions::new()
+                    .read(true)
+                    .share_mode(3) // FILE_SHARE_READ | FILE_SHARE_WRITE, no delete sharing
+                    .custom_flags(0x02200000) // BACKUP_SEMANTICS | OPEN_REPARSE_POINT
+                    .open(ancestor)
+                    .map_err(estr)?;
+                let metadata = directory.metadata().map_err(estr)?;
+                if !metadata.is_dir() || metadata.file_attributes() & 0x400 != 0 {
+                    return Err("Redirected directory is not supported for export".into());
+                }
+                ancestors.push(directory);
+            }
+            Ok(Self {
+                path: path.to_path_buf(),
+                _ancestors: ancestors,
+            })
+        }
+        #[cfg(not(any(target_os = "linux", windows)))]
+        {
+            let metadata = fs::symlink_metadata(path).map_err(estr)?;
+            if !metadata.is_dir() || metadata.file_type().is_symlink() {
+                return Err("Invalid export directory".into());
+            }
+            Ok(Self {
+                path: path.to_path_buf(),
+            })
+        }
+    }
+}
+
+fn open_bounded_source(source: &Path, max: u64) -> Result<(File, u64), String> {
+    let parent = PinnedDirectory::open(source.parent().ok_or("Missing source directory")?)?;
+    let name = source.file_name().ok_or("Missing source filename")?;
+    let source = parent.path.join(name);
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.share_mode(1).custom_flags(0x00200000);
+    }
+    let before = fs::symlink_metadata(&source).map_err(estr)?;
+    if !before.is_file() || before.file_type().is_symlink() {
+        return Err("Invalid or redirected gallery file".into());
+    }
+    let reader = options.open(&source).map_err(estr)?;
+    let metadata = reader.metadata().map_err(estr)?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        use std::os::windows::io::AsRawHandle;
+        use windows::Win32::Foundation::HANDLE;
+        use windows::Win32::Storage::FileSystem::{
+            GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+        };
+        let mut info = BY_HANDLE_FILE_INFORMATION::default();
+        // SAFETY: reader owns the live handle and info is valid writable storage.
+        unsafe { GetFileInformationByHandle(HANDLE(reader.as_raw_handle()), &mut info) }
+            .map_err(estr)?;
+        if metadata.file_attributes() & 0x400 != 0 || info.nNumberOfLinks != 1 {
+            return Err("Redirected or multiply linked gallery file".into());
+        }
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != metadata.dev() || before.ino() != metadata.ino() || metadata.nlink() != 1
+        {
+            return Err("Source changed or has multiple hard links".into());
+        }
+    }
+    if !metadata.is_file() || metadata.len() == 0 || metadata.len() > max {
+        return Err("Invalid or oversized gallery file".into());
+    }
+    Ok((reader, metadata.len()))
+}
+
+// Linux stages in an anonymous inode, not a pathname another process could
+// replace between writing and publishing. Link the exact opened inode after
+// sync, without replacing any existing destination.
+#[cfg(target_os = "linux")]
+fn publish_exclusively(
+    destination: &Path,
+    write: impl FnOnce(&mut File) -> Result<(), String>,
+) -> Result<(), String> {
+    use rustix::fs::{linkat, openat, AtFlags, Mode, OFlags, CWD};
+    use std::os::fd::AsRawFd;
+
+    let parent = destination.parent().ok_or("Missing export directory")?;
+    let name = destination.file_name().ok_or("Missing export filename")?;
+    let directory = File::open(parent).map_err(estr)?;
+    let flags = OFlags::TMPFILE | OFlags::RDWR | OFlags::CLOEXEC;
+    let mut staged = File::from(
+        openat(&directory, ".", flags, Mode::RUSR | Mode::WUSR)
+            .map_err(|error| format!("Destination does not support secure staging: {error}"))?,
+    );
+    write(&mut staged)?;
+    staged.sync_all().map_err(estr)?;
+    let descriptor = format!("/proc/self/fd/{}", staged.as_raw_fd());
+    linkat(
+        CWD,
+        descriptor.as_str(),
+        &directory,
+        name,
+        AtFlags::SYMLINK_FOLLOW,
+    )
+    .map_err(estr)?;
+    // Publication succeeded; do not report a failed copy and induce a duplicate
+    // retry just because this filesystem does not support directory fsync.
+    if let Err(error) = directory.sync_all() {
+        log(&format!(
+            "Export published; directory sync unavailable: {error}"
+        ));
+    }
+    Ok(())
+}
+
+// Windows uses same-filesystem staging and no-clobber publication. The named
+// staging entry is still subject to same-user manipulation; audit separately.
+#[cfg(not(target_os = "linux"))]
+fn publish_exclusively(
+    destination: &Path,
+    write: impl FnOnce(&mut File) -> Result<(), String>,
+) -> Result<(), String> {
+    let parent = destination.parent().ok_or("Missing export directory")?;
+    let mut staged = tempfile::Builder::new()
+        .prefix(".snapvere-")
+        .suffix(".partial")
+        .tempfile_in(parent)
+        .map_err(estr)?;
+    write(staged.as_file_mut())?;
+    staged.as_file().sync_all().map_err(estr)?;
+    staged
+        .persist_noclobber(destination)
+        .map_err(|error| estr(error.error))?;
+    Ok(())
+}
+
+fn copy_bounded(
+    reader: &mut impl Read,
+    writer: &mut impl std::io::Write,
+    expected: u64,
+) -> io::Result<()> {
+    // Write no more than the validated initial size even if a source grows.
+    let copied = io::copy(&mut (&mut *reader).take(expected), writer)?;
+    let mut extra = [0_u8; 1];
+    if copied != expected || reader.read(&mut extra)? != 0 {
+        return Err(io::Error::other("Source changed during export"));
+    }
+    Ok(())
+}
+
+fn export_results<T>(
+    items: impl IntoIterator<Item = (String, T)>,
+    mut export_one: impl FnMut(T) -> Result<(), String>,
+) -> Vec<crate::models::BatchExportItem> {
+    items
+        .into_iter()
+        .map(|(id, item)| crate::models::BatchExportItem {
+            id,
+            succeeded: export_one(item).is_ok(),
+        })
+        .collect()
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum BatchPreset {
     Original,
@@ -61,21 +279,13 @@ fn read_bounded_image(
     source: &Path,
     format: image::ImageFormat,
 ) -> Result<image::DynamicImage, String> {
-    let metadata = fs::symlink_metadata(source).map_err(estr)?;
-    if !metadata.is_file()
-        || metadata.file_type().is_symlink()
-        || metadata.len() == 0
-        || metadata.len() > MAX_IMAGE_BYTES
-    {
-        return Err("Invalid, redirected or oversized source image".into());
-    }
+    let (reader, expected) = open_bounded_source(source, MAX_IMAGE_BYTES)?;
     let mut bytes = Vec::new();
-    File::open(source)
-        .map_err(estr)?
-        .take(MAX_IMAGE_BYTES + 1)
+    reader
+        .take(expected + 1)
         .read_to_end(&mut bytes)
         .map_err(estr)?;
-    if bytes.len() as u64 != metadata.len() {
+    if bytes.len() as u64 != expected {
         return Err("Source changed during image export".into());
     }
     let (width, height) = image::ImageReader::with_format(Cursor::new(&bytes), format)
@@ -114,29 +324,11 @@ fn transform_exclusively(
     if format == image::ImageFormat::WebP {
         decoded = image::DynamicImage::ImageRgba8(decoded.into_rgba8());
     }
-    let file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(destination)
-        .map_err(estr)?;
-    let mut writer = BufWriter::new(file);
-    let result = decoded
-        .write_to(&mut writer, format)
-        .map_err(estr)
-        .and_then(|()| {
-            writer.flush().map_err(estr)?;
-            writer.get_ref().sync_all().map_err(estr)
-        });
-    drop(writer);
-    if let Err(error) = result {
-        if let Err(cleanup) = fs::remove_file(destination) {
-            log(&format!(
-                "failed to remove incomplete Pro image output: {cleanup}"
-            ));
-        }
-        return Err(error);
-    }
-    Ok(())
+    publish_exclusively(destination, |file| {
+        let mut writer = BufWriter::new(file);
+        decoded.write_to(&mut writer, format).map_err(estr)?;
+        writer.flush().map_err(estr)
+    })
 }
 
 fn validate_ids(ids: &[String]) -> Result<(), String> {
@@ -145,7 +337,8 @@ fn validate_ids(ids: &[String]) -> Result<(), String> {
     }
     let mut seen = HashSet::with_capacity(ids.len());
     for id in ids {
-        if uuid::Uuid::parse_str(id).is_err() || !seen.insert(id) {
+        let canonical = uuid::Uuid::parse_str(id).is_ok_and(|value| value.to_string() == *id);
+        if !canonical || !seen.insert(id) {
             return Err("Invalid or duplicate gallery item".into());
         }
     }
@@ -166,36 +359,10 @@ fn accepted_extension(format: &str) -> Result<&'static str, String> {
 fn copy_exclusively(source: &Path, destination: &Path) -> Result<(), String> {
     // Symlinks in the gallery must not turn a batch operation into a private
     // file-exfiltration primitive. The destination path is generated, not input.
-    let metadata = fs::symlink_metadata(source).map_err(estr)?;
-    if !metadata.is_file()
-        || metadata.file_type().is_symlink()
-        || metadata.len() == 0
-        || metadata.len() > MAX_FILE_BYTES
-    {
-        return Err("Invalid, redirected or oversized gallery file".into());
-    }
-    let mut reader = File::open(source).map_err(estr)?;
-    let mut writer = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(destination)
-        .map_err(estr)?;
-    let result = io::copy(&mut reader, &mut writer).and_then(|copied| {
-        if copied != metadata.len() {
-            return Err(io::Error::other("Source changed during export"));
-        }
-        writer.sync_all()
-    });
-    drop(writer);
-    if let Err(error) = result {
-        if let Err(cleanup) = fs::remove_file(destination) {
-            log(&format!(
-                "failed to remove incomplete Pro batch output: {cleanup}"
-            ));
-        }
-        return Err(format!("Could not complete local export: {error}"));
-    }
-    Ok(())
+    let (mut reader, expected) = open_bounded_source(source, MAX_FILE_BYTES)?;
+    publish_exclusively(destination, |writer| {
+        copy_bounded(&mut reader, writer, expected).map_err(estr)
+    })
 }
 
 pub(super) async fn export(
@@ -203,7 +370,7 @@ pub(super) async fn export(
     window: tauri::WebviewWindow,
     ids: Vec<String>,
     preset: String,
-) -> Result<u32, String> {
+) -> Result<crate::models::BatchExportReport, String> {
     validate_ids(&ids)?;
     let preset = BatchPreset::parse(&preset)?;
     tauri::async_runtime::spawn_blocking(move || {
@@ -211,25 +378,13 @@ pub(super) async fn export(
         let state = app.state::<AppState>();
         let items = {
             let db = lock(&state.db);
-            ids.iter()
+            ids.into_iter()
                 .map(|id| {
-                    db.get(id)
-                        .map_err(estr)?
-                        .ok_or_else(|| "Gallery item no longer exists".into())
+                    let shot = db.get(&id).map_err(estr)?;
+                    Ok((id, shot))
                 })
                 .collect::<Result<Vec<_>, String>>()?
         };
-        // Reject incompatible selections before the picker or any file write.
-        for shot in &items {
-            if preset == BatchPreset::Original {
-                accepted_extension(&shot.format)?;
-            } else {
-                if shot.source == "recording" {
-                    return Err("Image presets do not convert recordings".into());
-                }
-                still_format(&shot.format)?;
-            }
-        }
         let selected = app
             .dialog()
             .file()
@@ -237,31 +392,36 @@ pub(super) async fn export(
             .set_title("Export selected Snapvere Pro captures")
             .blocking_pick_folder();
         let Some(folder) = selected else {
-            return Ok(0);
+            return Ok(crate::models::BatchExportReport {
+                cancelled: true,
+                items: Vec::new(),
+            });
         };
         let destination = folder.into_path().map_err(estr)?;
         // Native picker decides the directory; don't accept a renderer path.
-        let metadata = fs::symlink_metadata(&destination).map_err(estr)?;
-        if !metadata.is_dir() || metadata.file_type().is_symlink() {
-            return Err("Selected folder is invalid".into());
-        }
-        let mut completed = 0;
-        for shot in items {
+        let destination = PinnedDirectory::open(&destination)?;
+        let items = export_results(items, |shot| {
+            let shot = shot.ok_or_else(|| "Gallery item no longer exists".to_string())?;
+            if preset != BatchPreset::Original && shot.source == "recording" {
+                return Err("Image presets do not convert recordings".into());
+            }
             let ext = preset.extension(&shot.format)?;
             let src = PathBuf::from(shot.file_path);
-            let file = destination.join(format!(
+            let file = destination.path.join(format!(
                 "Snapvere-Pro-{}.{}",
                 uuid::Uuid::new_v4().simple(),
                 ext
             ));
             if preset == BatchPreset::Original {
-                copy_exclusively(&src, &file)?;
+                copy_exclusively(&src, &file)
             } else {
-                transform_exclusively(&src, &file, still_format(&shot.format)?, preset)?;
+                transform_exclusively(&src, &file, still_format(&shot.format)?, preset)
             }
-            completed += 1;
-        }
-        Ok(completed)
+        });
+        Ok(crate::models::BatchExportReport {
+            cancelled: false,
+            items,
+        })
     })
     .await
     .map_err(|error| format!("Local export task failed: {error}"))?
@@ -272,10 +432,47 @@ mod tests {
     use super::*;
 
     #[test]
+    fn partial_results_preserve_order_and_continue_after_failure() {
+        let report = export_results(
+            [
+                ("first".into(), true),
+                ("second".into(), false),
+                ("third".into(), true),
+            ],
+            |success| {
+                if success {
+                    Ok(())
+                } else {
+                    Err("write failed".into())
+                }
+            },
+        );
+        assert_eq!(report.len(), 3);
+        assert_eq!(report[1].id, "second");
+        assert!(report[0].succeeded);
+        assert!(!report[1].succeeded);
+        assert!(report[2].succeeded);
+    }
+
+    #[test]
+    fn bounded_copy_detects_growth_and_truncation() {
+        let mut output = Vec::new();
+        assert!(copy_bounded(&mut Cursor::new(b"abcd"), &mut output, 3).is_err());
+        assert_eq!(output, b"abc");
+        output.clear();
+        assert!(copy_bounded(&mut Cursor::new(b"a"), &mut output, 3).is_err());
+        assert_eq!(output, b"a");
+        output.clear();
+        assert!(copy_bounded(&mut Cursor::new(b"abc"), &mut output, 3).is_ok());
+        assert_eq!(output, b"abc");
+    }
+
+    #[test]
     fn rejects_duplicate_invalid_and_oversized_batch_requests() {
         let id = uuid::Uuid::new_v4().to_string();
         assert!(validate_ids(std::slice::from_ref(&id)).is_ok());
         assert!(validate_ids(&[]).is_err());
+        assert!(validate_ids(&["ABCDEF12-3456-7890-ABCD-EF1234567890".into()]).is_err());
         assert!(validate_ids(&[id.clone(), id]).is_err());
         assert!(validate_ids(&["../secrets.txt".into()]).is_err());
         let too_many = (0..101)
@@ -360,6 +557,78 @@ mod tests {
         assert!(!dest.exists());
         assert!(read_bounded_image(&link, image::ImageFormat::Png).is_err());
         fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn failed_staging_never_publishes_a_partial_file() {
+        let dir = tempfile::tempdir().expect("fixture");
+        let target = dir.path().join("capture.png");
+        let result = publish_exclusively(&target, |file| {
+            file.write_all(b"partial").map_err(estr)?;
+            Err("simulated disk failure".into())
+        });
+        assert!(result.is_err());
+        assert!(!target.exists());
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn multiply_linked_sources_are_rejected() {
+        let dir = tempfile::tempdir().expect("fixture");
+        let source = dir.path().join("original.png");
+        let linked = dir.path().join("linked.png");
+        fs::write(&source, b"private").expect("source");
+        fs::hard_link(&source, &linked).expect("hard link");
+        assert!(open_bounded_source(&linked, MAX_FILE_BYTES).is_err());
+        assert!(open_bounded_source(&source, MAX_FILE_BYTES).is_err());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn staged_inode_has_no_name_and_collision_never_replaces_user_data() {
+        let dir = tempfile::tempdir().expect("fixture");
+        let target = dir.path().join("capture.png");
+        let result = publish_exclusively(&target, |file| {
+            assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
+            file.write_all(b"private capture").map_err(estr)?;
+            // Simulate a competing creator during export.
+            fs::write(&target, b"existing user data").map_err(estr)
+        });
+        assert!(result.is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"existing user data");
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn pinned_directory_survives_path_replacement_without_redirecting_output() {
+        let dir = tempfile::tempdir().expect("fixture");
+        let selected = dir.path().join("selected");
+        let moved = dir.path().join("moved");
+        fs::create_dir(&selected).unwrap();
+        let pinned = PinnedDirectory::open(&selected).unwrap();
+        fs::rename(&selected, &moved).unwrap();
+        fs::create_dir(&selected).unwrap();
+        publish_exclusively(&pinned.path.join("capture.png"), |file| {
+            file.write_all(b"complete").map_err(estr)
+        })
+        .unwrap();
+        assert!(!selected.join("capture.png").exists());
+        assert_eq!(fs::read(moved.join("capture.png")).unwrap(), b"complete");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn symlinked_parent_is_rejected() {
+        use std::os::unix::fs::symlink;
+        let dir = tempfile::tempdir().expect("fixture");
+        let real = dir.path().join("real");
+        let link = dir.path().join("link");
+        fs::create_dir(&real).unwrap();
+        fs::write(real.join("capture.png"), b"private").unwrap();
+        symlink(&real, &link).unwrap();
+        assert!(PinnedDirectory::open(&link).is_err());
+        assert!(open_bounded_source(&link.join("capture.png"), MAX_FILE_BYTES).is_err());
     }
 
     #[test]

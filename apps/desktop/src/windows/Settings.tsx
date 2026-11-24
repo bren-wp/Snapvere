@@ -12,7 +12,7 @@ import { ipc } from "../lib/ipc";
 import { LANGUAGES, type Language } from "../lib/i18n";
 import { useLanguage } from "../lib/LanguageProvider";
 import { printScreenCopy } from "../lib/printScreenHelp";
-import type { ImageFormat, RecordFormat, PlatformCapabilities } from "../lib/types";
+import type { ImageFormat, RecordFormat, PlatformCapabilities, LinuxAudioSnapshot } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
 import ProRecordingProfiles from "../components/ProRecordingProfiles";
 import { APP_NAME, IS_PRO } from "../lib/edition";
@@ -67,6 +67,10 @@ export default function Settings() {
   const [notice, setNotice] = useState<string | null>(null);
   const [platform, setPlatform] = useState<PlatformCapabilities | null>(null);
   const linuxGifOnly = platform?.os === "linux";
+  const [audioDevices, setAudioDevices] = useState<LinuxAudioSnapshot | null>(null);
+  const [audioBusy, setAudioBusy] = useState(false);
+  const [audioMic, setAudioMic] = useState("");
+  const [audioMonitor, setAudioMonitor] = useState("");
   const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
@@ -116,6 +120,42 @@ export default function Settings() {
       }
     })().catch((error) => setNotice(`${t("Could not load settings:")} ${String(error)}`));
   }, []);
+
+  async function refreshAudioDevices() {
+    setAudioBusy(true);
+    try {
+      const snapshot = await ipc.listLinuxAudioDevices();
+      setAudioDevices(snapshot);
+      setAudioMic(snapshot?.microphone ?? "");
+      setAudioMonitor(snapshot?.monitor ?? "");
+    } catch (error) {
+      setAudioDevices(null);
+      setNotice(t("Could not load settings:"));
+      void error;
+    } finally {
+      setAudioBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (tab === "recording" && platform?.linuxAudioPicker) void refreshAudioDevices();
+  }, [tab, platform?.linuxAudioPicker]);
+
+  async function saveAudioDevices() {
+    if (!audioDevices || audioBusy) return;
+    setAudioBusy(true);
+    try {
+      await ipc.selectLinuxAudioDevices(audioDevices.cookie, audioMic || null, audioMonitor || null);
+      setNotice(null);
+      await refreshAudioDevices();
+    } catch (error) {
+      setNotice(t("Could not save setting:"));
+      void error;
+      await refreshAudioDevices();
+    } finally {
+      setAudioBusy(false);
+    }
+  }
 
   function set<K extends keyof AppSettings>(key: K, val: AppSettings[K]) {
     if (!store) {
@@ -466,6 +506,42 @@ export default function Settings() {
                 onChange={(v) => set("recordSystemAudio", v)}
               />
             </Row>
+            {platform?.linuxAudioPicker && audioDevices && (
+              <>
+                <Row label={t("Record microphone")}>
+                  <select aria-label={t("Record microphone")} disabled={audioBusy}
+                    className="max-w-xs rounded-lg border border-border bg-elevated px-3 py-1.5 text-sm"
+                    value={audioMic} onChange={(event) => setAudioMic(event.target.value)}>
+                    <option value="">—</option>
+                    {audioDevices.devices.filter((device) => device.role === "microphone").map((device) => (
+                      <option key={device.serial} value={device.serial}>{device.name}</option>
+                    ))}
+                  </select>
+                </Row>
+                <Row label={t("Record system audio")}>
+                  <select aria-label={t("Record system audio")} disabled={audioBusy}
+                    className="max-w-xs rounded-lg border border-border bg-elevated px-3 py-1.5 text-sm"
+                    value={audioMonitor} onChange={(event) => setAudioMonitor(event.target.value)}>
+                    <option value="">—</option>
+                    {audioDevices.devices.filter((device) => device.role === "monitor").map((device) => (
+                      <option key={device.serial} value={device.serial}>{device.name}</option>
+                    ))}
+                  </select>
+                </Row>
+                <Row label={t("Save")}>
+                  <div className="flex gap-2">
+                    <button disabled={audioBusy} onClick={() => void refreshAudioDevices()}
+                      className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-elevated">
+                      {t("Change")}
+                    </button>
+                    <button disabled={audioBusy} onClick={() => void saveAudioDevices()}
+                      className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-elevated">
+                      {t("Save")}
+                    </button>
+                  </div>
+                </Row>
+              </>
+            )}
             <Row
               label={t("Stop after")}
               hint={t("Limit recording duration to protect disk space.")}

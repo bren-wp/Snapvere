@@ -1,6 +1,11 @@
 // Snapvere by Brendigo
 // TS ogledalo Rust modela (serde camelCase). Vidi src-tauri/src/models.rs.
 
+export interface BatchExportReport {
+  cancelled: boolean;
+  items: { id: string; succeeded: boolean }[];
+}
+
 export type ImageFormat = "png" | "jpg" | "webp";
 export type CaptureSource = "region" | "fullscreen" | "window" | "recording";
 export type CaptureAction = "copy" | "save" | "edit";
@@ -75,6 +80,8 @@ export interface PlatformCapabilities {
   microphone: boolean;
   systemAudio: boolean;
   cursorInRecordings: boolean;
+  /** Only opt-in Linux builds may display the native device picker. */
+  linuxAudioPicker?: boolean;
 }
 
 // ── snimanje ekrana ──
@@ -154,4 +161,17 @@ export interface RecFrameRect {
   height: number;
   /** Snima se cijeli monitor: nema zatamnjenja, samo rub. */
   full: boolean;
+}
+
+export interface LinuxAudioSnapshot {
+  cookie: number;
+  devices: { serial: string; role: "microphone" | "monitor"; name: string }[];
+  microphone: string | null;
+  monitor: string | null;
+}
+
+/** Output-local logical selection; physical mapping is done by native Wayland. */
+export interface LogicalRecordingSelection extends Region {
+  viewportWidth: number;
+  viewportHeight: number;
 }

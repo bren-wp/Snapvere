@@ -69,6 +69,7 @@ pub struct PlatformCapabilities {
     microphone: bool,
     system_audio: bool,
     cursor_in_recordings: bool,
+    linux_audio_picker: bool,
 }
 
 /// Native platform contract; a shared React UI must not promise unsupported
@@ -86,6 +87,7 @@ fn platform_capabilities() -> PlatformCapabilities {
         microphone: cfg!(windows),
         system_audio: cfg!(windows),
         cursor_in_recordings: cfg!(windows),
+        linux_audio_picker: cfg!(all(target_os = "linux", feature = "linux-native-media")),
     }
 }
 
@@ -97,6 +99,46 @@ pub fn get_platform_capabilities(
     Ok(platform_capabilities())
 }
 
+/// Device discovery is available only in the explicitly enabled native Linux build.
+#[tauri::command]
+pub async fn list_linux_audio_devices(
+    window: tauri::WebviewWindow,
+) -> Result<Option<crate::models::LinuxAudioSnapshot>, String> {
+    require_window_label(window.label(), &["settings"])?;
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    {
+        tauri::async_runtime::spawn_blocking(|| record::linux_audio::devices().map(Some))
+            .await
+            .map_err(estr)?
+    }
+    #[cfg(not(all(target_os = "linux", feature = "linux-native-media")))]
+    Ok(None)
+}
+
+/// Only Settings may approve explicitly selected live node identities.
+#[tauri::command]
+pub async fn select_linux_audio_devices(
+    window: tauri::WebviewWindow,
+    cookie: u32,
+    microphone: Option<String>,
+    monitor: Option<String>,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["settings"])?;
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    {
+        tauri::async_runtime::spawn_blocking(move || {
+            record::linux_audio::select(cookie, microphone, monitor)
+        })
+        .await
+        .map_err(estr)?
+    }
+    #[cfg(not(all(target_os = "linux", feature = "linux-native-media")))]
+    {
+        let _ = (cookie, microphone, monitor);
+        Err("Audio device selection is unavailable".into())
+    }
+}
+
 #[cfg(test)]
 #[test]
 fn native_capabilities_never_advertise_missing_linux_features() {
@@ -105,6 +147,10 @@ fn native_capabilities_never_advertise_missing_linux_features() {
     assert_eq!(capabilities.microphone, cfg!(windows));
     assert_eq!(capabilities.system_audio, cfg!(windows));
     assert_eq!(capabilities.cursor_in_recordings, cfg!(windows));
+    assert_eq!(
+        capabilities.linux_audio_picker,
+        cfg!(all(target_os = "linux", feature = "linux-native-media"))
+    );
 }
 
 // No arbitrary store keys or language identifiers may be supplied by a WebView.
@@ -895,9 +941,32 @@ fn region_capture_blocking(app: &AppHandle, mode: CaptureMode) -> Result<(), Str
             .get_webview_window("overlay")
             .ok_or_else(|| "Overlay window unavailable".to_string())?;
         set_cloaked(&win, true);
-        win.set_position(PhysicalPosition::new(info.x, info.y))
+        #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+        let geometry = if mode == CaptureMode::Record && record::wayland::active() {
+            let output = record::wayland::output_for_monitor(&info.name)?;
+            let monitor = win
+                .available_monitors()
+                .map_err(estr)?
+                .into_iter()
+                .find(|m| m.name().map(|name| name.as_str()) == Some(output.name.as_str()))
+                .ok_or("Native overlay monitor does not match the selected output")?;
+            if (monitor.size().width, monitor.size().height) != output.physical {
+                return Err("Native overlay size does not match the selected output".into());
+            }
+            (
+                monitor.position().x,
+                monitor.position().y,
+                output.physical.0,
+                output.physical.1,
+            )
+        } else {
+            (info.x, info.y, info.width, info.height)
+        };
+        #[cfg(not(all(target_os = "linux", feature = "linux-native-media")))]
+        let geometry = (info.x, info.y, info.width, info.height);
+        win.set_position(PhysicalPosition::new(geometry.0, geometry.1))
             .map_err(estr)?;
-        win.set_size(PhysicalSize::new(info.width, info.height))
+        win.set_size(PhysicalSize::new(geometry.2, geometry.3))
             .map_err(estr)?;
         win.emit(
             "snapvere:capture",
@@ -905,10 +974,10 @@ fn region_capture_blocking(app: &AppHandle, mode: CaptureMode) -> Result<(), Str
                 token,
                 id: info.id,
                 mode: mode.as_str(),
-                x: info.x,
-                y: info.y,
-                width: info.width,
-                height: info.height,
+                x: geometry.0,
+                y: geometry.1,
+                width: geometry.2,
+                height: geometry.3,
             },
         )
         .map_err(estr)
@@ -1285,11 +1354,12 @@ pub async fn start_recording(
     region: Option<Region>,
     monitor_id: Option<u32>,
     options: Option<RecordOptions>,
+    logical_selection: Option<crate::models::LogicalRecordingSelection>,
 ) -> Result<RecordStatus, String> {
     require_window_label(window.label(), &["overlay"])?;
     tauri::async_runtime::spawn_blocking(move || {
         let opts = options.unwrap_or_else(|| record_options(&app));
-        start_recording_inner(&app, region, monitor_id, opts)
+        start_recording_inner(&app, region, monitor_id, opts, logical_selection)
     })
     .await
     .map_err(|e| format!("start_recording task: {e}"))?
@@ -1300,16 +1370,82 @@ fn start_recording_inner(
     region: Option<Region>,
     monitor_id: Option<u32>,
     opts: RecordOptions,
+    logical_selection: Option<crate::models::LogicalRecordingSelection>,
 ) -> Result<RecordStatus, String> {
     let target = resolve_target(app, region, monitor_id)?;
+    #[cfg(not(all(target_os = "linux", feature = "linux-native-media")))]
+    let _ = logical_selection;
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    let (target, portal) = if record::wayland::active() {
+        let monitor = capture::list_monitors()
+            .map_err(estr)?
+            .into_iter()
+            .find(|m| m.id == target.monitor_id)
+            .ok_or("Selected monitor disappeared")?;
+        let output = record::wayland::output_for_monitor(&monitor.name)?;
+        let mut target = record::wayland::map_target(target, &output, logical_selection)?;
+        if region.is_some() {
+            let overlay = app
+                .get_webview_window("overlay")
+                .ok_or("Recording selection window is unavailable")?;
+            let monitor = overlay
+                .current_monitor()
+                .map_err(estr)?
+                .ok_or("Recording selection monitor is unavailable")?;
+            let origin = overlay.inner_position().map_err(estr)?;
+            let size = overlay.inner_size().map_err(estr)?;
+            if monitor.name().map(|name| name.as_str()) != Some(output.name.as_str())
+                || (origin.x, origin.y) != (monitor.position().x, monitor.position().y)
+                || (size.width, size.height) != output.physical
+                || (monitor.size().width, monitor.size().height) != output.physical
+                || overlay.scale_factor().map_err(estr)? != monitor.scale_factor()
+            {
+                return Err(
+                    "Wayland selection window does not match the authorized monitor".into(),
+                );
+            }
+            let scale = monitor.scale_factor();
+            if !scale.is_finite()
+                || scale <= 0.0
+                || (f64::from(output.logical.0) * scale - f64::from(output.physical.0)).abs() > 1.0
+                || (f64::from(output.logical.1) * scale - f64::from(output.physical.1)).abs() > 1.0
+            {
+                return Err("Wayland selection scale does not match the physical stream".into());
+            }
+            target.monitor_x = monitor.position().x;
+            target.monitor_y = monitor.position().y;
+        }
+        (target, Some(output))
+    } else {
+        (target, None)
+    };
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    let portal_capture = portal.is_some();
     let (ox, oy, ow, oh) = record::crop_rect(&target)?;
 
     // Overlay se sklanja TEK nakon uspješnog starta — ako DXGI ili enkoder padnu,
     // korisnik grešku vidi u overlayu koji je još pred njim. Overlay je ionako
     // izuzet iz capture-a (`exclude_from_capture`), pa ne može upasti u snimku.
-    let status = record::start(app, target, opts)?;
+    let status = record::start(
+        app,
+        target,
+        opts,
+        #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+        portal,
+    )?;
     hide_overlays(app);
     lock(&app.state::<AppState>().frozen).clear();
+
+    // Wayland global window placement and annotation/redaction alignment
+    // are not yet verified. Keep those surfaces closed in portal recordings.
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    if portal_capture {
+        let _ = app.emit(
+            "snapvere:toast",
+            "Recording started. Press the recording shortcut again to stop.",
+        );
+        return Ok(status);
+    }
 
     // Okvir ide prvi (najniže), pa sloj za crtanje, pa HUD — HUD mora ostati na vrhu.
     if let Err(e) = show_rec_frame(app, &target, (ox, oy, ow, oh)) {
@@ -1451,7 +1587,7 @@ pub fn dispatch_record_fullscreen(app: &AppHandle) {
                 return;
             }
             let opts = record_options(&app);
-            if let Err(e) = start_recording_inner(&app, None, None, opts) {
+            if let Err(e) = start_recording_inner(&app, None, None, opts, None) {
                 let _ = app.emit(
                     "snapvere:toast",
                     "Recording could not start. Open Diagnostics for details.",
@@ -1479,7 +1615,11 @@ pub fn pause_recording(
     app: AppHandle,
     paused: bool,
 ) -> Result<RecordStatus, String> {
-    require_window_label(window.label(), &["recbar"])?;
+    if paused {
+        require_window_label(window.label(), &["recbar", "recdraw"])?;
+    } else {
+        require_window_label(window.label(), &["recbar"])?;
+    }
     record::set_paused(&app, paused)
 }
 
@@ -1488,8 +1628,75 @@ pub fn recording_status(
     window: tauri::WebviewWindow,
     app: AppHandle,
 ) -> Result<RecordStatus, String> {
-    require_window_label(window.label(), &["recbar"])?;
+    require_window_label(window.label(), &["recbar", "recdraw"])?;
     Ok(record::status(&app))
+}
+
+/// Ordinary crop-local editor, shown only after portal recording is paused.
+pub(crate) fn show_crop_preview(app: &AppHandle) -> Result<(), String> {
+    let win = if let Some(win) = app.get_webview_window("recpreview") {
+        win
+    } else {
+        WebviewWindowBuilder::new(
+            app,
+            "recpreview",
+            WebviewUrl::App("index.html#recpreview".into()),
+        )
+        .title("Snapvere — Recording")
+        .inner_size(980.0, 680.0)
+        .min_inner_size(400.0, 300.0)
+        .visible(false)
+        .build()
+        .map_err(estr)?
+    };
+    win.emit("snapvere:preview-refresh", ()).map_err(estr)?;
+    win.show().map_err(estr)?;
+    win.set_focus().map_err(estr)
+}
+
+#[tauri::command]
+pub fn get_crop_preview(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+) -> Result<record::preview::Snapshot, String> {
+    require_window_label(window.label(), &["recpreview"])?;
+    record::crop_preview(&app)
+}
+
+#[tauri::command]
+pub fn get_crop_preview_packet(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    session: String,
+    after: u64,
+) -> Result<Response, String> {
+    require_window_label(window.label(), &["recpreview"])?;
+    Ok(Response::new(record::crop_preview_packet(
+        &app, &session, after,
+    )?))
+}
+
+#[tauri::command]
+pub fn acknowledge_crop_preview(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    session: String,
+    frame_id: u64,
+) -> Result<u64, String> {
+    require_window_label(window.label(), &["recpreview"])?;
+    record::acknowledge_crop_preview(&app, &session, frame_id)
+}
+
+#[tauri::command]
+pub fn resume_crop_preview(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    session: String,
+    marks: Vec<record::preview::Mark>,
+    history_delta: i32,
+) -> Result<RecordStatus, String> {
+    require_window_label(window.label(), &["recpreview"])?;
+    record::resume_crop_preview(&app, &session, marks, history_delta)
 }
 
 /// Resize only the recording HUD, only to reviewed fixed dimensions.
@@ -1554,9 +1761,19 @@ pub fn set_blur_regions(
     window: tauri::WebviewWindow,
     app: AppHandle,
     rects: Vec<PixelRect>,
+    viewport_width: u32,
+    viewport_height: u32,
 ) -> Result<(), String> {
     require_window_label(window.label(), &["recdraw"])?;
-    record::set_blur_regions(&app, rects)
+    let size = window.inner_size().map_err(estr)?;
+    let scale = window.scale_factor().map_err(estr)?;
+    record::set_blur_regions(
+        &app,
+        rects,
+        (viewport_width, viewport_height),
+        (size.width, size.height),
+        scale,
+    )
 }
 
 /// Sakrij UI snimanja (HUD + sloj za crtanje). Zove ga frontend kad snimanje završi.
@@ -1709,7 +1926,7 @@ pub async fn pro_export_batch(
     window: tauri::WebviewWindow,
     ids: Vec<String>,
     preset: String,
-) -> Result<u32, String> {
+) -> Result<crate::models::BatchExportReport, String> {
     require_window_label(window.label(), &["home"])?;
     #[cfg(feature = "pro")]
     {

@@ -15,11 +15,23 @@ pub(super) fn run(
     fps: u32,
     crop: (u32, u32, u32, u32),
     ready: std::sync::mpsc::Sender<Result<(), String>>,
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))] portal: Option<
+        wayland::OutputGeometry,
+    >,
 ) -> Result<Recorded, String> {
     let (ox, oy, ow, oh) = crop;
     let t0 = Instant::now();
 
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    let mut source = match portal {
+        Some(output) => Source::Wayland(Box::new(wayland::PortalSource::open(&target, output)?)),
+        None => Source::open(&target)?,
+    };
+    #[cfg(not(all(target_os = "linux", feature = "linux-native-media")))]
     let mut source = Source::open(&target)?;
+    if ctl.cancel.load(Ordering::Acquire) {
+        return Err("Recording initialization was cancelled".into());
+    }
     let (src_w, src_h) = source.size();
     let t_source = t0.elapsed();
 
@@ -65,8 +77,10 @@ pub(super) fn run(
             }
         }
     };
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, all(target_os = "linux", feature = "linux-native-media"))))]
     let mixer: Option<()> = None;
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    let mut mixer = linux_audio::Mixer::selected(&opts)?;
 
     let mut encoder = open_encoder(
         path,
@@ -77,8 +91,11 @@ pub(super) fn run(
         opts.quality,
         mixer.is_some(),
     )?;
-    // Mark the file as session-owned only after exclusive encoder creation succeeds.
-    ctl.output_owned.store(true, Ordering::Release);
+    // Linux experimental MP4 owns an anonymous inode until successful publication.
+    let delayed_publication = cfg!(all(target_os = "linux", feature = "linux-native-media"))
+        && opts.format == RecordFormat::Mp4;
+    ctl.output_owned
+        .store(!delayed_publication, Ordering::Release);
 
     #[cfg(windows)]
     let mut painter = cursor::CursorPainter::new();
@@ -91,6 +108,12 @@ pub(super) fn run(
 
     let interval = Duration::from_secs_f64(1.0 / fps as f64);
     let dur_100ns = (interval.as_nanos() / 100) as i64;
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    if let Some(mixer) = &mut mixer {
+        mixer.resume()?;
+        ctl.mic.store(opts.mic, Ordering::Relaxed);
+        ctl.system_audio.store(opts.system_audio, Ordering::Relaxed);
+    }
     let started = Instant::now();
     // Audio i video dijele sat od ovog trenutka: sve što je mikrofon uhvatio prije
     // starta bi inače stajalo ispred prvog framea kao konstantan zaostatak.
@@ -109,6 +132,8 @@ pub(super) fn run(
     let mut pause_started: Option<Instant> = None;
     let mut next_due = Instant::now();
     let mut last_tick = Instant::now();
+    let mut last_preview: Option<Instant> = None;
+    let mut last_accepted: Option<preview::FrameStamp> = None;
     let mut last_time_100ns = -1i64;
 
     let mut frame_buf = allocate_bgra(ow, oh)?;
@@ -149,11 +174,56 @@ pub(super) fn run(
         if ctl.phase.load(Ordering::Relaxed) == PHASE_PAUSED {
             if pause_started.is_none() {
                 pause_started = Some(Instant::now());
+                #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+                if let Some(mixer) = &mut mixer {
+                    mixer.pause();
+                }
+            }
+            #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+            if let Err(error) = source.discard_paused() {
+                recording_error = Some(error);
+                break;
+            }
+            if !ctl.pause_ack.load(Ordering::Acquire) {
+                if let Some(preview) = &ctl.preview {
+                    let mut preview = crate::state::lock(preview);
+                    // The worker still owns the most recent accepted frame.
+                    // Freeze that exact frame, not a throttled older sample.
+                    let pending = last_accepted.filter(|stamp| preview.needs_sample(stamp.id));
+                    if let Some(stamp) = pending {
+                        if let Err(error) = preview.remember(&frame_buf, stamp) {
+                            recording_error = Some(error);
+                            break;
+                        }
+                    }
+                    preview.begin_pause();
+                }
+                ctl.pause_ack.store(true, Ordering::Release);
+                if ctl.preview.is_some() {
+                    offer_preview(app, ctl);
+                }
             }
             std::thread::sleep(Duration::from_millis(40));
             continue;
         }
         if let Some(p) = pause_started.take() {
+            // The ordinary preview is hidden before resume. Allow compositor
+            // presentation to settle, then drain the bounded video queue.
+            if ctl.preview.is_some() {
+                std::thread::sleep(Duration::from_millis(250));
+            }
+            #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+            if let Err(error) = source.discard_paused() {
+                recording_error = Some(error);
+                break;
+            }
+            #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+            if let Some(mixer) = &mut mixer {
+                if let Err(error) = mixer.resume() {
+                    recording_error = Some(error);
+                    break;
+                }
+            }
             paused_total += p.elapsed();
             next_due = Instant::now();
             #[cfg(windows)]
@@ -214,6 +284,13 @@ pub(super) fn run(
             }
         }
 
+        if let Some(preview) = &ctl.preview {
+            if let Err(error) = crate::state::lock(preview).compose(&mut frame_buf) {
+                recording_error = Some(error);
+                break;
+            }
+        }
+
         if thumb.is_none() {
             thumb = Some(bgra_to_rgba_image(&frame_buf, ow, oh));
         }
@@ -234,12 +311,38 @@ pub(super) fn run(
             break;
         }
 
+        if let Some(preview) = &ctl.preview {
+            let id = ctl.frames.load(Ordering::Relaxed) + 1;
+            let stamp = preview::FrameStamp {
+                id,
+                timestamp_100ns: encoder.preview_pts_100ns(id, time_100ns as u64),
+                capture_started: work_started,
+                encoder_accepted: Instant::now(),
+            };
+            last_accepted = Some(stamp);
+            if last_preview.is_none_or(|last| last.elapsed() >= Duration::from_millis(100)) {
+                if let Err(error) = crate::state::lock(preview).remember(&frame_buf, stamp) {
+                    recording_error = Some(error);
+                    break;
+                }
+                last_preview = Some(Instant::now());
+            }
+        }
+
         #[cfg(windows)]
         if let Some(m) = &mixer {
             let due = ((media.saturating_sub(AUDIO_LAG)).as_secs_f64() * audio::RATE as f64) as i64;
             if let Err(e) = write_audio_until(&mut encoder, m, &mut audio_written, due) {
                 let error = format!("snimanje: audio je odbijen — {e}");
                 log(&error);
+                recording_error = Some(error);
+                break;
+            }
+        }
+
+        #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+        if let Some(mixer) = &mut mixer {
+            if let Err(error) = mixer.pump(&mut encoder, time_100ns + dur_100ns) {
                 recording_error = Some(error);
                 break;
             }
@@ -269,6 +372,9 @@ pub(super) fn run(
         }
     }
 
+    // Release the screen source and portal consent before potentially slow
+    // encoder finalization, even on cancellation or device loss.
+    drop(source);
     ctl.phase.store(PHASE_FINISHING, Ordering::SeqCst);
     let _ = app.emit("snapvere:rec-state", ctl.status());
     #[cfg(windows)]
@@ -286,26 +392,52 @@ pub(super) fn run(
             }
         }
     }
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    if let Some(mixer) = &mut mixer {
+        // Stop collecting before finalization; do not capture after Stop.
+        mixer.pause();
+    }
     let frames = ctl.frames.load(Ordering::Relaxed).max(1);
     log(&format!(
         "snimanje: prosječna obrada framea {:.1} ms (budžet {:.1} ms @ {fps} fps)",
         work_total.as_secs_f64() * 1000.0 / frames as f64,
         1000.0 / fps as f64
     ));
+    // An unpublished Linux MP4 is discarded on cancellation or runtime error.
+    if delayed_publication && (cancelled || recording_error.is_some()) {
+        drop(encoder);
+        if let Some(error) = recording_error {
+            return Err(error);
+        }
+        return Ok(Recorded {
+            cancelled,
+            width: ow,
+            height: oh,
+            thumb,
+        });
+    }
     // Finalize to release native file handles, but never commit a partial recording.
     let finalize_result = encoder.finish();
+    if delayed_publication && finalize_result.is_ok() {
+        ctl.output_owned.store(true, Ordering::Release);
+    }
     drop(encoder);
     // The encoder's close/flush does not guarantee its bytes reached the
     // filesystem. Persist the finalized MP4/GIF before it is indexed in the
     // gallery; disk-full or interrupted writes must not report success.
     // Open with write access for Windows FlushFileBuffers compatibility.
-    let durable_result = finalize_result.and_then(|()| {
-        std::fs::OpenOptions::new()
-            .write(true)
-            .open(path)
-            .and_then(|file| file.sync_all())
-            .map_err(|error| format!("Could not persist recording: {error}"))
-    });
+    let durable_result = if delayed_publication {
+        // The native encoder synced its exact opened inode before linking it.
+        finalize_result
+    } else {
+        finalize_result.and_then(|()| {
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open(path)
+                .and_then(|file| file.sync_all())
+                .map_err(|error| format!("Could not persist recording: {error}"))
+        })
+    };
     recording_completion(recording_error, durable_result)?;
 
     Ok(Recorded {

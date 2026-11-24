@@ -27,8 +27,11 @@ assert '#[cfg(feature = "pro")]\nmod pro_batch;' in commands
 assert '#[cfg(not(feature = "pro"))]' in commands
 assert 'require_window_label(window.label(), &["home"])?' in commands
 assert 'commands::pro_export_batch' in lib
-for required in ("blocking_pick_folder()", "create_new(true)", "sync_all()",
-                 "symlink_metadata", "validate_ids", "MAX_BATCH: usize = 100"):
+for required in ("blocking_pick_folder()", "persist_noclobber(destination)", "sync_all()",
+                 "symlink_metadata", "validate_ids", "MAX_BATCH: usize = 100",
+                 "PinnedDirectory::open", "metadata.nlink() != 1",
+                 "info.nNumberOfLinks != 1", "tempfile_in(parent)",
+                 "OFlags::TMPFILE", "AtFlags::SYMLINK_FOLLOW", "linkat("):
     assert required in native, f"Missing secure Pro batch export guard: {required}"
 for forbidden in ("reqwest::", "TcpStream::", "HttpClient::", "std::net::",
                   "ftp::", "WebSocket::"):

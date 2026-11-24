@@ -1,5 +1,57 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.32 — Release integrity (development)
+
+- Add isolated real Wayland portal inclusion test and session-bound browser render receipts for paused preview latency; retain live window safety gate.
+
+- Measure preview sample latency, freeze the exact last accepted frame at pause, render binary RGBA directly and verify codec frame identity and timing against preview packets.
+
+- Add bounded timestamped latest-frame binary preview transport and configurable annotation color, width and opacity with enforced opaque masks.
+
+- Expand crop-local annotations with bounded cached raster spans, transactional drawing-only undo/redo, protected committed masks and real encoder/decode fixtures.
+
+- Add experimental paused crop-local preview and native rectangular annotations/opaque masks applied to future encoder frames, independent of global Wayland window placement.
+
+- Validate output-local redaction viewport and map mask edges outward in Rust; add headless wlroots mixed-DPI compositor geometry acceptance.
+
+- Bind experimental Wayland logical overlay selection to validated per-output physical crop dimensions and portal video caps, with strict monitor/viewport identity checks.
+
+- Add independent Wayland compositor output inventory and exact inward fractional logical-to-physical region mapping; retain capture gating until real mixed-DPI overlay and stream validation.
+
+- Validate explicit portal monitor geometry and native overlay coordinates for experimental regional capture and single-monitor selection in unscaled multi-monitor layouts; reject ambiguous or scaled layouts.
+
+- Harden experimental Wayland portal ownership, revocation, bounded paused-frame discard, stream metadata validation and teardown before file finalization.
+
+- Add an opt-in continuous Wayland ScreenCast Portal/PipeWire video source for one full monitor, with consent-scoped remote, bounded startup and validated BGRA capture. Native compositor acceptance pending.
+
+- Add experimental bounded fractional audio-clock drift compensation and four-hour simulations, plus native X11 framebuffer acceptance in Free/Pro and monitor-geometry checks.
+
+- Add experimental graphical audio source selection backed by the live native PipeWire registry, settings-window-only IPC and session-scoped selection, without persisting stale serials.
+
+- Validate experimental Linux audio selections against native PipeWire node roles and server identity; reject stale sessions and reversed roles, and retain strict Rust formatting/dead-code checks.
+
+- Wire the experimental Rust recorder to the native AAC encoder and explicit dual-input PipeWire mixer, with bounded PCM/video-clock alignment, pause teardown, same-target resume and fail-closed audio health checks. Public capabilities remain disabled.
+
+- Add an experimental native AAC branch to the Linux MP4 adapter, plus real PipeWire PCM-to-AAC/H.264 mux, pause/resume and missing-device regression tests. Production recorder integration remains gated.
+
+- Add an isolated native PipeWire PCM transport acceptance test with virtual source and sink-monitor devices, explicit target selection and missing-target rejection. No audio capability enabled yet.
+
+- Introduce an opt-in native Linux H.264/MP4 encoder using GStreamer and an anonymous output inode, with real codec/decode CI tests. It is not enabled in public packages; PipeWire audio and native acceptance remain open.
+- Fix Clippy pixel conversion lint without disabling checks.
+
+- Linux Pro export publishes from an anonymous synced inode without a replaceable staging pathname; unsupported destination filesystems fail safely. Windows named staging remains under audit.
+- Reject changed capture geometry in the native xcap fallback to preserve region and redaction correctness; validate lockfile registry provenance and integrity.
+
+- Pro export stages and syncs output before publishing without replacement, pins the selected destination and rejects multiply linked source handles. Linux and Windows native regression verification pending.
+
+- Pro batch export continues after individual failures, returns per-capture success status and keeps failed IDs selected for retry; cancellation preserves selection.
+- Open and validate source handles, reject final symlink/reparse redirection on Linux/Windows, and bound original-copy writes to the validated size. Parent directory races and crash-safe publication remain under review.
+
+- Gate preview publication on successful quality and frontend visual checks for the exact main commit.
+- Reconcile unsigned Tauri release metadata from v0.2.25 onward, including future releases, without touching drafts or the legacy channel.
+- Keep all ten native packages as unsigned previews until signing and real native acceptance are verified.
+- Native device QA, commercial Pro entitlement, four isolated update channels and Linux recording parity remain open.
+
 ## v0.2.31 — Shared gallery reliability and Pro export preferences (development)
 
 - Both Windows and Linux, Free and Pro: uncropped gallery previews, lazy asynchronous decoding, safe fallback from a failed thumbnail to a registered still image, and localized unavailable-preview state. Recording files never become still-image fallback paths.

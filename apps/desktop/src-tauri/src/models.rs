@@ -4,6 +4,21 @@
 
 use serde::{Deserialize, Serialize};
 
+/// One result per requested gallery ID; no local paths or raw OS errors.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchExportItem {
+    pub id: String,
+    pub succeeded: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchExportReport {
+    pub cancelled: bool,
+    pub items: Vec<BatchExportItem>,
+}
+
 /// Izlazni format slike.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -70,6 +85,20 @@ pub struct Region {
     pub y: i32,
     pub width: u32,
     pub height: u32,
+}
+
+/// Logical CSS rectangle for the consent-scoped Wayland recorder.
+/// Kept separate from the legacy physical Region IPC contract.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LogicalRecordingSelection {
+    pub monitor_id: u32,
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+    pub viewport_width: u32,
+    pub viewport_height: u32,
 }
 
 /// Akcija koju korisnik odabere u overlay floating toolbaru.
@@ -236,4 +265,22 @@ impl RecordStatus {
             system_audio: false,
         }
     }
+}
+
+// Read-only native device metadata; serials are strings to preserve full u64 identity.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinuxAudioDevice {
+    pub serial: String,
+    pub role: &'static str,
+    pub name: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinuxAudioSnapshot {
+    pub cookie: u32,
+    pub devices: Vec<LinuxAudioDevice>,
+    pub microphone: Option<String>,
+    pub monitor: Option<String>,
 }

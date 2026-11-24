@@ -190,6 +190,54 @@ pub(super) fn pixelate_bgra(buf: &mut [u8], w: u32, h: u32, r: &PixelRect) {
     }
 }
 
+/// Map output-local CSS redaction rectangles to encoder pixels. Unlike
+/// selection crops, redact edges round OUTWARD: no partially covered pixel
+/// may remain outside the requested mask. The native surface must be the
+/// exact encoder surface, not a guessed global DPI.
+pub(super) fn map_redaction_rects(
+    rects: &[PixelRect],
+    viewport: (u32, u32),
+    surface: (u32, u32),
+    scale: f64,
+) -> Result<Vec<PixelRect>, String> {
+    if viewport.0 == 0
+        || viewport.1 == 0
+        || surface.0 == 0
+        || surface.1 == 0
+        || !scale.is_finite()
+        || scale <= 0.0
+        || (f64::from(viewport.0) * scale - f64::from(surface.0)).abs() > 2.0
+        || (f64::from(viewport.1) * scale - f64::from(surface.1)).abs() > 2.0
+        || rects.len() > super::MAX_BLUR_REGIONS
+    {
+        return Err("Invalid recording redaction viewport".into());
+    }
+    let axis = |start: u32, len: u32, logical: u32, physical: u32| {
+        let end = start.checked_add(len)?;
+        if len == 0 || end > logical {
+            return None;
+        }
+        let first = u64::from(start) * u64::from(physical) / u64::from(logical);
+        let last = (u64::from(end) * u64::from(physical)).div_ceil(u64::from(logical));
+        Some((first as u32, (last - first) as u32))
+    };
+    rects
+        .iter()
+        .map(|rect| {
+            let (x, width) = axis(rect.x, rect.width, viewport.0, surface.0)
+                .ok_or("Invalid horizontal redaction bounds")?;
+            let (y, height) = axis(rect.y, rect.height, viewport.1, surface.1)
+                .ok_or("Invalid vertical redaction bounds")?;
+            Ok(PixelRect {
+                x,
+                y,
+                width,
+                height,
+            })
+        })
+        .collect()
+}
+
 pub(super) fn bgra_to_rgba_image(bgra: &[u8], w: u32, h: u32) -> image::RgbaImage {
     let mut out = vec![0u8; bgra.len()];
     let (destination_pixels, _) = out.as_chunks_mut::<4>();
@@ -206,6 +254,26 @@ pub(super) fn bgra_to_rgba_image(bgra: &[u8], w: u32, h: u32) -> image::RgbaImag
 #[cfg(test)]
 mod regression_tests {
     use super::*;
+
+    #[test]
+    fn fractional_redaction_covers_every_touched_pixel() {
+        let rect = PixelRect {
+            x: 1,
+            y: 1,
+            width: 101,
+            height: 101,
+        };
+        let mapped = map_redaction_rects(&[rect], (1920, 1080), (2400, 1350), 1.25).unwrap();
+        let r = mapped[0];
+        assert_eq!((r.x, r.y, r.width, r.height), (1, 1, 127, 127));
+        assert!(map_redaction_rects(&[rect], (1920, 1080), (2400, 1350), 1.5).is_err());
+        assert!(map_redaction_rects(&[rect], (0, 1080), (2400, 1350), 1.25).is_err());
+        let overflow = PixelRect {
+            x: u32::MAX,
+            ..rect
+        };
+        assert!(map_redaction_rects(&[overflow], (1920, 1080), (2400, 1350), 1.25).is_err());
+    }
 
     fn target(region: Region) -> RecordTarget {
         RecordTarget {

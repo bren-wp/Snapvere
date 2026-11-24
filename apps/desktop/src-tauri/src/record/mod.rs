@@ -17,9 +17,20 @@ mod dxgi;
 #[cfg(windows)]
 mod mp4;
 
+#[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+mod audio_clock;
 mod gifenc;
+#[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+pub(crate) mod linux_audio;
+#[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+mod linux_mp4;
 mod pixels;
+pub(crate) mod preview;
 mod transport;
+#[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+pub(crate) mod wayland;
+#[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+mod wayland_outputs;
 mod worker;
 
 pub use pixels::crop_rect;
@@ -94,6 +105,8 @@ pub struct Ctl {
     /// Područja koja se pikseliziraju u svakom frameu (koordinate snimke).
     /// Jedini ne-atomik ovdje; lock je nenapadnut i drži se mikrosekundu po frameu.
     blur: Mutex<Vec<PixelRect>>,
+    preview: Option<Mutex<preview::Preview>>,
+    pause_ack: AtomicBool,
     /// Trenutak pokretanja — hotkey ne smije zaustaviti tek pokrenuto snimanje.
     started: Instant,
     /// Što se od zvuka STVARNO snima (postavlja recorder nakon otvaranja izvora).
@@ -237,16 +250,29 @@ pub fn start(
     app: &AppHandle,
     target: RecordTarget,
     opts: RecordOptions,
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))] portal: Option<
+        wayland::OutputGeometry,
+    >,
 ) -> Result<RecordStatus, String> {
     let _starting = RecorderStartGuard::acquire()?;
     if is_active(app) {
         return Err("Snimanje je već u tijeku".into());
     }
     validate_audio_options(&opts)?;
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    if opts.format == RecordFormat::Mp4 && opts.capture_cursor {
+        return Err("Experimental Linux MP4 requires cursor capture to be disabled".into());
+    }
 
     let fps = opts.fps.clamp(5, 60);
     // Izlazne dimenzije moraju biti parne (NV12 uzorkuje kromu 2x2).
     let (ox, oy, ow, oh) = crop_rect(&target)?;
+
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    let portal_preview = portal.is_some();
+    #[cfg(not(all(target_os = "linux", feature = "linux-native-media")))]
+    let portal_preview = false;
+    let preview = portal_preview.then(|| Mutex::new(preview::Preview::new(ow, oh)));
 
     let ctl = Arc::new(Ctl {
         phase: AtomicU8::new(PHASE_RECORDING),
@@ -259,6 +285,8 @@ pub fn start(
         height: oh,
         format: opts.format,
         blur: Mutex::new(Vec::new()),
+        preview,
+        pause_ack: AtomicBool::new(false),
         started: Instant::now(),
         mic: AtomicBool::new(false),
         system_audio: AtomicBool::new(false),
@@ -289,6 +317,8 @@ pub fn start(
                     fps,
                     (ox, oy, ow, oh),
                     ready_tx.clone(),
+                    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+                    portal,
                 )
             }));
             let outcome = match result {
@@ -302,7 +332,11 @@ pub fn start(
         .map_err(|e| format!("ne mogu pokrenuti dretvu snimanja: {e}"))?;
 
     // Otvaranje DXGI-ja + MF-a je ispod ~300 ms; timeout je samo zaštita od zaglavljivanja.
-    match ready_rx.recv_timeout(Duration::from_secs(10)) {
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    let startup_timeout = if wayland::active() { 100 } else { 10 };
+    #[cfg(not(all(target_os = "linux", feature = "linux-native-media")))]
+    let startup_timeout = 10;
+    match ready_rx.recv_timeout(Duration::from_secs(startup_timeout)) {
         Ok(Ok(())) => {}
         Ok(Err(e)) => {
             ctl.phase.store(PHASE_IDLE, Ordering::SeqCst);
@@ -389,37 +423,166 @@ fn bounded_blur_rects(
         .collect())
 }
 
-pub fn set_blur_regions(app: &AppHandle, rects: Vec<PixelRect>) -> Result<(), String> {
+pub fn set_blur_regions(
+    app: &AppHandle,
+    rects: Vec<PixelRect>,
+    viewport: (u32, u32),
+    surface: (u32, u32),
+    scale: f64,
+) -> Result<(), String> {
     let state = app.state::<AppState>();
     let guard = crate::state::lock(&state.recorder);
     let Some(session) = guard.as_ref() else {
         return Err("nema aktivnog snimanja".into());
     };
     let ctl = &session.ctl;
-    let bounded = bounded_blur_rects(&rects, ctl.width, ctl.height)?;
+    if surface != (ctl.width, ctl.height) {
+        return Err("Redaction window does not match the recording dimensions".into());
+    }
+    let mapped = pixels::map_redaction_rects(&rects, viewport, surface, scale)?;
+    let bounded = bounded_blur_rects(&mapped, ctl.width, ctl.height)?;
     *crate::state::lock(&ctl.blur) = bounded;
     Ok(())
 }
 
+// Preview windows are shown only after the worker acknowledges its pause.
+// Resume hides the window first. The main-thread show path uses try_lock so
+// it never deadlocks with a concurrent IPC resume waiting for the UI thread.
+fn hide_preview(app: &AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("recpreview") {
+        window.hide().map_err(|e| e.to_string())?;
+        if window.is_visible().map_err(|e| e.to_string())? {
+            return Err("Close the recording preview before resuming".into());
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn offer_preview(app: &AppHandle, ctl: &Arc<Ctl>) {
+    let app = app.clone();
+    let ctl = ctl.clone();
+    let dispatch = app.clone();
+    let _ = dispatch.run_on_main_thread(move || {
+        let state = app.state::<AppState>();
+        let Ok(slot) = state.recorder.try_lock() else {
+            return;
+        };
+        if !slot.as_ref().is_some_and(|s| Arc::ptr_eq(&s.ctl, &ctl))
+            || ctl.phase.load(Ordering::Acquire) != PHASE_PAUSED
+            || !ctl.pause_ack.load(Ordering::Acquire)
+            || !ctl
+                .preview
+                .as_ref()
+                .is_some_and(|p| crate::state::lock(p).ready())
+        {
+            return;
+        }
+        if let Err(error) = crate::commands::show_crop_preview(&app) {
+            log(&format!("Recording preview unavailable: {error}"));
+        }
+    });
+}
+
+pub fn crop_preview(app: &AppHandle) -> Result<preview::Snapshot, String> {
+    let state = app.state::<AppState>();
+    let slot = crate::state::lock(&state.recorder);
+    let ctl = &slot.as_ref().ok_or("No active recording")?.ctl;
+    if ctl.phase.load(Ordering::Acquire) != PHASE_PAUSED || !ctl.pause_ack.load(Ordering::Acquire) {
+        return Err("Recording preview requires an acknowledged pause".into());
+    }
+    let preview = ctl
+        .preview
+        .as_ref()
+        .ok_or("Recording preview is unavailable")?;
+    let preview = crate::state::lock(preview);
+    preview.snapshot()
+}
+
+pub fn crop_preview_packet(app: &AppHandle, session: &str, after: u64) -> Result<Vec<u8>, String> {
+    let state = app.state::<AppState>();
+    let slot = crate::state::lock(&state.recorder);
+    let ctl = &slot.as_ref().ok_or("No active recording")?.ctl;
+    if ctl.phase.load(Ordering::Acquire) != PHASE_PAUSED || !ctl.pause_ack.load(Ordering::Acquire) {
+        return Err("Recording preview requires an acknowledged pause".into());
+    }
+    let preview = ctl
+        .preview
+        .as_ref()
+        .ok_or("Recording preview is unavailable")?;
+    let preview = crate::state::lock(preview);
+    preview.check_session(session)?;
+    preview.packet(after)
+}
+
+pub fn acknowledge_crop_preview(
+    app: &AppHandle,
+    session: &str,
+    frame_id: u64,
+) -> Result<u64, String> {
+    let state = app.state::<AppState>();
+    let slot = crate::state::lock(&state.recorder);
+    let ctl = &slot.as_ref().ok_or("No active recording")?.ctl;
+    if ctl.phase.load(Ordering::Acquire) != PHASE_PAUSED || !ctl.pause_ack.load(Ordering::Acquire) {
+        return Err("Recording preview requires an acknowledged pause".into());
+    }
+    let preview = ctl
+        .preview
+        .as_ref()
+        .ok_or("Recording preview is unavailable")?;
+    let total = crate::state::lock(preview).acknowledge(session, frame_id)?;
+    log(&format!(
+        "Paused preview render receipt: {total} us (includes IPC and pause)"
+    ));
+    Ok(total)
+}
+
+pub fn resume_crop_preview(
+    app: &AppHandle,
+    session: &str,
+    marks: Vec<preview::Mark>,
+    history_delta: i32,
+) -> Result<RecordStatus, String> {
+    {
+        let state = app.state::<AppState>();
+        let slot = crate::state::lock(&state.recorder);
+        let ctl = &slot.as_ref().ok_or("No active recording")?.ctl;
+        if ctl.phase.load(Ordering::Acquire) != PHASE_PAUSED
+            || !ctl.pause_ack.load(Ordering::Acquire)
+        {
+            return Err("Recording is not paused".into());
+        }
+        let preview = ctl
+            .preview
+            .as_ref()
+            .ok_or("Recording preview is unavailable")?;
+        let mut preview = crate::state::lock(preview);
+        preview.check_session(session)?;
+        let plan = preview.plan(&marks, history_delta)?;
+        hide_preview(app)?;
+        preview.apply(plan);
+        ctl.pause_ack.store(false, Ordering::Release);
+        ctl.phase.store(PHASE_RECORDING, Ordering::Release);
+    }
+    Ok(publish_phase(app))
+}
+
 pub fn set_paused(app: &AppHandle, paused: bool) -> Result<RecordStatus, String> {
-    with_ctl(app, |ctl| {
+    {
+        let state = app.state::<AppState>();
+        let slot = crate::state::lock(&state.recorder);
+        let ctl = &slot.as_ref().ok_or("No active recording")?.ctl;
         let current = ctl.phase.load(Ordering::SeqCst);
         if paused && current == PHASE_RECORDING {
+            ctl.pause_ack.store(false, Ordering::Release);
             ctl.phase.store(PHASE_PAUSED, Ordering::SeqCst);
-            log(&format!(
-                "snimanje: pauza na {} ms ({} frameova)",
-                ctl.elapsed_ms.load(Ordering::Relaxed),
-                ctl.frames.load(Ordering::Relaxed)
-            ));
         } else if !paused && current == PHASE_PAUSED {
+            if ctl.preview.is_some() {
+                hide_preview(app)?;
+            }
+            ctl.pause_ack.store(false, Ordering::Release);
             ctl.phase.store(PHASE_RECORDING, Ordering::SeqCst);
-            log("snimanje: nastavak nakon pauze");
-        } else {
-            log(&format!(
-                "snimanje: zahtjev pauza={paused} ignoriran (faza {current})"
-            ));
         }
-    })?;
+    }
     Ok(publish_phase(app))
 }
 
@@ -531,7 +694,7 @@ fn open_encoder(
     quality: u8,
     with_audio: bool,
 ) -> Result<Encoder, String> {
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, all(target_os = "linux", feature = "linux-native-media"))))]
     let _ = with_audio;
     match format {
         #[cfg(windows)]
@@ -546,8 +709,12 @@ fn open_encoder(
                 channels: audio::CHANNELS as u32,
             }),
         )?))),
-        #[cfg(not(windows))]
-        RecordFormat::Mp4 => Err("MP4 snimanje je zasad dostupno samo na Windowsu".into()),
+        #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+        RecordFormat::Mp4 => Ok(Encoder::LinuxMp4(Box::new(linux_mp4::LinuxMp4::new(
+            path, w, h, fps, quality, with_audio,
+        )?))),
+        #[cfg(not(any(windows, all(target_os = "linux", feature = "linux-native-media"))))]
+        RecordFormat::Mp4 => Err("MP4 recording is not available in this build".into()),
         RecordFormat::Gif => Ok(Encoder::Gif(Box::new(gifenc::GifEncoder::new(
             path, w, h, fps, quality,
         )?))),
@@ -642,6 +809,10 @@ fn finish_session(
         std::fs::metadata(path).map(|m| m.len()).unwrap_or(0),
         Ordering::Relaxed,
     );
+
+    if ctl.preview.is_some() {
+        let _ = hide_preview(app);
+    }
 
     // Send terminal notifications before making the recorder available again.
     // Otherwise a new session can start while this worker is still emitting

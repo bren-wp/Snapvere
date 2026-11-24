@@ -29,7 +29,7 @@ import {
 import type { GalleryFilter } from "../lib/galleryPaging";
 import { galleryStatusCopy } from "../lib/galleryStatusCopy";
 import { galleryKeyboardShortcut } from "../lib/galleryKeyboard";
-import type { RecordDone, Screenshot } from "../lib/types";
+import type { BatchExportReport, RecordDone, Screenshot } from "../lib/types";
 import WindowFrame from "../components/WindowFrame";
 import { APP_NAME, IS_PRO } from "../lib/edition";
 import { proGalleryCopy } from "../lib/proGalleryCopy";
@@ -53,6 +53,7 @@ export default function Home() {
   const [proBatchMode, setProBatchMode] = useState(false);
   const [proSelected, setProSelected] = useState<Set<string>>(() => new Set());
   const [proExportBusy, setProExportBusy] = useState(false);
+  const [proExportReport, setProExportReport] = useState<BatchExportReport | null>(null);
   const [proExportPreset, setProExportPreset] = useState<ProExportPreset>(() => IS_PRO ? readProExportPreset() : "original");
   const proExportLock = useRef(false);
   const [query, setQuery] = useState("");
@@ -237,12 +238,13 @@ export default function Home() {
     proExportLock.current = true;
     setProExportBusy(true);
     try {
-      const count = await ipc.proExportBatch([...proSelected], proExportPreset);
-      if (count > 0) {
-        setToast(proText.exported(count));
-        setProSelected(new Set());
-        setProBatchMode(false);
-      }
+      const report = await ipc.proExportBatch([...proSelected], proExportPreset);
+      if (report.cancelled) return;
+      const failed = report.items.filter(item => !item.succeeded);
+      const count = report.items.length - failed.length;
+      setProExportReport(report);
+      setProSelected(new Set(failed.map(item => item.id)));
+      setToast(failed.length ? `${proText.exported(count)} (${count}/${report.items.length}). ${proText.failed}` : proText.exported(count));
     } catch (error) {
       console.error("Local Pro batch export failed", error);
       setToast(proText.failed);
@@ -542,7 +544,7 @@ export default function Home() {
           <div className="snapvere-gallery-actions">
             {IS_PRO && (
               <button type="button"
-                onClick={() => { if (!proExportLock.current) { setProBatchMode((prev) => !prev); setProSelected(new Set()); } }}
+                onClick={() => { if (!proExportLock.current) { setProBatchMode((prev) => !prev); setProSelected(new Set()); setProExportReport(null); } }}
                 disabled={proExportBusy}
                 aria-pressed={proBatchMode}
                 className="snapvere-btn-secondary inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm"
@@ -673,6 +675,23 @@ export default function Home() {
                   if (!proExportLock.current) setProSelected(current => removeIncompatibleProImages(current, visible));
                 }}>{proText.removeIncompatible}</button>
             </div>
+          )}
+          {proExportReport && (
+            <details className="basis-full rounded-lg border border-border px-3 py-2">
+              <summary className="cursor-pointer">
+                {proText.exported(proExportReport.items.filter(item => item.succeeded).length)}
+                {" · "}{proExportReport.items.filter(item => item.succeeded).length}/{proExportReport.items.length}
+                {proExportReport.items.some(item => !item.succeeded) && ` · ${proText.failed}`}
+              </summary>
+              <ul className="mt-2 max-h-32 overflow-y-auto text-xs">
+                {proExportReport.items.map(item => (
+                  <li key={item.id} className="break-all">
+                    <span aria-label={item.succeeded ? proText.exported(1) : proText.failed}>{item.succeeded ? "✓" : "×"}</span>
+                    {" "}{items.find(shot => shot.id === item.id)?.name ?? item.id}
+                  </li>
+                ))}
+              </ul>
+            </details>
           )}
           <button type="button" className="snapvere-btn-secondary rounded-full px-3 py-2 text-sm font-semibold"
             disabled={proExportBusy || proSelected.size === 0 || incompatibleCount > 0}

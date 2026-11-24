@@ -6,8 +6,10 @@ import { invoke } from "@tauri-apps/api/core";
 import type { CapturePreferences } from "./capturePreferences";
 import type { ProExportPreset } from "./proSelection";
 import type {
+  BatchExportReport,
   CaptureAction,
   ImageFormat,
+  LinuxAudioSnapshot,
   MonitorInfo,
   PixelRect,
   PlatformCapabilities,
@@ -15,13 +17,39 @@ import type {
   RecordOptions,
   RecordStatus,
   Region,
+  LogicalRecordingSelection,
   Screenshot,
 } from "./types";
+
+export type PreviewMark = {
+  kind: "rectangle" | "mask" | "ellipse" | "line" | "arrow" | "pen" | "marker" | "text" | "step";
+  rect: PixelRect;
+  points?: { x: number; y: number }[];
+  glyph?: number[];
+  style?: { rgb: [number, number, number]; width: number; opacity: number };
+};
+export type CropPreview = {
+  session: string;
+  width: number;
+  height: number;
+  remaining: number;
+  undoCount: number;
+  redoCount: number;
+  frameId: number;
+  timestamp100ns: number;
+  revision: number;
+  captureToSampleUs: number;
+  encoderToSampleUs: number;
+  sampleAgeUs: number;
+};
 
 export const ipc = {
   // Language preferences are read-only to non-settings windows.
   getAppLanguage: () => invoke<string>("get_app_language"),
   getPlatformCapabilities: () => invoke<PlatformCapabilities>("get_platform_capabilities"),
+  listLinuxAudioDevices: () => invoke<LinuxAudioSnapshot | null>("list_linux_audio_devices"),
+  selectLinuxAudioDevices: (cookie: number, microphone: string | null, monitor: string | null) =>
+    invoke<void>("select_linux_audio_devices", { cookie, microphone, monitor }),
   setAppLanguage: (language: string) =>
     invoke<void>("set_app_language", { language }),
   // ── least-privilege settings snapshots ──
@@ -63,13 +91,21 @@ export const ipc = {
     region: Region | null,
     monitorId?: number,
     options?: Partial<RecordOptions>,
+    logicalSelection?: LogicalRecordingSelection,
   ) =>
-    invoke<RecordStatus>("start_recording", { region, monitorId, options }),
+    invoke<RecordStatus>("start_recording", { region, monitorId, options, logicalSelection }),
   stopRecording: () => invoke<void>("stop_recording"),
   cancelRecording: () => invoke<void>("cancel_recording"),
   pauseRecording: (paused: boolean) =>
     invoke<RecordStatus>("pause_recording", { paused }),
   recordingStatus: () => invoke<RecordStatus>("recording_status"),
+  getCropPreview: () => invoke<CropPreview>("get_crop_preview"),
+  getCropPreviewPacket: (session: string, after: number) =>
+    invoke<ArrayBuffer>("get_crop_preview_packet", { session, after }),
+  acknowledgeCropPreview: (session: string, frameId: number) =>
+    invoke<number>("acknowledge_crop_preview", { session, frameId }),
+  resumeCropPreview: (session: string, marks: PreviewMark[], historyDelta: number) =>
+    invoke<RecordStatus>("resume_crop_preview", { session, marks, historyDelta }),
   closeRecHud: () => invoke<void>("close_rec_hud"),
   /** Expand the native HUD viewport to show its palette/error, then shrink. */
   setRecHudExpanded: (expanded: boolean) =>
@@ -80,8 +116,8 @@ export const ipc = {
   setDrawInteractive: (interactive: boolean) =>
     invoke<void>("set_draw_interactive", { interactive }),
   /** Redact zone koje Rust pikselizira u svakom frameu snimke. */
-  setBlurRegions: (rects: PixelRect[]) =>
-    invoke<void>("set_blur_regions", { rects }),
+  setBlurRegions: (rects: PixelRect[], viewportWidth: number, viewportHeight: number) =>
+    invoke<void>("set_blur_regions", { rects, viewportWidth, viewportHeight }),
 
   // ── editor ──
   saveEditedImage: (base64Png: string, format: ImageFormat, quality: number) =>
@@ -113,7 +149,7 @@ export const ipc = {
   copyMediaPath: (id: string) => invoke<void>("copy_media_path", { id }),
   /** Pro native builds only: bounded, ID-based, user-approved local folder export. */
   proExportBatch: (ids: string[], preset: ProExportPreset) =>
-    invoke<number>("pro_export_batch", { ids, preset }),
+    invoke<BatchExportReport>("pro_export_batch", { ids, preset }),
 
   // ── sustav ──
   showHome: () => invoke<void>("show_home"),

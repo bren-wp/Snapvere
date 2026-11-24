@@ -20,24 +20,35 @@ SUSPICIOUS_NATIVE = re.compile(
     r"LoadLibrary(?:A|W)?|WinHttp(?:Open|SendRequest)|InternetOpen(?:A|W)?|"
     r"TcpStream|UdpSocket|reqwest|ureq|hyper::|curl::|libloading::)\b"
 )
+# Native C adapters must not bypass the first-party Rust process/network guard.
+SUSPICIOUS_C = re.compile(
+    r"\b(?:system|popen|fork|exec[lv][pe]?|posix_spawnp?|socket|connect|"
+    r"curl_easy_perform|dlopen|g_spawn_[a-z_]+|gst_uri_get_location)\s*\("
+)
 SUSPICIOUS_WEBVIEW = re.compile(
     r"\b(?:fetch|WebSocket|EventSource|XMLHttpRequest)\s*\(|"
     r"\bnavigator\.sendBeacon\s*\(|\b(?:importScripts|eval)\s*\("
 )
-CODE = [*sorted(NATIVE.rglob("*.rs")), *sorted(DESKTOP.rglob("*.ts")),
+CODE = [*sorted(NATIVE.rglob("*.rs")), *sorted((NATIVE / "native").rglob("*.c")),
+        *sorted((NATIVE / "native").rglob("*.h")),
+        *sorted(DESKTOP.rglob("*.ts")),
         *sorted(DESKTOP.rglob("*.tsx"))]
 count = 0
 for path in CODE:
     if "target" in path.parts or "node_modules" in path.parts:
         continue
     count += 1
-    pattern = SUSPICIOUS_NATIVE if path.suffix == ".rs" else SUSPICIOUS_WEBVIEW
+    pattern = {
+        ".rs": SUSPICIOUS_NATIVE,
+        ".c": SUSPICIOUS_C,
+        ".h": SUSPICIOUS_C,
+    }.get(path.suffix, SUSPICIOUS_WEBVIEW)
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if line.lstrip().startswith(("//", "*", "/*")):
             continue
         # Raw external endpoints in native code are unusual for an offline
         # capture app; public site analytics is separately reviewed below.
-        if path.suffix == ".rs" and re.search(r"https?://", line):
+        if path.suffix in {".rs", ".c", ".h"} and re.search(r"https?://", line):
             raise AssertionError(
                 f"Native external endpoint requires review: {path}:{number}: {line.strip()}"
             )

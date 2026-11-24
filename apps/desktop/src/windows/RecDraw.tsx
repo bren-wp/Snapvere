@@ -35,6 +35,8 @@ export default function RecDraw() {
   const [textEdit, setTextEdit] = useState<Point | null>(null);
   const [textValue, setTextValue] = useState("");
   const [scale, setScale] = useState(1);
+  const [redactError, setRedactError] = useState(false);
+  const redactQueue = useRef<Promise<void>>(Promise.resolve());
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -75,19 +77,36 @@ export default function RecDraw() {
 
   // ── redact zone idu u Rust; on ih pikselizira u svakom frameu ──
   useEffect(() => {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
     const rects = annotations
       .filter((a) => a.tool === "blur" && a.points.length > 1)
       .map((a) => {
         const [p0, p1] = a.points;
+        const x = Math.max(0, Math.floor(Math.min(p0.x, p1.x)));
+        const y = Math.max(0, Math.floor(Math.min(p0.y, p1.y)));
         return {
-          x: Math.round(Math.min(p0.x, p1.x) * scale),
-          y: Math.round(Math.min(p0.y, p1.y) * scale),
-          width: Math.round(Math.abs(p1.x - p0.x) * scale),
-          height: Math.round(Math.abs(p1.y - p0.y) * scale),
+          x,
+          y,
+          width: Math.min(viewportWidth, Math.ceil(Math.max(p0.x, p1.x))) - x,
+          height: Math.min(viewportHeight, Math.ceil(Math.max(p0.y, p1.y))) - y,
         };
       })
-      .filter((r) => r.width > 1 && r.height > 1);
-    void ipc.setBlurRegions(rects).catch(() => undefined);
+      .filter((r) => r.width > 0 && r.height > 0);
+    // Serialize updates so a slow earlier IPC cannot overwrite a newer mask.
+    redactQueue.current = redactQueue.current.catch(() => undefined).then(async () => {
+      try {
+        const status = await ipc.recordingStatus();
+        if (status.phase === "idle" || status.phase === "finishing") return;
+        await ipc.setBlurRegions(rects, viewportWidth, viewportHeight);
+        setRedactError(false);
+      } catch (error) {
+        if (rects.length === 0) return;
+        console.error("Redaction update failed", error);
+        setRedactError(true);
+        await ipc.pauseRecording(true).catch(() => undefined);
+      }
+    });
   }, [annotations, scale]);
 
   // ── crtanje ──
@@ -254,6 +273,11 @@ export default function RecDraw() {
       onMouseUp={onUp}
       onMouseLeave={onUp}
     >
+      {redactError && (
+        <div role="alert" className="absolute left-4 top-4 z-50 rounded-lg bg-black/90 px-3 py-2 text-sm text-white">
+          {t("Redaction update failed. Check recording before resuming.")}
+        </div>
+      )}
       <canvas
         ref={canvasRef}
         className="pointer-events-none absolute inset-0 h-full w-full"

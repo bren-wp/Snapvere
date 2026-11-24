@@ -1,9 +1,11 @@
 name: Audit unsigned Snapvere release preview labels
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-preview-integrity.yml'
   schedule:
-    # Publishing and editing releases can happen outside the build workflow.
-    # Keep unsigned, unvalidated Tauri releases clearly marked as previews.
     - cron: '17 5 * * *'
 permissions:
   contents: read
@@ -12,28 +14,34 @@ concurrency:
   cancel-in-progress: false
 jobs:
   audit-unsigned-preview-metadata:
-    name: Reconcile unsigned v0.2.25, v0.2.26 and v0.2.27 release labels
+    name: Reconcile unsigned Tauri preview release labels
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
-      - name: Require prerelease metadata for legacy unsigned releases
+      - name: Require prerelease metadata for Tauri preview channel
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          for tag in v0.2.25 v0.2.26 v0.2.27; do
-            value="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" --jq '.prerelease')"
-            if [[ "$value" != true ]]; then
-              echo "::warning::Unsigned ${tag} is incorrectly marked stable"
-              gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --prerelease
+          [[ "$GITHUB_REF" == refs/heads/main ]] || { echo "::error::Use main for release reconciliation"; exit 1; }
+          # v0.2.25 and later are preview-only until a reviewed signed-release
+          # policy replaces this conservative boundary. Never edit drafts or
+          # the legacy WinUI/.NET channel. Do not infer trust from release notes.
+          releases="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[]')"
+          candidates="$(jq -rs '.[] | select(.draft == false) | select(.tag_name | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) | select((.tag_name[1:] | split(".") | map(tonumber)) >= [0,2,25]) | .id' <<< "$releases")"
+          while IFS= read -r id; do
+            [[ -n "$id" ]] || continue
+            release="$(gh api "repos/$GITHUB_REPOSITORY/releases/$id")"
+            tag="$(jq -r '.tag_name' <<< "$release")"
+            [[ "$(jq -r '.draft' <<< "$release")" == false ]] || continue
+            if [[ "$(jq -r '.prerelease' <<< "$release")" != true ]]; then
+              echo "::warning::Unsigned preview $tag is incorrectly marked stable"
+              gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$id" -F prerelease=true --silent
             fi
-            after="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" --jq '.prerelease')"
-            if [[ "$after" != true ]]; then
-              echo "::error::Unable to verify prerelease status for ${tag}"
-              exit 1
-            fi
-            echo "${tag}: unsigned preview status verified"
-          done
+            verified="$(gh api "repos/$GITHUB_REPOSITORY/releases/$id")"
+            jq -e --arg tag "$tag" '.tag_name == $tag and .draft == false and .prerelease == true' <<< "$verified" >/dev/null
+            echo "$tag: preview status verified"
+          done <<< "$candidates"

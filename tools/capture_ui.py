@@ -98,6 +98,17 @@ TAURI_PREVIEW = r"""
             source:"recording", createdAt:1747300800000, isUploaded:false, tags:[] }
         ];
       }
+      if (command === "pro_export_batch") {
+        const attempts = window.__SNAPVERE_TEST_BATCH_ATTEMPTS ||= [];
+        attempts.push([...args.ids]);
+        if (attempts.length === 1) return { cancelled: true, items: [] };
+        return {
+          cancelled: false,
+          items: args.ids.map(id => ({
+            id, succeeded: attempts.length > 2 || id === "parity-image"
+          }))
+        };
+      }
       if (command === "list_monitors") return [];
       if (command === "active_hotkeys") return window.location.search.includes("previewPrintScreenTaken")
         ? ["Ctrl+Shift+1", "Ctrl+Shift+R"] : ["PrintScreen", "Ctrl+Shift+R"];
@@ -504,6 +515,22 @@ with sync_playwright() as p:
                 card_path = OUTPUT / f"parity-card-{edition}-{platform}-{theme}.png"
                 image_card.screenshot(path=str(card_path), animations="disabled")
                 card_paths.append(card_path)
+                if edition == "pro":
+                    gallery.get_by_role("button", name="Select captures", exact=True).click()
+                    gallery.get_by_role("button", name="Select loaded", exact=True).click()
+                    export_button = gallery.get_by_role("button", name="Export to folder", exact=True)
+                    export_button.click()
+                    gallery.wait_for_function("() => window.__SNAPVERE_TEST_BATCH_ATTEMPTS?.length === 1")
+                    gallery.get_by_text("Selected: 2 / 100", exact=True).wait_for()
+                    export_button.click()
+                    gallery.get_by_text("Selected: 1 / 100", exact=True).wait_for()
+                    gallery.locator("details summary").filter(has_text="1/2").click()
+                    assert gallery.locator("details[open] li").count() == 2
+                    export_button.click()
+                    gallery.get_by_text("Selected: 0 / 100", exact=True).wait_for()
+                    assert gallery.evaluate("() => window.__SNAPVERE_TEST_BATCH_ATTEMPTS[2]") == [
+                        "parity-recording"
+                    ], "Only the failed capture must be retried"
                 context.close()
             assert geometry[0] == geometry[1], (edition, theme, geometry)
             with Image.open(card_paths[0]) as first, Image.open(card_paths[1]) as second:

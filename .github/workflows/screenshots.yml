@@ -1,5 +1,8 @@
 name: Capture real Snapvere frontend previews
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main

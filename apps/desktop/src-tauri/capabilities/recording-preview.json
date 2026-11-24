@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "recording-preview",
+  "description": "Crop-local preview. No store, shell, dialogs, clipboard, file access, or window creation grants.",
+  "windows": [
+    "recpreview"
+  ],
+  "permissions": [
+    "core:default",
+    "core:event:default"
+  ]
+}

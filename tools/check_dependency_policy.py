@@ -3,6 +3,7 @@
 """Fail closed if SNAPVERE reintroduces unsafe dependency update practices."""
 from pathlib import Path
 import json
+import re
 import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,4 +40,26 @@ for path in (ROOT / ".github/workflows").glob("*.yml"):
 assert manifest["overrides"]["picomatch"] == "npm:@ryotsu/picomatch@4.0.7-a", (
     "Do not silently repin audited patched fork"
 )
+# Verify provenance and integrity metadata across the entire locked graph.
+# Bundled WASI dependencies inherit the integrity of their enclosing archive.
+packages = npm_lock["packages"]
+for path, package in packages.items():
+    if not path:
+        continue
+    if package.get("inBundle"):
+        parent_path = path.rsplit("/node_modules/", 1)[0]
+        parent = packages.get(parent_path, {})
+        assert parent.get("resolved", "").startswith("https://registry.npmjs.org/"), path
+        assert re.fullmatch(r"sha512-[A-Za-z0-9+/]+={0,2}", parent.get("integrity", "")), path
+        continue
+    assert package.get("resolved", "").startswith("https://registry.npmjs.org/"), path
+    assert re.fullmatch(r"sha512-[A-Za-z0-9+/]+={0,2}", package.get("integrity", "")), path
+
+for package in cargo_lock["package"]:
+    if package["name"] == cargo["package"]["name"] and "source" not in package:
+        continue
+    assert package.get("source") == "registry+https://github.com/rust-lang/crates.io-index", package["name"]
+    assert re.fullmatch(r"[a-f0-9]{64}", package.get("checksum", "")), package["name"]
+
+print(f"Lock provenance checked: {len(packages) - 1} npm entries, {len(cargo_lock['package']) - 1} registry crates")
 print("Dependency policy OK: versions synced, bots disabled, audited fork pinned")
