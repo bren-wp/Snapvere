@@ -20,6 +20,9 @@ pub(super) fn run(
     let t0 = Instant::now();
 
     let mut source = Source::open(&target)?;
+    if ctl.cancel.load(Ordering::Acquire) {
+        return Err("Recording initialization was cancelled".into());
+    }
     let (src_w, src_h) = source.size();
     let t_source = t0.elapsed();
 
@@ -165,10 +168,20 @@ pub(super) fn run(
                     mixer.pause();
                 }
             }
+            #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+            if let Err(error) = source.discard_paused() {
+                recording_error = Some(error);
+                break;
+            }
             std::thread::sleep(Duration::from_millis(40));
             continue;
         }
         if let Some(p) = pause_started.take() {
+            #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+            if let Err(error) = source.discard_paused() {
+                recording_error = Some(error);
+                break;
+            }
             #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
             if let Some(mixer) = &mut mixer {
                 if let Err(error) = mixer.resume() {
@@ -299,6 +312,9 @@ pub(super) fn run(
         }
     }
 
+    // Release the screen source and portal consent before potentially slow
+    // encoder finalization, even on cancellation or device loss.
+    drop(source);
     ctl.phase.store(PHASE_FINISHING, Ordering::SeqCst);
     let _ = app.emit("snapvere:rec-state", ctl.status());
     #[cfg(windows)]

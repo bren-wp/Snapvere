@@ -82,6 +82,14 @@ impl Source {
         }
     }
 
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    pub(super) fn discard_paused(&mut self) -> Result<(), String> {
+        if let Source::Wayland(source) = self {
+            source.discard()?;
+        }
+        Ok(())
+    }
+
     pub(super) fn size(&self) -> (u32, u32) {
         match self {
             #[cfg(windows)]

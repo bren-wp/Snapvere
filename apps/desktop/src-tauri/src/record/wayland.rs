@@ -13,6 +13,7 @@ unsafe extern "C" {
         capacity: usize,
         timeout_ms: u32,
     ) -> c_int;
+    fn snapvere_wayland_discard(handle: *mut c_void) -> c_int;
     fn snapvere_wayland_free(handle: *mut c_void);
 }
 
@@ -37,7 +38,13 @@ impl PortalSource {
             return Err("Wayland recording requires a full monitor selection".into());
         }
         let monitors = xcap::Monitor::all().map_err(|error| error.to_string())?;
-        if monitors.len() != 1 || monitors[0].id().ok() != Some(target.monitor_id) {
+        if monitors.len() != 1
+            || monitors[0].id().ok() != Some(target.monitor_id)
+            || monitors[0].x().ok() != Some(target.monitor_x)
+            || monitors[0].y().ok() != Some(target.monitor_y)
+            || monitors[0].width().ok() != Some(target.monitor_w)
+            || monitors[0].height().ok() != Some(target.monitor_h)
+        {
             return Err("Wayland recording currently requires one available monitor".into());
         }
         let frame = allocate_bgra(target.monitor_w, target.monitor_h)?;
@@ -75,6 +82,18 @@ impl PortalSource {
             _ => return Err("Wayland screen sharing ended or the frame format changed".into()),
         }
         Ok(&self.frame)
+    }
+
+    pub(super) fn discard(&mut self) -> Result<(), String> {
+        if self.seen {
+            self.frame.fill(0);
+            self.seen = false;
+        }
+        // SAFETY: the worker owns the native session; discard copies no pixels.
+        if unsafe { snapvere_wayland_discard(self.handle.as_ptr()) } != 0 {
+            return Err("Wayland screen sharing ended".into());
+        }
+        Ok(())
     }
 
     pub(super) fn size(&self) -> (u32, u32) {

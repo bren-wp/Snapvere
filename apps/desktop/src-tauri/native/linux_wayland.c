@@ -6,6 +6,7 @@
 #include <gio/gio.h>
 #include <gio/gunixfdlist.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <string.h>
 
 #define PORTAL "org.freedesktop.portal.Desktop"
@@ -18,7 +19,9 @@ typedef struct {
     GDBusConnection *bus;
     GMainContext *context;
     gchar *session;
+    gchar *owner;
     guint closed_subscription;
+    guint owner_subscription;
     gboolean closed;
     GstElement *pipeline;
     GstAppSink *sink;
@@ -50,9 +53,9 @@ static gchar *handle_path(GDBusConnection *bus, const gchar *kind, const gchar *
 }
 
 static void close_handle(PortalVideo *ctx, const gchar *path, const gchar *iface) {
-    if (!ctx->bus || !path) return;
+    if (!ctx->bus || !ctx->owner || !path) return;
     GVariant *reply = g_dbus_connection_call_sync(
-        ctx->bus, PORTAL, path, iface, "Close", NULL, G_VARIANT_TYPE_UNIT,
+        ctx->bus, ctx->owner, path, iface, "Close", NULL, G_VARIANT_TYPE_UNIT,
         G_DBUS_CALL_FLAGS_NO_AUTO_START, 1000, NULL, NULL);
     if (reply) g_variant_unref(reply);
 }
@@ -79,6 +82,71 @@ static void session_closed(GDBusConnection *bus, const gchar *sender,
     ((PortalVideo *)data)->closed = TRUE;
 }
 
+static void owner_changed(GDBusConnection *bus, const gchar *sender,
+                          const gchar *path, const gchar *iface, const gchar *signal,
+                          GVariant *parameters, gpointer data) {
+    (void)bus; (void)sender; (void)path; (void)iface; (void)signal;
+    PortalVideo *ctx = data;
+    if (!g_variant_is_of_type(parameters, G_VARIANT_TYPE("(sss)"))) {
+        ctx->closed = TRUE;
+        return;
+    }
+    const gchar *name, *previous, *next;
+    g_variant_get(parameters, "(&s&s&s)", &name, &previous, &next);
+    if (!strcmp(name, PORTAL) && !strcmp(previous, ctx->owner) &&
+        strcmp(next, ctx->owner)) ctx->closed = TRUE;
+}
+
+static gchar *get_owner(GDBusConnection *bus) {
+    GVariant *reply = g_dbus_connection_call_sync(
+        bus, "org.freedesktop.DBus", "/org/freedesktop/DBus",
+        "org.freedesktop.DBus", "GetNameOwner", g_variant_new("(s)", PORTAL),
+        G_VARIANT_TYPE("(s)"), G_DBUS_CALL_FLAGS_NONE, 2000, NULL, NULL);
+    if (!reply) return NULL;
+    const gchar *name;
+    g_variant_get(reply, "(&s)", &name);
+    gchar *owner = g_dbus_is_unique_name(name) ? g_strdup(name) : NULL;
+    g_variant_unref(reply);
+    return owner;
+}
+
+// A dedicated connection owns only this recording's requests and sessions.
+// Disconnecting therefore releases orphaned portal objects without touching
+// other components' D-Bus subscriptions or connections.
+static gboolean open_bus(PortalVideo *ctx) {
+    gchar *address = g_dbus_address_get_for_bus_sync(G_BUS_TYPE_SESSION, NULL, NULL);
+    if (!address) return FALSE;
+    ctx->bus = g_dbus_connection_new_for_address_sync(
+        address, G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT |
+        G_DBUS_CONNECTION_FLAGS_MESSAGE_BUS_CONNECTION, NULL, NULL, NULL);
+    g_free(address);
+    if (!ctx->bus) return FALSE;
+    g_dbus_connection_set_exit_on_close(ctx->bus, FALSE);
+    ctx->owner = get_owner(ctx->bus);
+    if (!ctx->owner) {
+        GVariant *reply = g_dbus_connection_call_sync(
+            ctx->bus, "org.freedesktop.DBus", "/org/freedesktop/DBus",
+            "org.freedesktop.DBus", "StartServiceByName", g_variant_new("(su)", PORTAL, 0u),
+            G_VARIANT_TYPE("(u)"), G_DBUS_CALL_FLAGS_NONE, 3000, NULL, NULL);
+        if (reply) g_variant_unref(reply);
+        ctx->owner = get_owner(ctx->bus);
+    }
+    if (!ctx->owner) return FALSE;
+    ctx->owner_subscription = g_dbus_connection_signal_subscribe(
+        ctx->bus, "org.freedesktop.DBus", "org.freedesktop.DBus", "NameOwnerChanged",
+        "/org/freedesktop/DBus", PORTAL, G_DBUS_SIGNAL_FLAGS_NONE, owner_changed, ctx, NULL);
+    gchar *confirmed = get_owner(ctx->bus);
+    gboolean ok = confirmed && !strcmp(confirmed, ctx->owner);
+    g_free(confirmed);
+    return ok;
+}
+
+static gboolean session_alive(PortalVideo *ctx) {
+    for (guint i = 0; i < 64; i++)
+        if (!g_main_context_iteration(ctx->context, FALSE)) break;
+    return !ctx->closed && !g_dbus_connection_is_closed(ctx->bus);
+}
+
 // Subscribe before calling the method to avoid losing an immediate Response.
 // All waits share one finite startup deadline; a timed-out request is closed.
 static GVariant *request(PortalVideo *ctx, const gchar *method, const gchar *id,
@@ -90,25 +158,59 @@ static GVariant *request(PortalVideo *ctx, const gchar *method, const gchar *id,
     }
     Response response = {0};
     guint subscription = g_dbus_connection_signal_subscribe(
-        ctx->bus, PORTAL, REQUEST, "Response", expected, NULL,
+        ctx->bus, ctx->owner, REQUEST, "Response", expected, NULL,
         G_DBUS_SIGNAL_FLAGS_NONE, response_signal, &response, NULL);
     GVariant *reply = g_dbus_connection_call_sync(
-        ctx->bus, PORTAL, ROOT, SCREEN, method, arguments, G_VARIANT_TYPE("(o)"),
-        G_DBUS_CALL_FLAGS_NONE, 3000, NULL, NULL);
+        ctx->bus, ctx->owner, ROOT, SCREEN, method, arguments, G_VARIANT_TYPE("(o)"),
+        G_DBUS_CALL_FLAGS_NO_AUTO_START, 3000, NULL, NULL);
     const gchar *returned = NULL;
     if (reply) g_variant_get(reply, "(&o)", &returned);
     if (returned && !strcmp(returned, expected)) {
-        while (!response.done && !ctx->closed && g_get_monotonic_time() < deadline) {
-            for (guint i = 0; i < 64; i++)
-                if (!g_main_context_iteration(ctx->context, FALSE)) break;
+        while (!response.done && g_get_monotonic_time() < deadline) {
+            if (!session_alive(ctx)) break;
             if (!response.done) g_usleep(10000);
         }
     }
     g_dbus_connection_signal_unsubscribe(ctx->bus, subscription);
-    if (!response.done) close_handle(ctx, returned ? returned : expected, REQUEST);
+    // Never close an arbitrary object path returned by an unexpected reply.
+    if (!response.done) close_handle(ctx, expected, REQUEST);
+    if (!returned || strcmp(returned, expected) || !session_alive(ctx)) {
+        if (response.results) g_variant_unref(response.results);
+        response.results = NULL;
+    }
     if (reply) g_variant_unref(reply);
     g_free(expected);
     return response.results;
+}
+
+static gboolean parse_stream(GVariant *result, guint32 *node, guint64 *serial) {
+    *node = 0;
+    *serial = 0;
+    GVariant *streams = g_variant_lookup_value(result, "streams", G_VARIANT_TYPE("a(ua{sv})"));
+    gboolean valid = streams && g_variant_n_children(streams) == 1;
+    if (valid) {
+        GVariant *props = NULL;
+        g_variant_get_child(streams, 0, "(u@a{sv})", node, &props);
+        GVariant *type = g_variant_lookup_value(props, "source_type", NULL);
+        GVariant *identity = g_variant_lookup_value(props, "pipewire-serial", NULL);
+        // Optional metadata is allowed on old portals; malformed or wrong
+        // metadata must never be interpreted as consent for a monitor.
+        valid = !type || (g_variant_is_of_type(type, G_VARIANT_TYPE_UINT32) &&
+                          g_variant_get_uint32(type) == 1);
+        if (identity) {
+            if (!g_variant_is_of_type(identity, G_VARIANT_TYPE_UINT64)) valid = FALSE;
+            else {
+                *serial = g_variant_get_uint64(identity);
+                if (!*serial) valid = FALSE;
+            }
+        }
+        valid = valid && (*node != 0 || *serial != 0);
+        if (type) g_variant_unref(type);
+        if (identity) g_variant_unref(identity);
+        g_variant_unref(props);
+    }
+    if (streams) g_variant_unref(streams);
+    return valid;
 }
 
 static gboolean negotiate(PortalVideo *ctx, guint32 *node, guint64 *serial) {
@@ -134,7 +236,7 @@ static gboolean negotiate(PortalVideo *ctx, guint32 *node, guint64 *serial) {
     g_variant_unref(result);
     if (!matches) return FALSE;
     ctx->closed_subscription = g_dbus_connection_signal_subscribe(
-        ctx->bus, PORTAL, SESSION, "Closed", ctx->session, NULL,
+        ctx->bus, ctx->owner, SESSION, "Closed", ctx->session, NULL,
         G_DBUS_SIGNAL_FLAGS_NONE, session_closed, ctx, NULL);
 
     id = token();
@@ -157,27 +259,16 @@ static gboolean negotiate(PortalVideo *ctx, guint32 *node, guint64 *serial) {
                      g_variant_new("(osa{sv})", ctx->session, "", &options), deadline);
     g_free(id);
     if (!result) return FALSE;
-    GVariant *streams = g_variant_lookup_value(result, "streams", G_VARIANT_TYPE("a(ua{sv})"));
-    gboolean valid = streams && g_variant_n_children(streams) == 1;
-    if (valid) {
-        GVariant *props = NULL;
-        guint32 type = 1;
-        g_variant_get_child(streams, 0, "(u@a{sv})", node, &props);
-        (void)g_variant_lookup(props, "source_type", "u", &type);
-        (void)g_variant_lookup(props, "pipewire-serial", "t", serial);
-        valid = (*serial != 0 || *node != 0) && type == 1;
-        g_variant_unref(props);
-    }
-    if (streams) g_variant_unref(streams);
+    gboolean valid = parse_stream(result, node, serial);
     g_variant_unref(result);
-    if (!valid || ctx->closed) return FALSE;
+    if (!valid || !session_alive(ctx)) return FALSE;
 
     GUnixFDList *fds = NULL;
     g_variant_builder_init(&options, G_VARIANT_TYPE_VARDICT);
     GVariant *reply = g_dbus_connection_call_with_unix_fd_list_sync(
-        ctx->bus, PORTAL, ROOT, SCREEN, "OpenPipeWireRemote",
+        ctx->bus, ctx->owner, ROOT, SCREEN, "OpenPipeWireRemote",
         g_variant_new("(oa{sv})", ctx->session, &options), G_VARIANT_TYPE("(h)"),
-        G_DBUS_CALL_FLAGS_NONE, 3000, NULL, &fds, NULL, NULL);
+        G_DBUS_CALL_FLAGS_NO_AUTO_START, 3000, NULL, &fds, NULL, NULL);
     if (reply && fds) {
         gint index;
         g_variant_get(reply, "(h)", &index);
@@ -186,7 +277,9 @@ static gboolean negotiate(PortalVideo *ctx, guint32 *node, guint64 *serial) {
     }
     if (reply) g_variant_unref(reply);
     if (fds) g_object_unref(fds);
-    return ctx->fd >= 0;
+    struct stat info;
+    return ctx->fd >= 0 && fstat(ctx->fd, &info) == 0 &&
+        S_ISSOCK(info.st_mode) && session_alive(ctx);
 }
 
 // Validate exact negotiated physical dimensions and per-row bounds before
@@ -234,9 +327,15 @@ void snapvere_wayland_free(void *handle) {
     if (ctx->fd >= 0) close(ctx->fd);
     if (ctx->closed_subscription)
         g_dbus_connection_signal_unsubscribe(ctx->bus, ctx->closed_subscription);
+    if (ctx->owner_subscription)
+        g_dbus_connection_signal_unsubscribe(ctx->bus, ctx->owner_subscription);
     close_handle(ctx, ctx->session, SESSION);
     g_free(ctx->session);
-    if (ctx->bus) g_object_unref(ctx->bus);
+    g_free(ctx->owner);
+    if (ctx->bus) {
+        g_dbus_connection_close_sync(ctx->bus, NULL, NULL);
+        g_object_unref(ctx->bus);
+    }
     if (ctx->context) g_main_context_unref(ctx->context);
     g_free(ctx);
 }
@@ -251,10 +350,9 @@ void *snapvere_wayland_open(guint width, guint height) {
     ctx->height = height;
     ctx->context = g_main_context_new();
     g_main_context_push_thread_default(ctx->context);
-    ctx->bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, NULL);
     guint32 node = 0;
     guint64 serial = 0;
-    gboolean ok = ctx->bus && negotiate(ctx, &node, &serial);
+    gboolean ok = open_bus(ctx) && negotiate(ctx, &node, &serial);
     g_main_context_pop_thread_default(ctx->context);
     if (!ok) goto fail;
     GError *error = NULL;
@@ -272,6 +370,11 @@ void *snapvere_wayland_open(guint width, guint height) {
         if (input) gst_object_unref(input);
         goto fail;
     }
+    GstCaps *expected = gst_caps_new_simple("video/x-raw",
+        "format", G_TYPE_STRING, "BGRA", "width", G_TYPE_INT, (gint)width,
+        "height", G_TYPE_INT, (gint)height, NULL);
+    gst_app_sink_set_caps(ctx->sink, expected);
+    gst_caps_unref(expected);
     const gchar *target_property = serial ? "target-object" : "path";
     if (!g_object_class_find_property(G_OBJECT_GET_CLASS(input), "fd") ||
         !g_object_class_find_property(G_OBJECT_GET_CLASS(input), target_property)) {
@@ -301,17 +404,34 @@ fail:
     return NULL;
 }
 
-int snapvere_wayland_pull(void *handle, guint8 *data, gsize capacity, guint timeout_ms) {
-    PortalVideo *ctx = handle;
-    if (!ctx) return -1;
-    for (guint i = 0; i < 64; i++)
-        if (!g_main_context_iteration(ctx->context, FALSE)) break;
-    if (ctx->closed || g_dbus_connection_is_closed(ctx->bus)) return -1;
+static gboolean video_alive(PortalVideo *ctx) {
+    if (!ctx || !session_alive(ctx) || gst_app_sink_is_eos(ctx->sink)) return FALSE;
     GstMessage *message = gst_bus_pop_filtered(ctx->video_bus, GST_MESSAGE_ERROR | GST_MESSAGE_EOS);
     if (message) {
         gst_message_unref(message);
-        return -1;
+        ctx->closed = TRUE;
+        return FALSE;
     }
+    return TRUE;
+}
+
+int snapvere_wayland_discard(void *handle) {
+    PortalVideo *ctx = handle;
+    if (!video_alive(ctx)) return -1;
+    // Bound work even with a producer faster than the recorder. No paused
+    // sample is copied into Rust or passed to the encoder.
+    for (guint i = 0; i < 4; i++) {
+        GstSample *sample = gst_app_sink_try_pull_sample(ctx->sink, 0);
+        if (!sample) break;
+        gst_sample_unref(sample);
+        ctx->last_frame = g_get_monotonic_time();
+    }
+    return video_alive(ctx) ? 0 : -1;
+}
+
+int snapvere_wayland_pull(void *handle, guint8 *data, gsize capacity, guint timeout_ms) {
+    PortalVideo *ctx = handle;
+    if (!video_alive(ctx)) return -1;
     GstSample *sample = gst_app_sink_try_pull_sample(ctx->sink,
                             MIN(timeout_ms, 2000) * GST_MSECOND);
     if (!sample) {
@@ -319,7 +439,8 @@ int snapvere_wayland_pull(void *handle, guint8 *data, gsize capacity, guint time
             g_get_monotonic_time() - ctx->last_frame > 3 * G_TIME_SPAN_SECOND) return -1;
         return 0;
     }
-    gboolean ok = copy_frame(sample, ctx->width, ctx->height, data, capacity);
+    gboolean ok = video_alive(ctx) &&
+        copy_frame(sample, ctx->width, ctx->height, data, capacity);
     gst_sample_unref(sample);
     if (!ok) return -1;
     ctx->last_frame = g_get_monotonic_time();
@@ -352,7 +473,40 @@ int snapvere_wayland_test_frame(void) {
         !copy_frame(sample, 1, 4, output, sizeof(output));
     gst_sample_unref(sample);
     gst_buffer_unref(buffer);
+
+    // Metadata with a stride larger than the actual backing buffer must
+    // fail before changing any destination byte.
+    buffer = gst_buffer_new_allocate(NULL, 12, NULL);
+    gst_buffer_add_video_meta_full(buffer, GST_VIDEO_FRAME_FLAG_NONE,
+        GST_VIDEO_FORMAT_BGRA, 2, 2, 1, offsets, strides);
+    sample = gst_sample_new(buffer, caps, NULL, NULL);
+    memset(output, 0xA5, sizeof(output));
+    valid = valid && !copy_frame(sample, 2, 2, output, sizeof(output));
+    for (guint i = 0; i < sizeof(output); i++) valid = valid && output[i] == 0xA5;
+    gst_sample_unref(sample);
+    gst_buffer_unref(buffer);
     gst_caps_unref(caps);
+
+    const gchar *fixtures[] = {
+        "{'streams': <[(uint32 42, {'source_type': <uint32 1>})]>}",
+        "{'streams': <[(uint32 42, {'source_type': <uint32 2>})]>}",
+        "{'streams': <[(uint32 42, {'source_type': <'monitor'>})]>}",
+        "{'streams': <[(uint32 42, {'pipewire-serial': <uint64 777>})]>}",
+        "{'streams': <[(uint32 42, {'pipewire-serial': <uint64 0>})]>}",
+        "{'streams': <[(uint32 42, {'pipewire-serial': <'777'>})]>}",
+        "{'streams': <[(uint32 0, @a{sv} {})]>}",
+        "{'streams': <[(uint32 42, @a{sv} {}), (uint32 43, @a{sv} {})]>}"
+    };
+    for (guint i = 0; i < G_N_ELEMENTS(fixtures); i++) {
+        GVariant *result = g_variant_parse(G_VARIANT_TYPE_VARDICT, fixtures[i], NULL, NULL, NULL);
+        if (!result) return 1;
+        guint32 node;
+        guint64 serial;
+        gboolean accepted = parse_stream(result, &node, &serial);
+        valid = valid && accepted == (i == 0 || i == 3);
+        if (i == 3) valid = valid && serial == 777;
+        g_variant_unref(result);
+    }
     return valid ? 0 : 1;
 }
 

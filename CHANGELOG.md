@@ -2,6 +2,8 @@
 
 ## v0.2.32 — Release integrity (development)
 
+- Harden experimental Wayland portal ownership, revocation, bounded paused-frame discard, stream metadata validation and teardown before file finalization.
+
 - Add an opt-in continuous Wayland ScreenCast Portal/PipeWire video source for one full monitor, with consent-scoped remote, bounded startup and validated BGRA capture. Native compositor acceptance pending.
 
 - Add experimental bounded fractional audio-clock drift compensation and four-hour simulations, plus native X11 framebuffer acceptance in Free/Pro and monitor-geometry checks.
