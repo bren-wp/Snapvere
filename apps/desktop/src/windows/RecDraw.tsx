@@ -275,7 +275,7 @@ export default function RecDraw() {
     >
       {redactError && (
         <div role="alert" className="absolute left-4 top-4 z-50 rounded-lg bg-black/90 px-3 py-2 text-sm text-white">
-          {t("Recording could not start. Open Diagnostics for details.")}
+          {t("Redaction update failed. Check recording before resuming.")}
         </div>
       )}
       <canvas

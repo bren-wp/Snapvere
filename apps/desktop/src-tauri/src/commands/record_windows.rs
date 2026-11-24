@@ -1,7 +1,7 @@
 // Snapvere by Brendigo
 //! Native recording-window geometry and per-monitor placement.
 
-use super::{cursor_pos, ensure_rec_windows, estr, raise_topmost, REC_HUD_H};
+use super::{cursor_pos, ensure_rec_windows, estr, raise_topmost, REC_HUD_H, REC_HUD_W};
 use crate::capture;
 use crate::models::{MonitorInfo, RecFrameRect, Region};
 use crate::record::RecordTarget;
@@ -74,6 +74,28 @@ pub(super) fn resolve_target(
     })
 }
 
+/// Calculate compact HUD geometry using the destination output's scale,
+/// not the hidden toolbar's previous monitor. Never position it beyond the
+/// monitor's physical bounds (a narrow output cannot fit the full toolbar).
+fn hud_geometry(
+    target: &RecordTarget,
+    scale: f64,
+) -> Result<(PhysicalPosition<i32>, PhysicalSize<u32>), String> {
+    if !scale.is_finite() || !(0.5..=8.0).contains(&scale) {
+        return Err("Invalid recording monitor scale".into());
+    }
+    let width = (f64::from(REC_HUD_W) * scale).round() as u32;
+    let height = (f64::from(REC_HUD_H) * scale).round() as u32;
+    if width > target.monitor_w || height > target.monitor_h {
+        return Err("Recording monitor is too small for the toolbar".into());
+    }
+    let margin = ((48.0 * scale).round() as u32).min(target.monitor_h - height);
+    let x = i64::from(target.monitor_w - width) / 2;
+    let y = i64::from(target.monitor_h - height - margin);
+    let pos = safe_window_position(target.monitor_x, target.monitor_y, x, y);
+    Ok((pos, PhysicalSize::new(width, height)))
+}
+
 /// Mala uvijek-na-vrhu traka s tajmerom i kontrolama, na dnu snimanog monitora.
 pub(super) fn show_rec_hud(app: &AppHandle, target: &RecordTarget) -> Result<(), String> {
     ensure_rec_windows(app)?;
@@ -81,23 +103,22 @@ pub(super) fn show_rec_hud(app: &AppHandle, target: &RecordTarget) -> Result<(),
         .get_webview_window("recbar")
         .ok_or("HUD prozor nedostaje")?;
 
-    // Dno-centar snimanog monitora, malo iznad ruba.
-    let scale = win.scale_factor().map_err(estr)?;
-    let base_height = (f64::from(REC_HUD_H) * scale).round().max(1.0) as u32;
-    let size = win.inner_size().map_err(estr)?;
-    // Previous recording may have ended with a popup open; always restart
-    // with a compact native HWND before computing the next HUD position.
-    if size.height != base_height {
-        win.set_size(PhysicalSize::new(size.width, base_height))
-            .map_err(estr)?;
+    let monitors = win.available_monitors().map_err(estr)?;
+    let mut matches = monitors.iter().filter(|monitor| {
+        (monitor.position().x, monitor.position().y) == (target.monitor_x, target.monitor_y)
+            && (monitor.size().width, monitor.size().height)
+                == (target.monitor_w, target.monitor_h)
+    });
+    let monitor = matches
+        .next()
+        .ok_or("Recording toolbar monitor geometry is unavailable")?;
+    if matches.next().is_some() {
+        return Err("Recording toolbar monitor geometry is ambiguous".into());
     }
-    // Center using the actual physical HWND width; REC_HUD_W is logical and
-    // would shift the toolbar off center at 125%, 150% or 200% scaling.
-    let offset_x = (i64::from(target.monitor_w) - i64::from(size.width)) / 2;
-    let offset_y = i64::from(target.monitor_h) - i64::from(base_height) - 48;
-    let pos = safe_window_position(target.monitor_x, target.monitor_y, offset_x, offset_y);
+    let (pos, size) = hud_geometry(target, monitor.scale_factor())?;
     win.set_position(pos).map_err(estr)?;
-    let _ = win.show();
+    win.set_size(size).map_err(estr)?;
+    win.show().map_err(estr)?;
     raise_topmost(&win);
     Ok(())
 }
@@ -128,11 +149,11 @@ pub(super) fn show_rec_draw(
     let _ = win.emit("snapvere:draw-clear", ());
 
     win.set_position(pos).map_err(estr)?;
-    let _ = win.set_size(PhysicalSize::new(ow, oh));
+    win.set_size(PhysicalSize::new(ow, oh)).map_err(estr)?;
     // Dok nije odabran alat sloj mora propuštati klikove — inače se ne može
     // raditi ništa drugo dok snimanje traje.
-    let _ = win.set_ignore_cursor_events(true);
-    let _ = win.show();
+    win.set_ignore_cursor_events(true).map_err(estr)?;
+    win.show().map_err(estr)?;
     Ok(())
 }
 
@@ -208,6 +229,23 @@ mod selection_tests {
             1
         );
         assert!(select_record_monitor(&[], None, (0, 0)).is_err());
+    }
+
+    #[test]
+    fn hud_uses_destination_dpi_and_stays_inside_negative_origin_monitor() {
+        let target = RecordTarget {
+            monitor_id: 2,
+            monitor_x: -2400,
+            monitor_y: 0,
+            monitor_w: 2400,
+            monitor_h: 1350,
+            region: None,
+        };
+        let (pos, size) = hud_geometry(&target, 1.25).unwrap();
+        assert_eq!((size.width, size.height), (1025, 73));
+        assert_eq!((pos.x, pos.y), (-1713, 1217));
+        assert!(hud_geometry(&target, f64::NAN).is_err());
+        assert!(hud_geometry(&target, 4.0).is_err());
     }
 
     #[test]
