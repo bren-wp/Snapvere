@@ -6,6 +6,7 @@ fn main() {
         println!("cargo:rerun-if-changed=native/linux_mp4.c");
         println!("cargo:rerun-if-changed=native/linux_audio.c");
         println!("cargo:rerun-if-changed=native/linux_audio_identity.c");
+        println!("cargo:rerun-if-changed=native/linux_media.h");
         let library = pkg_config::Config::new()
             .cargo_metadata(false)
             .atleast_version("1.20")

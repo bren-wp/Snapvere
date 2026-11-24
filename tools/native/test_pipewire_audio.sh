@@ -24,10 +24,10 @@ cleanup() {
     for pid in "${pids[@]}"; do wait "$pid" 2>/dev/null || true; done
 }
 trap cleanup EXIT
-cc -Wall -Wextra -Werror -O2 "$root/tools/native/pipewire_capture_probe.c" \
+cc -Wall -Wextra -Werror -O2 -I"$root/apps/desktop/src-tauri/native" "$root/tools/native/pipewire_capture_probe.c" \
     "$root/apps/desktop/src-tauri/native/linux_mp4.c" \
     -o "$runtime/audio-probe" $(pkg-config --cflags --libs gstreamer-app-1.0)
-cc -Wall -Wextra -Werror -O2 "$root/tools/native/mixer_probe.c" \
+cc -Wall -Wextra -Werror -O2 -I"$root/apps/desktop/src-tauri/native" "$root/tools/native/mixer_probe.c" \
     "$root/apps/desktop/src-tauri/native/linux_audio.c" \
     "$root/apps/desktop/src-tauri/native/linux_audio_identity.c" \
     -o "$runtime/mixer-probe" $(pkg-config --cflags --libs gstreamer-app-1.0 libpipewire-0.3)

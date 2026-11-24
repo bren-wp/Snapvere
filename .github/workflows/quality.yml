@@ -53,6 +53,8 @@ jobs:
         run: python tools/check_source_headers.py
       - name: Enforce reachable Rust modules (dead-code graph)
         run: python tools/check_rust_modules.py
+      - name: Audit duplicate maintained desktop and QA source files
+        run: python tools/audit_duplicate_sources.py
       - name: Enforce production-only TypeScript module reachability
         working-directory: apps/desktop
         run: node ../../tools/check_dead_code.mjs
@@ -409,7 +411,7 @@ jobs:
           for features in free pro; do
             args=()
             if [[ "$features" == pro ]]; then args=(--features pro); fi
-            xvfb-run -a -s '-screen 0 640x480x24 -nolisten tcp' bash -c '
+            xvfb-run -a -s '-screen 0 640x480x24 -nolisten tcp -noreset' bash -c '
               set -e
               xsetroot -solid "#123456"
               cargo test --locked "$@" native_x11_capture_checks_real_pixels_and_monitor_identity -- --ignored

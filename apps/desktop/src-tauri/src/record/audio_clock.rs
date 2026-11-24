@@ -42,7 +42,7 @@ impl DriftClock {
         }
         self.phase = (self.phase + step) % UNIT;
         for _ in 0..advance {
-            queue.pop_front();
+            let _ = queue.pop_front();
         }
         Some(sample)
     }

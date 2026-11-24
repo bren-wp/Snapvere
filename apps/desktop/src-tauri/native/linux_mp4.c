@@ -1,6 +1,6 @@
 // Snapvere by Brendigo
 // Native GStreamer adapter. All buffers and objects have explicit ownership.
-#include <gst/gst.h>
+#include "linux_media.h"
 #include <gst/app/gstappsrc.h>
 
 typedef struct {
@@ -107,10 +107,6 @@ void *snapvere_mp4_open_av(int fd, guint w, guint h, guint fps, guint bitrate,
         return NULL;
     }
     return ctx;
-}
-
-void *snapvere_mp4_open(int fd, guint w, guint h, guint fps, guint bitrate) {
-    return snapvere_mp4_open_av(fd, w, h, fps, bitrate, FALSE);
 }
 
 static int push_bytes(SnapvereMp4 *ctx, GstAppSrc *source, const guint8 *data,

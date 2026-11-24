@@ -1,15 +1,9 @@
 // Snapvere by Brendigo
 // Query the live local PipeWire registry, without recording or starting a stream.
-#include <gst/gst.h>
+#include "linux_media.h"
 #include <pipewire/pipewire.h>
 #include <errno.h>
 #include <string.h>
-
-typedef struct {
-    guint64 serial;
-    guint32 role;
-    char name[256];
-} AudioNode;
 
 typedef struct {
     guint64 mic, monitor;

@@ -30,6 +30,7 @@ SUSPICIOUS_WEBVIEW = re.compile(
     r"\bnavigator\.sendBeacon\s*\(|\b(?:importScripts|eval)\s*\("
 )
 CODE = [*sorted(NATIVE.rglob("*.rs")), *sorted((NATIVE / "native").rglob("*.c")),
+        *sorted((NATIVE / "native").rglob("*.h")),
         *sorted(DESKTOP.rglob("*.ts")),
         *sorted(DESKTOP.rglob("*.tsx"))]
 count = 0
@@ -40,13 +41,14 @@ for path in CODE:
     pattern = {
         ".rs": SUSPICIOUS_NATIVE,
         ".c": SUSPICIOUS_C,
+        ".h": SUSPICIOUS_C,
     }.get(path.suffix, SUSPICIOUS_WEBVIEW)
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if line.lstrip().startswith(("//", "*", "/*")):
             continue
         # Raw external endpoints in native code are unusual for an offline
         # capture app; public site analytics is separately reviewed below.
-        if path.suffix in {".rs", ".c"} and re.search(r"https?://", line):
+        if path.suffix in {".rs", ".c", ".h"} and re.search(r"https?://", line):
             raise AssertionError(
                 f"Native external endpoint requires review: {path}:{number}: {line.strip()}"
             )

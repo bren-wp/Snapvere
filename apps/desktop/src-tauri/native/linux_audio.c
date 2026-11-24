@@ -1,11 +1,8 @@
 // Snapvere by Brendigo
 // Private native PipeWire graph. The requested inputs share one mixer clock.
-#include <gst/gst.h>
+#include "linux_media.h"
 #include <gst/app/gstappsink.h>
 #include <string.h>
-
-int snapvere_audio_validate(guint64 mic, guint64 monitor, guint32 expected_cookie,
-                            guint32 *actual_cookie);
 
 typedef struct {
     GMutex lock;

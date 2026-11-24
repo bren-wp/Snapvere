@@ -1,20 +1,12 @@
 // Snapvere by Brendigo
 // Test-only native PCM capture probe. Never shipped in desktop packages.
 // Requires an explicitly selected node in the isolated CI PipeWire graph.
-#include <gst/gst.h>
+#include "linux_media.h"
 #include <gst/app/gstappsink.h>
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdio.h>
-
-void *snapvere_mp4_open_av(int fd, guint w, guint h, guint fps, guint bitrate,
-                            gboolean with_audio);
-int snapvere_mp4_push(void *handle, const guint8 *data, gsize len,
-                      guint64 pts_ns, guint64 duration_ns);
-int snapvere_mp4_push_pcm(void *handle, const guint8 *data, gsize len);
-int snapvere_mp4_finish(void *handle);
-void snapvere_mp4_free(void *handle);
 
 static gboolean append_audio_video(void *encoder, const guint8 *pcm, gsize bytes,
                                    guint64 *frames, guint64 *video_frames) {

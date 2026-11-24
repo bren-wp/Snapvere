@@ -1,19 +1,7 @@
 // Snapvere by Brendigo
 // Exercise the same mixed audio adapter linked into the experimental recorder.
-#include <gst/gst.h>
+#include "linux_media.h"
 #include <stdlib.h>
-
-typedef struct {
-    guint64 serial;
-    guint32 role;
-    char name[256];
-} AudioNode;
-int snapvere_audio_list(AudioNode *nodes, guint capacity, guint32 *cookie);
-void *snapvere_audio_open(guint64 mic, guint64 monitor, guint32 cookie);
-int snapvere_audio_validate(guint64 mic, guint64 monitor, guint32 expected_cookie,
-                            guint32 *actual_cookie);
-int snapvere_audio_pull(void *handle, guint8 *data, gsize capacity);
-void snapvere_audio_free(void *handle);
 
 int main(int argc, char **argv) {
     if (argc != 3) return 2;
