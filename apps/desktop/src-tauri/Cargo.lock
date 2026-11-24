@@ -4229,10 +4229,12 @@ version = "0.2.32"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
+ "cc",
  "chrono",
  "gif",
  "image",
  "libc",
+ "pkg-config",
  "rusqlite",
  "rustix 1.1.6",
  "serde",

@@ -25,3 +25,10 @@ Frontend screenshots are not native WebView2 or WebKitGTK verification. Existing
 - Existing xcap capture now rejects frame geometry changes rather than padding or clipping a potentially wrong redaction region. This affects the Windows fallback and Linux. No new MP4 or audio capability is claimed.
 - Added lock provenance checks for registry origins and integrity metadata, including bundled npm entries. No dependency version bump. Registry checks do not replace vulnerability, license or upstream source review.
 - Native acceptance: test Windows NTFS and Linux ext4/btrfs, removable/network targets, directory replacement, hard links, disk exhaustion, GNOME/KDE Wayland and X11 hotplug/scale changes, and verify all four Free/Pro editions. Linux MP4/PipeWire and portal session architecture are still open. No physical hardware tests performed.
+
+## Experimental native Linux video backend
+
+- A feature-gated GStreamer/OpenH264 encoder accepts the already cropped and redacted BGRA frames from the worker. It writes through an owned anonymous local file descriptor, uses monotonic timestamps, bounded raw-frame queue and EOS finalization, and publishes only a successfully finalized recording without replacement. No renderer paths, external recorder process or network source is accepted.
+- The quality workflow installs distro GStreamer development/runtime plugins only for CI, runs real encoding tests and verifies the generated H.264 MP4 with ffprobe and ffmpeg decoding. This is synthetic-frame testing, not interactive desktop QA. No public packages enable linux-native-media and Linux MP4/audio capability flags remain disabled.
+- PipeWire microphone and monitor source selection, audio timestamp mapping, pause/resume synchronization, portal-session permissions, plugin distribution/license review, and actual desktop acceptance are still open. Existing pipewire/ashpd dependencies are not evidence of a working audio implementation.
+- Fixed the reported Linux Clippy chunks-exact lint using fixed-size slice arrays; no warning suppression.

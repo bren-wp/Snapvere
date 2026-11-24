@@ -95,12 +95,10 @@ fn rgba_to_bgra_frame(
             "Capture dimensions changed; restart recording to protect the selected region".into(),
         );
     }
-    for (source, target) in image
-        .as_raw()
-        .chunks_exact(4)
-        .zip(destination.chunks_exact_mut(4))
-    {
-        target.copy_from_slice(&[source[2], source[1], source[0], 255]);
+    let (source, _) = image.as_raw().as_chunks::<4>();
+    let (target, _) = destination.as_chunks_mut::<4>();
+    for (source, target) in source.iter().zip(target.iter_mut()) {
+        *target = [source[2], source[1], source[0], 255];
     }
     Ok(())
 }
@@ -109,6 +107,8 @@ fn rgba_to_bgra_frame(
 pub(super) enum Encoder {
     #[cfg(windows)]
     Mp4(Box<mp4::Mp4Encoder>),
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    LinuxMp4(Box<super::linux_mp4::LinuxMp4>),
     Gif(Box<gifenc::GifEncoder>),
 }
 
@@ -119,11 +119,13 @@ impl Encoder {
         time_100ns: i64,
         dur_100ns: i64,
     ) -> Result<(), String> {
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, all(target_os = "linux", feature = "linux-native-media"))))]
         let _ = (time_100ns, dur_100ns);
         match self {
             #[cfg(windows)]
             Encoder::Mp4(e) => e.write(bgra, time_100ns, dur_100ns),
+            #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+            Encoder::LinuxMp4(e) => e.write(bgra, time_100ns, dur_100ns),
             Encoder::Gif(e) => e.write(bgra),
         }
     }
@@ -146,6 +148,8 @@ impl Encoder {
         match self {
             #[cfg(windows)]
             Encoder::Mp4(e) => e.finish(),
+            #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+            Encoder::LinuxMp4(e) => e.finish(),
             Encoder::Gif(e) => e.finish(),
         }
     }

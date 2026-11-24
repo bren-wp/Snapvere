@@ -347,7 +347,9 @@ jobs:
             build-essential pkg-config libssl-dev libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev \
             libclang-dev libxcb1-dev libxrandr-dev libdbus-1-dev \
-            libpipewire-0.3-dev libwayland-dev libegl-dev libgbm-dev libfuse2t64 rpm
+            libpipewire-0.3-dev libwayland-dev libegl-dev libgbm-dev libfuse2t64 rpm \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad ffmpeg
       - name: Verify required GBM development linker library
         run: |
           pkg-config --exists gbm
@@ -378,6 +380,17 @@ jobs:
       - name: Linux Clippy (warnings treated as errors)
         working-directory: apps/desktop/src-tauri
         run: cargo clippy --all-targets --locked -- -D warnings
+      - name: Encode and decode a real Linux H.264 MP4 (experimental backend)
+        working-directory: apps/desktop/src-tauri
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SNAPVERE_TEST_MP4_PATH="$RUNNER_TEMP/snapvere-native-test.mp4"
+          cargo test --locked --features linux-native-media record::linux_mp4::tests
+          cargo clippy --all-targets --locked --features linux-native-media -- -D warnings
+          test "$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 "$SNAPVERE_TEST_MP4_PATH")" = h264
+          test "$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$SNAPVERE_TEST_MP4_PATH")" = "64,48"
+          ffmpeg -v error -xerror -i "$SNAPVERE_TEST_MP4_PATH" -f null -
       - name: Build Free Linux DEB, RPM and AppImage for QA
         working-directory: apps/desktop
         run: npm run tauri -- build --bundles deb,rpm,appimage

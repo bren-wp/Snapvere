@@ -77,8 +77,11 @@ pub(super) fn run(
         opts.quality,
         mixer.is_some(),
     )?;
-    // Mark the file as session-owned only after exclusive encoder creation succeeds.
-    ctl.output_owned.store(true, Ordering::Release);
+    // Linux experimental MP4 owns an anonymous inode until successful publication.
+    let delayed_publication = cfg!(all(target_os = "linux", feature = "linux-native-media"))
+        && opts.format == RecordFormat::Mp4;
+    ctl.output_owned
+        .store(!delayed_publication, Ordering::Release);
 
     #[cfg(windows)]
     let mut painter = cursor::CursorPainter::new();
@@ -292,20 +295,41 @@ pub(super) fn run(
         work_total.as_secs_f64() * 1000.0 / frames as f64,
         1000.0 / fps as f64
     ));
+    // An unpublished Linux MP4 is discarded on cancellation or runtime error.
+    if delayed_publication && (cancelled || recording_error.is_some()) {
+        drop(encoder);
+        if let Some(error) = recording_error {
+            return Err(error);
+        }
+        return Ok(Recorded {
+            cancelled,
+            width: ow,
+            height: oh,
+            thumb,
+        });
+    }
     // Finalize to release native file handles, but never commit a partial recording.
     let finalize_result = encoder.finish();
+    if delayed_publication && finalize_result.is_ok() {
+        ctl.output_owned.store(true, Ordering::Release);
+    }
     drop(encoder);
     // The encoder's close/flush does not guarantee its bytes reached the
     // filesystem. Persist the finalized MP4/GIF before it is indexed in the
     // gallery; disk-full or interrupted writes must not report success.
     // Open with write access for Windows FlushFileBuffers compatibility.
-    let durable_result = finalize_result.and_then(|()| {
-        std::fs::OpenOptions::new()
-            .write(true)
-            .open(path)
-            .and_then(|file| file.sync_all())
-            .map_err(|error| format!("Could not persist recording: {error}"))
-    });
+    let durable_result = if delayed_publication {
+        // The native encoder synced its exact opened inode before linking it.
+        finalize_result
+    } else {
+        finalize_result.and_then(|()| {
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open(path)
+                .and_then(|file| file.sync_all())
+                .map_err(|error| format!("Could not persist recording: {error}"))
+        })
+    };
     recording_completion(recording_error, durable_result)?;
 
     Ok(Recorded {

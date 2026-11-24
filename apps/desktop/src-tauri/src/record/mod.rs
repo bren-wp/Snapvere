@@ -18,6 +18,8 @@ mod dxgi;
 mod mp4;
 
 mod gifenc;
+#[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+mod linux_mp4;
 mod pixels;
 mod transport;
 mod worker;
@@ -243,6 +245,10 @@ pub fn start(
         return Err("Snimanje je već u tijeku".into());
     }
     validate_audio_options(&opts)?;
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    if opts.format == RecordFormat::Mp4 && (opts.mic || opts.system_audio || opts.capture_cursor) {
+        return Err("Experimental Linux MP4 requires audio and cursor capture to be disabled".into());
+    }
 
     let fps = opts.fps.clamp(5, 60);
     // Izlazne dimenzije moraju biti parne (NV12 uzorkuje kromu 2x2).
@@ -546,8 +552,12 @@ fn open_encoder(
                 channels: audio::CHANNELS as u32,
             }),
         )?))),
-        #[cfg(not(windows))]
-        RecordFormat::Mp4 => Err("MP4 snimanje je zasad dostupno samo na Windowsu".into()),
+        #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+        RecordFormat::Mp4 => Ok(Encoder::LinuxMp4(Box::new(linux_mp4::LinuxMp4::new(
+            path, w, h, fps, quality,
+        )?))),
+        #[cfg(not(any(windows, all(target_os = "linux", feature = "linux-native-media"))))]
+        RecordFormat::Mp4 => Err("MP4 recording is not available in this build".into()),
         RecordFormat::Gif => Ok(Encoder::Gif(Box::new(gifenc::GifEncoder::new(
             path, w, h, fps, quality,
         )?))),

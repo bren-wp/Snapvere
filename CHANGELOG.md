@@ -2,6 +2,9 @@
 
 ## v0.2.32 — Release integrity (development)
 
+- Introduce an opt-in native Linux H.264/MP4 encoder using GStreamer and an anonymous output inode, with real codec/decode CI tests. It is not enabled in public packages; PipeWire audio and native acceptance remain open.
+- Fix Clippy pixel conversion lint without disabling checks.
+
 - Linux Pro export publishes from an anonymous synced inode without a replaceable staging pathname; unsupported destination filesystems fail safely. Windows named staging remains under audit.
 - Reject changed capture geometry in the native xcap fallback to preserve region and redaction correctness; validate lockfile registry provenance and integrity.
 
