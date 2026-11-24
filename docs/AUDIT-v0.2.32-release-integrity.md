@@ -12,3 +12,9 @@ Baseline: `aa7f4bd89421cef4c0bd7387e61d6ed46a4f311f`. The Git tree contains 379 
 | UPD-01 | P1 | Only version-only Windows manifest; no authenticated per-edition update chain. | Open: separate feeds, signatures, compatibility and downgrade validation. |
 
 Frontend screenshots are not native WebView2 or WebKitGTK verification. Existing live-site comparison is non-blocking. Actual hardware QA, comprehensive dependency/security audit and branch protection remain unverified or incomplete. Do not advertise OCR, native scrolling capture or Linux MP4/audio until implemented and tested.
+
+## Filesystem follow-up
+
+- Linux: open each directory component with no-follow directory descriptors, pin the destination for the entire batch, and use its live procfs descriptor path. Reject multiply linked source handles. Windows: open ancestor directories without delete sharing, reject reparse attributes and query link count on the live file handle. These are mitigations, not a proof of containment on all filesystems; initial picker/open races, same-user manipulation of named staging entries, mount changes and remote filesystem semantics remain in scope.
+- Stage outputs in the selected filesystem, sync before no-clobber publication. A crash may leave a partial staging filename. Directory sync is best-effort after publication; durability and power-loss testing remain open.
+- New regression cases cover hard links, failed staging, Linux parent symlinks and replacement of an already pinned directory. Native CI pending for this revision.

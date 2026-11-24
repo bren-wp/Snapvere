@@ -2,6 +2,8 @@
 
 ## v0.2.32 — Release integrity (development)
 
+- Pro export stages and syncs output before publishing without replacement, pins the selected destination and rejects multiply linked source handles. Linux and Windows native regression verification pending.
+
 - Pro batch export continues after individual failures, returns per-capture success status and keeps failed IDs selected for retry; cancellation preserves selection.
 - Open and validate source handles, reject final symlink/reparse redirection on Linux/Windows, and bound original-copy writes to the validated size. Parent directory races and crash-safe publication remain under review.
 

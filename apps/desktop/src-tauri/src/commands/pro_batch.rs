@@ -12,11 +12,88 @@ const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 const MAX_IMAGE_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_IMAGE_PIXELS: u64 = 24_000_000;
 
-// Validate the opened handle, not only a pathname inspected before opening.
-// Linux rejects final symlinks and avoids blocking on substituted FIFOs.
-// Windows opens the reparse point itself, then rejects reparse attributes.
-// Parent-directory replacement and hard links need a separate containment audit.
+// Hold each Linux directory by descriptor; do not follow any path-component
+// symlink. On Windows, hold ancestor directory handles without delete sharing
+// and reject reparse points. The picker and initial open are still separate.
+struct PinnedDirectory {
+    path: PathBuf,
+    #[cfg(target_os = "linux")]
+    _directory: File,
+    #[cfg(windows)]
+    _ancestors: Vec<File>,
+}
+
+impl PinnedDirectory {
+    fn open(path: &Path) -> Result<Self, String> {
+        if !path.is_absolute() {
+            return Err("Export requires an absolute directory".into());
+        }
+        #[cfg(target_os = "linux")]
+        {
+            use rustix::fs::{open, openat, Mode, OFlags};
+            use std::os::fd::AsRawFd;
+            use std::path::Component;
+
+            let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
+            let mut directory = open("/", flags, Mode::empty()).map_err(estr)?;
+            for component in path.components() {
+                match component {
+                    Component::RootDir => {}
+                    Component::Normal(name) => {
+                        directory = openat(&directory, name, flags, Mode::empty()).map_err(estr)?;
+                    }
+                    _ => return Err("Invalid directory component".into()),
+                }
+            }
+            let directory = File::from(directory);
+            let path = PathBuf::from(format!("/proc/self/fd/{}", directory.as_raw_fd()));
+            Ok(Self {
+                path,
+                _directory: directory,
+            })
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+            let mut ancestors = Vec::new();
+            for ancestor in path.ancestors().collect::<Vec<_>>().into_iter().rev() {
+                if !ancestor.is_absolute() {
+                    continue;
+                }
+                let directory = OpenOptions::new()
+                    .read(true)
+                    .share_mode(3) // FILE_SHARE_READ | FILE_SHARE_WRITE, no delete sharing
+                    .custom_flags(0x02200000) // BACKUP_SEMANTICS | OPEN_REPARSE_POINT
+                    .open(ancestor)
+                    .map_err(estr)?;
+                let metadata = directory.metadata().map_err(estr)?;
+                if !metadata.is_dir() || metadata.file_attributes() & 0x400 != 0 {
+                    return Err("Redirected directory is not supported for export".into());
+                }
+                ancestors.push(directory);
+            }
+            Ok(Self {
+                path: path.to_path_buf(),
+                _ancestors: ancestors,
+            })
+        }
+        #[cfg(not(any(target_os = "linux", windows)))]
+        {
+            let metadata = fs::symlink_metadata(path).map_err(estr)?;
+            if !metadata.is_dir() || metadata.file_type().is_symlink() {
+                return Err("Invalid export directory".into());
+            }
+            Ok(Self {
+                path: path.to_path_buf(),
+            })
+        }
+    }
+}
+
 fn open_bounded_source(source: &Path, max: u64) -> Result<(File, u64), String> {
+    let parent = PinnedDirectory::open(source.parent().ok_or("Missing source directory")?)?;
+    let name = source.file_name().ok_or("Missing source filename")?;
+    let source = parent.path.join(name);
     let mut options = OpenOptions::new();
     options.read(true);
     #[cfg(target_os = "linux")]
@@ -27,32 +104,68 @@ fn open_bounded_source(source: &Path, max: u64) -> Result<(File, u64), String> {
     #[cfg(windows)]
     {
         use std::os::windows::fs::OpenOptionsExt;
-        options.custom_flags(0x00200000); // FILE_FLAG_OPEN_REPARSE_POINT
+        options.share_mode(1).custom_flags(0x00200000);
     }
-    let before = fs::symlink_metadata(source).map_err(estr)?;
+    let before = fs::symlink_metadata(&source).map_err(estr)?;
     if !before.is_file() || before.file_type().is_symlink() {
         return Err("Invalid or redirected gallery file".into());
     }
-    let reader = options.open(source).map_err(estr)?;
+    let reader = options.open(&source).map_err(estr)?;
     let metadata = reader.metadata().map_err(estr)?;
     #[cfg(windows)]
     {
         use std::os::windows::fs::MetadataExt;
-        if metadata.file_attributes() & 0x400 != 0 {
-            return Err("Reparse-point gallery file".into());
+        use std::os::windows::io::AsRawHandle;
+        use windows::Win32::Foundation::HANDLE;
+        use windows::Win32::Storage::FileSystem::{
+            GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+        };
+        let mut info = BY_HANDLE_FILE_INFORMATION::default();
+        // SAFETY: reader owns the live handle and info is valid writable storage.
+        unsafe { GetFileInformationByHandle(HANDLE(reader.as_raw_handle()), &mut info) }
+            .map_err(estr)?;
+        if metadata.file_attributes() & 0x400 != 0 || info.nNumberOfLinks != 1 {
+            return Err("Redirected or multiply linked gallery file".into());
         }
     }
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        if before.dev() != metadata.dev() || before.ino() != metadata.ino() {
-            return Err("Source changed before export".into());
+        if before.dev() != metadata.dev()
+            || before.ino() != metadata.ino()
+            || metadata.nlink() != 1
+        {
+            return Err("Source changed or has multiple hard links".into());
         }
     }
     if !metadata.is_file() || metadata.len() == 0 || metadata.len() > max {
         return Err("Invalid or oversized gallery file".into());
     }
     Ok((reader, metadata.len()))
+}
+
+// Stage on the same filesystem, sync the completed file, then publish without
+// replacing any existing name. A crash can leave a .partial staging file,
+// but no incomplete image or video is published at its final name.
+fn publish_exclusively(
+    destination: &Path,
+    write: impl FnOnce(&mut File) -> Result<(), String>,
+) -> Result<(), String> {
+    let parent = destination.parent().ok_or("Missing export directory")?;
+    let mut staged = tempfile::Builder::new()
+        .prefix(".snapvere-")
+        .suffix(".partial")
+        .tempfile_in(parent)
+        .map_err(estr)?;
+    write(staged.as_file_mut())?;
+    staged.as_file().sync_all().map_err(estr)?;
+    staged.persist_noclobber(destination).map_err(|error| estr(error.error))?;
+    // Directory metadata durability is separate from content durability.
+    #[cfg(target_os = "linux")]
+    if let Err(error) = File::open(parent).and_then(|directory| directory.sync_all()) {
+        log(&format!("Export published; directory sync unavailable: {error}"));
+    }
+    Ok(())
 }
 
 fn copy_bounded(
@@ -176,29 +289,11 @@ fn transform_exclusively(
     if format == image::ImageFormat::WebP {
         decoded = image::DynamicImage::ImageRgba8(decoded.into_rgba8());
     }
-    let file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(destination)
-        .map_err(estr)?;
-    let mut writer = BufWriter::new(file);
-    let result = decoded
-        .write_to(&mut writer, format)
-        .map_err(estr)
-        .and_then(|()| {
-            writer.flush().map_err(estr)?;
-            writer.get_ref().sync_all().map_err(estr)
-        });
-    drop(writer);
-    if let Err(error) = result {
-        if let Err(cleanup) = fs::remove_file(destination) {
-            log(&format!(
-                "failed to remove incomplete Pro image output: {cleanup}"
-            ));
-        }
-        return Err(error);
-    }
-    Ok(())
+    publish_exclusively(destination, |file| {
+        let mut writer = BufWriter::new(file);
+        decoded.write_to(&mut writer, format).map_err(estr)?;
+        writer.flush().map_err(estr)
+    })
 }
 
 fn validate_ids(ids: &[String]) -> Result<(), String> {
@@ -230,22 +325,9 @@ fn copy_exclusively(source: &Path, destination: &Path) -> Result<(), String> {
     // Symlinks in the gallery must not turn a batch operation into a private
     // file-exfiltration primitive. The destination path is generated, not input.
     let (mut reader, expected) = open_bounded_source(source, MAX_FILE_BYTES)?;
-    let mut writer = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(destination)
-        .map_err(estr)?;
-    let result = copy_bounded(&mut reader, &mut writer, expected).and_then(|()| writer.sync_all());
-    drop(writer);
-    if let Err(error) = result {
-        if let Err(cleanup) = fs::remove_file(destination) {
-            log(&format!(
-                "failed to remove incomplete Pro batch output: {cleanup}"
-            ));
-        }
-        return Err(format!("Could not complete local export: {error}"));
-    }
-    Ok(())
+    publish_exclusively(destination, |writer| {
+        copy_bounded(&mut reader, writer, expected).map_err(estr)
+    })
 }
 
 pub(super) async fn export(
@@ -282,10 +364,7 @@ pub(super) async fn export(
         };
         let destination = folder.into_path().map_err(estr)?;
         // Native picker decides the directory; don't accept a renderer path.
-        let metadata = fs::symlink_metadata(&destination).map_err(estr)?;
-        if !metadata.is_dir() || metadata.file_type().is_symlink() {
-            return Err("Selected folder is invalid".into());
-        }
+        let destination = PinnedDirectory::open(&destination)?;
         let items = export_results(items, |shot| {
             let shot = shot.ok_or_else(|| "Gallery item no longer exists".to_string())?;
             if preset != BatchPreset::Original && shot.source == "recording" {
@@ -293,7 +372,7 @@ pub(super) async fn export(
             }
             let ext = preset.extension(&shot.format)?;
             let src = PathBuf::from(shot.file_path);
-            let file = destination.join(format!(
+            let file = destination.path.join(format!(
                 "Snapvere-Pro-{}.{}",
                 uuid::Uuid::new_v4().simple(),
                 ext
@@ -443,6 +522,62 @@ mod tests {
         assert!(!dest.exists());
         assert!(read_bounded_image(&link, image::ImageFormat::Png).is_err());
         fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn failed_staging_never_publishes_a_partial_file() {
+        let dir = tempfile::tempdir().expect("fixture");
+        let target = dir.path().join("capture.png");
+        let result = publish_exclusively(&target, |file| {
+            file.write_all(b"partial").map_err(estr)?;
+            Err("simulated disk failure".into())
+        });
+        assert!(result.is_err());
+        assert!(!target.exists());
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn multiply_linked_sources_are_rejected() {
+        let dir = tempfile::tempdir().expect("fixture");
+        let source = dir.path().join("original.png");
+        let linked = dir.path().join("linked.png");
+        fs::write(&source, b"private").expect("source");
+        fs::hard_link(&source, &linked).expect("hard link");
+        assert!(open_bounded_source(&linked, MAX_FILE_BYTES).is_err());
+        assert!(open_bounded_source(&source, MAX_FILE_BYTES).is_err());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn pinned_directory_survives_path_replacement_without_redirecting_output() {
+        let dir = tempfile::tempdir().expect("fixture");
+        let selected = dir.path().join("selected");
+        let moved = dir.path().join("moved");
+        fs::create_dir(&selected).unwrap();
+        let pinned = PinnedDirectory::open(&selected).unwrap();
+        fs::rename(&selected, &moved).unwrap();
+        fs::create_dir(&selected).unwrap();
+        publish_exclusively(&pinned.path.join("capture.png"), |file| {
+            file.write_all(b"complete").map_err(estr)
+        })
+        .unwrap();
+        assert!(!selected.join("capture.png").exists());
+        assert_eq!(fs::read(moved.join("capture.png")).unwrap(), b"complete");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn symlinked_parent_is_rejected() {
+        use std::os::unix::fs::symlink;
+        let dir = tempfile::tempdir().expect("fixture");
+        let real = dir.path().join("real");
+        let link = dir.path().join("link");
+        fs::create_dir(&real).unwrap();
+        fs::write(real.join("capture.png"), b"private").unwrap();
+        symlink(&real, &link).unwrap();
+        assert!(PinnedDirectory::open(&link).is_err());
+        assert!(open_bounded_source(&link.join("capture.png"), MAX_FILE_BYTES).is_err());
     }
 
     #[test]
