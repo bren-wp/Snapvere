@@ -1,6 +1,7 @@
 // Snapvere by Brendigo
 //! Continuous consent-scoped Wayland capture. No unrestricted PipeWire fallback.
 use super::pixels::allocate_bgra;
+use super::wayland_outputs::OutputGeometry;
 use super::RecordTarget;
 use crate::models::MonitorInfo;
 use std::ffi::{c_int, c_void};
@@ -84,7 +85,7 @@ pub(crate) fn validate_layout(
     Ok(())
 }
 
-fn validate_current_layout(target: &RecordTarget) -> Result<(), String> {
+fn validate_current_layout(target: &RecordTarget) -> Result<OutputGeometry, String> {
     let monitors = crate::capture::list_monitors().map_err(|error| error.to_string())?;
     validate_layout(target, &monitors)?;
     let outputs = super::wayland_outputs::snapshot()?;
@@ -104,7 +105,7 @@ fn validate_current_layout(target: &RecordTarget) -> Result<(), String> {
             return Err("Wayland recording region does not map to physical pixels".into());
         }
     }
-    Ok(())
+    Ok(output.clone())
 }
 
 pub(super) struct PortalSource {
@@ -114,12 +115,13 @@ pub(super) struct PortalSource {
     height: u32,
     seen: bool,
     target: RecordTarget,
+    output: OutputGeometry,
     checked: Instant,
 }
 
 impl PortalSource {
     pub(super) fn open(target: &RecordTarget) -> Result<Self, String> {
-        validate_current_layout(target)?;
+        let output = validate_current_layout(target)?;
         let frame = allocate_bgra(target.monitor_w, target.monitor_h)?;
         // SAFETY: the worker owns the portal session and its video pipeline.
         let handle = NonNull::new(unsafe {
@@ -138,10 +140,11 @@ impl PortalSource {
             height: target.monitor_h,
             seen: false,
             target: *target,
+            output,
             checked: Instant::now(),
         };
         // Revalidate after the user finishes the potentially long consent dialog.
-        validate_current_layout(target)?;
+        source.verify_output()?;
         source.grab(2_000)?;
         if !source.seen {
             return Err("Wayland screen sharing did not provide a frame".into());
@@ -149,10 +152,17 @@ impl PortalSource {
         Ok(source)
     }
 
+    fn verify_output(&mut self) -> Result<(), String> {
+        if validate_current_layout(&self.target)? != self.output {
+            return Err("Wayland output identity or geometry changed during recording".into());
+        }
+        self.checked = Instant::now();
+        Ok(())
+    }
+
     pub(super) fn grab(&mut self, timeout_ms: u32) -> Result<&[u8], String> {
         if self.checked.elapsed() >= Duration::from_secs(1) {
-            validate_current_layout(&self.target)?;
-            self.checked = Instant::now();
+            self.verify_output()?;
         }
         // SAFETY: C copies only validated BGRA rows into the owned buffer.
         let status = unsafe {
@@ -173,8 +183,7 @@ impl PortalSource {
 
     pub(super) fn discard(&mut self) -> Result<(), String> {
         if self.checked.elapsed() >= Duration::from_secs(1) {
-            validate_current_layout(&self.target)?;
-            self.checked = Instant::now();
+            self.verify_output()?;
         }
         if self.seen {
             self.frame.fill(0);

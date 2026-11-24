@@ -7,9 +7,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use wayland_client::protocol::{wl_callback, wl_output, wl_registry};
 use wayland_client::{Connection, Dispatch, EventQueue, QueueHandle, WEnum};
-use wayland_protocols::xdg::xdg_output::zv1::client::{
-    zxdg_output_manager_v1, zxdg_output_v1,
-};
+use wayland_protocols::xdg::xdg_output::zv1::client::{zxdg_output_manager_v1, zxdg_output_v1};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct OutputGeometry {
@@ -50,7 +48,10 @@ impl OutputGeometry {
             if last <= first {
                 return None;
             }
-            Some((u32::try_from(first).ok()?, u32::try_from(last - first).ok()?))
+            Some((
+                u32::try_from(first).ok()?,
+                u32::try_from(last - first).ok()?,
+            ))
         };
         let (x, w) = axis(x, w, self.logical.0, self.physical.0)
             .ok_or("Invalid Wayland horizontal region")?;
@@ -281,9 +282,18 @@ fn finish(raw: RawOutput) -> Result<OutputGeometry, String> {
         .filter(|name| !name.is_empty() && name.len() <= 256 && !name.chars().any(char::is_control))
         .ok_or("Missing Wayland output name")?;
     let origin = raw.origin.ok_or("Missing Wayland logical origin")?;
-    let logical = raw.logical.and_then(dimensions).ok_or("Invalid Wayland logical size")?;
-    let mut physical = raw.mode.and_then(dimensions).ok_or("Invalid Wayland physical mode")?;
-    let transform = raw.transform.filter(|value| *value <= 7).ok_or("Invalid Wayland transform")?;
+    let logical = raw
+        .logical
+        .and_then(dimensions)
+        .ok_or("Invalid Wayland logical size")?;
+    let mut physical = raw
+        .mode
+        .and_then(dimensions)
+        .ok_or("Invalid Wayland physical mode")?;
+    let transform = raw
+        .transform
+        .filter(|value| *value <= 7)
+        .ok_or("Invalid Wayland transform")?;
     if matches!(transform, 1 | 3 | 5 | 7) {
         physical = (physical.1, physical.0);
     }
@@ -304,7 +314,8 @@ pub(super) fn snapshot() -> Result<Vec<OutputGeometry>, String> {
     let path = if path.is_absolute() {
         path
     } else {
-        let runtime = std::env::var_os("XDG_RUNTIME_DIR").ok_or("Wayland runtime directory is unavailable")?;
+        let runtime =
+            std::env::var_os("XDG_RUNTIME_DIR").ok_or("Wayland runtime directory is unavailable")?;
         PathBuf::from(runtime).join(path)
     };
     let stream = UnixStream::connect(path).map_err(|e| e.to_string())?;
@@ -332,7 +343,11 @@ pub(super) fn snapshot() -> Result<Vec<OutputGeometry>, String> {
     }
     let _second = display.sync(&qh, 2_u8);
     wait(&mut queue, &mut state, 2, deadline)?;
-    let outputs: Vec<_> = state.outputs.into_values().map(finish).collect::<Result<_, _>>()?;
+    let outputs: Vec<_> = state
+        .outputs
+        .into_values()
+        .map(finish)
+        .collect::<Result<_, _>>()?;
     // Connection and protocol objects live until the entire snapshot is complete.
     drop(proxies);
     for (index, output) in outputs.iter().enumerate() {
@@ -377,6 +392,9 @@ mod tests {
         let mut a = output("DP-1", (-1920, 0), (2400, 1350));
         let b = output("DP-2", (-1920, 0), (2880, 1620));
         assert!(select(&[a.clone(), b], -1920, 0, 1920, 1080).is_err());
+        let mut replacement = a.clone();
+        replacement.name = "DP-3".into();
+        assert_ne!(a, replacement);
         assert!(a.inward_crop(-1, 0, 100, 100).is_err());
         assert!(a.inward_crop(1919, 0, 2, 100).is_err());
         assert!(a.inward_crop(1, 1, u32::MAX, 100).is_err());
