@@ -62,11 +62,15 @@ export default function RecPreview() {
 
   function point(event: React.PointerEvent<SVGSVGElement>): Point | null {
     if (!preview || !canvas.current) return null;
-    const bounds = canvas.current.getBoundingClientRect();
-    if (!bounds.width || !bounds.height) return null;
+    // Invert the actual SVG transform rather than the CSS bounding box:
+    // letterboxing, device scale and window resize cannot shift masks.
+    const matrix = canvas.current.getScreenCTM();
+    if (!matrix) return null;
+    const p = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
     return {
-      x: Math.max(0, Math.min(preview.width, (event.clientX - bounds.left) * preview.width / bounds.width)),
-      y: Math.max(0, Math.min(preview.height, (event.clientY - bounds.top) * preview.height / bounds.height)),
+      x: Math.max(0, Math.min(preview.width, p.x)),
+      y: Math.max(0, Math.min(preview.height, p.y)),
     };
   }
 
@@ -134,7 +138,7 @@ export default function RecPreview() {
             style={{ aspectRatio: preview.width / preview.height, maxHeight: "100%", maxWidth: "100%", touchAction: "none" }}
             className="block h-auto w-auto cursor-crosshair select-none"
             onPointerDown={(event) => {
-              if (busy || marks.length >= preview.remaining || event.button !== 0) return;
+              if (busy || anchor.current || marks.length >= preview.remaining || event.button !== 0) return;
               const p = point(event);
               if (!p) return;
               event.currentTarget.setPointerCapture(event.pointerId);
@@ -152,7 +156,9 @@ export default function RecPreview() {
               setDraft(null);
               if (!p || !start) return;
               const mark = rectangle(start, p);
-              if (mark.rect.width && mark.rect.height) setMarks((previous) => [...previous, mark]);
+              if (mark.rect.width && mark.rect.height) {
+                setMarks((previous) => previous.length < preview.remaining ? [...previous, mark] : previous);
+              }
             }}
             onPointerCancel={() => { anchor.current = null; setDraft(null); }}>
             <image href={preview.image} width={preview.width} height={preview.height} />

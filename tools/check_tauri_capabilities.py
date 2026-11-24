@@ -15,6 +15,11 @@ def read(name):
 shared = read("default.json")
 home = read("home-privileged.json")
 settings = read("settings-privileged.json")
+preview = read("recording-preview.json")
+assert preview["windows"] == ["recpreview"], "Recording preview permission scope changed"
+assert set(preview["permissions"]) == {"core:default", "core:event:default"}, (
+    "Recording preview received additional capabilities"
+)
 
 expected = {"home", "overlay", "editor", "settings", "recbar", "recdraw", "recframe", "overlay-*"}
 assert set(shared["windows"]) == expected, "Shared window set changed; review new WebView security"
@@ -64,8 +69,10 @@ protected_ipc = {
     "start_recording": ["overlay"],
     "stop_recording": ["recbar"],
     "cancel_recording": ["recbar"],
-    "pause_recording": ["recbar"],
-    "recording_status": ["recbar"],
+    "pause_recording": ["recbar", "recdraw"],
+    "recording_status": ["recbar", "recdraw"],
+    "get_crop_preview": ["recpreview"],
+    "resume_crop_preview": ["recpreview"],
     "rec_frame_rect": ["recframe"],
     "set_draw_interactive": ["recdraw"],
     "set_blur_regions": ["recdraw"],
@@ -104,5 +111,10 @@ for name, allowed in protected_ipc.items():
     assert guard is not None, f"Unprotected IPC function: {name}"
     actual = re.findall(r'"([^"]+)"', guard.group(1))
     assert actual == allowed, f"Incorrect origin permissions for {name}: {actual}"
+    if name == "pause_recording":
+        assert re.search(
+            r'if paused\s*\{\s*require_window_label\(window\.label\(\), &\["recbar", "recdraw"\]\)\?;\s*\}\s*else\s*\{\s*require_window_label\(window\.label\(\), &\["recbar"\]\)\?;',
+            first_statements,
+        ), "Only recbar may resume through the generic pause command"
 
 print(f"Rust IPC origin boundary OK: {len(protected_ipc)} sensitive commands")

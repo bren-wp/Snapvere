@@ -10,7 +10,6 @@
     "recbar",
     "recdraw",
     "recframe",
-    "recpreview",
     "overlay-*"
   ],
   "permissions": [

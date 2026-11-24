@@ -87,7 +87,7 @@ impl Preview {
             let last = (u64::from(end) * u64::from(large)).div_ceil(u64::from(small));
             Some((first as u32, (last - first) as u32))
         };
-        marks
+        let mapped: Vec<_> = marks
             .iter()
             .map(|mark| {
                 let r = mark.rect;
@@ -105,7 +105,19 @@ impl Preview {
                     },
                 })
             })
-            .collect()
+            .collect::<Result<_, String>>()?;
+        // Bound aggregate coverage, not just the number of rectangles.
+        // Even dozens of overlapping full-frame masks must not stall capture.
+        let area: u64 = self
+            .marks
+            .iter()
+            .chain(&mapped)
+            .map(|mark| u64::from(mark.rect.width) * u64::from(mark.rect.height))
+            .sum();
+        if area > u64::from(self.width) * u64::from(self.height) * 2 {
+            return Err("Annotation coverage exceeds the recording work budget".into());
+        }
+        Ok(mapped)
     }
 
     pub(super) fn append(&mut self, marks: Vec<Mark>) {
@@ -135,17 +147,19 @@ impl Preview {
                 } else {
                     [217, 191, 9, 255]
                 };
+                let paint = |row: &mut [u8], start: usize, end: usize| {
+                    for pixel in row[start * 4..end * 4].as_chunks_mut::<4>().0 {
+                        *pixel = color;
+                    }
+                };
                 for y in y0..y1 {
-                    for x in x0..x1 {
-                        if mask
-                            || x - x0 < border
-                            || x1 - x <= border
-                            || y - y0 < border
-                            || y1 - y <= border
-                        {
-                            let index = y * stride + x * 4;
-                            bgra[index..index + 4].copy_from_slice(&color);
-                        }
+                    let row = &mut bgra[y * stride..(y + 1) * stride];
+                    if mask || y - y0 < border || y1 - y <= border {
+                        paint(row, x0, x1);
+                    } else {
+                        let left = (x0 + border).min(x1);
+                        paint(row, x0, left);
+                        paint(row, x1.saturating_sub(border).max(left), x1);
                     }
                 }
             }
@@ -202,7 +216,10 @@ mod tests {
         assert_eq!(&frame[68..72], &[0, 0, 0, 255]);
         assert_eq!(&frame[..4], &[255, 255, 255, 255]);
         preview.remember(&frame).unwrap();
-        assert_eq!(preview.frame.as_ref().unwrap().get_pixel(1, 1).0, [0, 0, 0, 255]);
+        assert_eq!(
+            preview.frame.as_ref().unwrap().get_pixel(1, 1).0,
+            [0, 0, 0, 255]
+        );
         assert!(preview.compose(&mut frame[..8]).is_err());
     }
 
@@ -218,6 +235,16 @@ mod tests {
         assert!(preview.map_marks(&[invalid]).is_err());
         assert!(preview.map_marks(&[mark(MarkKind::Mask); 32]).is_err());
         assert_eq!(preview.marks.len(), 1);
+        let full = Mark {
+            kind: MarkKind::Mask,
+            rect: PixelRect {
+                x: 0,
+                y: 0,
+                width: 960,
+                height: 540,
+            },
+        };
+        assert!(preview.map_marks(&[full, full]).is_err());
         let odd = Preview::new(1918, 1078);
         assert_eq!(odd.small, (959, 539));
     }

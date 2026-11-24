@@ -269,11 +269,10 @@ pub fn start(
     let (ox, oy, ow, oh) = crop_rect(&target)?;
 
     #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
-    let preview = portal
-        .as_ref()
-        .map(|_| Mutex::new(preview::Preview::new(ow, oh)));
+    let portal_preview = portal.is_some();
     #[cfg(not(all(target_os = "linux", feature = "linux-native-media")))]
-    let preview = None;
+    let portal_preview = false;
+    let preview = portal_preview.then(|| Mutex::new(preview::Preview::new(ow, oh)));
 
     let ctl = Arc::new(Ctl {
         phase: AtomicU8::new(PHASE_RECORDING),
@@ -488,13 +487,15 @@ pub fn crop_preview(app: &AppHandle) -> Result<preview::Snapshot, String> {
     let state = app.state::<AppState>();
     let slot = crate::state::lock(&state.recorder);
     let ctl = &slot.as_ref().ok_or("No active recording")?.ctl;
-    if ctl.phase.load(Ordering::Acquire) != PHASE_PAUSED
-        || !ctl.pause_ack.load(Ordering::Acquire)
-    {
+    if ctl.phase.load(Ordering::Acquire) != PHASE_PAUSED || !ctl.pause_ack.load(Ordering::Acquire) {
         return Err("Recording preview requires an acknowledged pause".into());
     }
-    let preview = ctl.preview.as_ref().ok_or("Recording preview is unavailable")?;
-    crate::state::lock(preview).snapshot()
+    let preview = ctl
+        .preview
+        .as_ref()
+        .ok_or("Recording preview is unavailable")?;
+    let preview = crate::state::lock(preview);
+    preview.snapshot()
 }
 
 pub fn resume_crop_preview(
@@ -511,7 +512,10 @@ pub fn resume_crop_preview(
         {
             return Err("Recording is not paused".into());
         }
-        let preview = ctl.preview.as_ref().ok_or("Recording preview is unavailable")?;
+        let preview = ctl
+            .preview
+            .as_ref()
+            .ok_or("Recording preview is unavailable")?;
         let mut preview = crate::state::lock(preview);
         preview.check_session(session)?;
         let mapped = preview.map_marks(&marks)?;
