@@ -22,6 +22,7 @@ export default function RecPreview() {
   const anchor = useRef<Point | null>(null);
   const canvas = useRef<SVGSVGElement>(null);
   const epoch = useRef(0);
+  const remaining = preview ? Math.max(0, preview.remaining - historyDelta) : 0;
 
   const load = useCallback(async () => {
     const id = ++epoch.current;
@@ -148,15 +149,15 @@ export default function RecPreview() {
           <p className="text-xs text-muted">{t("Paused preview. Edits apply to future frames only.")}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button disabled={busy || !preview || marks.length >= preview.remaining} onClick={() => setKind("rectangle")}
+          <button disabled={busy || !preview || marks.length >= remaining} onClick={() => setKind("rectangle")}
             aria-pressed={kind === "rectangle"} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm disabled:opacity-40">
             <Square size={16} /> {t("Rectangle")}
           </button>
-          <button disabled={busy || !preview || marks.length >= preview.remaining} onClick={() => setKind("mask")}
+          <button disabled={busy || !preview || marks.length >= remaining} onClick={() => setKind("mask")}
             aria-pressed={kind === "mask"} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm disabled:opacity-40">
             <EyeOff size={16} /> {t("Opaque mask")}
           </button>
-          <select aria-label={t("Recording preview")} value={kind} onChange={(event) => setKind(event.target.value as PreviewMark["kind"])}
+          <select aria-label={t("Recording preview")} value={kind} disabled={busy || Boolean(draft)} onChange={(event) => setKind(event.target.value as PreviewMark["kind"])}
             className="rounded-lg border border-border bg-background px-2 py-2 text-sm">
             {([["rectangle","Rectangle"],["mask","Opaque mask"],["ellipse","Ellipse"],["line","Line"],["arrow","Arrow"],["pen","Pen"],["marker","Marker"],["text","Text"],["step","Numbered step"]] as const).map(([id, label]) =>
               <option key={id} value={id}>{t(label)}</option>)}
@@ -170,8 +171,9 @@ export default function RecPreview() {
           }} className="rounded-lg border border-border p-2 disabled:opacity-40" aria-label={t("Undo")}>
             <Undo2 size={16} />
           </button>
-          <button disabled={busy || (!redo.length && (!preview || historyDelta >= preview.redoCount || marks.length > 0))} onClick={() => {
+          <button disabled={busy || (!redo.length && (!preview || historyDelta >= preview.redoCount || marks.length > 0 || (historyDelta >= 0 && remaining === 0)))} onClick={() => {
             if (redo.length) {
+              if (marks.length >= remaining) return;
               setMarks((previous) => [...previous, redo[redo.length - 1]]);
               setRedo((previous) => previous.slice(0, -1));
             } else setHistoryDelta((previous) => previous + 1);
@@ -194,7 +196,7 @@ export default function RecPreview() {
             style={{ aspectRatio: preview.width / preview.height, maxHeight: "100%", maxWidth: "100%", touchAction: "none" }}
             className="block h-auto w-auto cursor-crosshair select-none"
             onPointerDown={(event) => {
-              if (busy || anchor.current || marks.length >= preview.remaining || event.button !== 0) return;
+              if (busy || anchor.current || marks.length >= remaining || event.button !== 0) return;
               const p = point(event);
               if (!p) return;
               event.currentTarget.setPointerCapture(event.pointerId);
@@ -223,12 +225,12 @@ export default function RecPreview() {
               const start = anchor.current;
               anchor.current = null;
               setDraft(null);
-              if (!p || !start) return;
+              if (!p || !start || busy) return;
               const mark = rectangle(start, p);
               if (kind === "pen" || kind === "marker") {
                 mark.points = [...stroke.current, p].map((q) => ({ x: Math.min(preview.width - 1, Math.floor(q.x)), y: Math.min(preview.height - 1, Math.floor(q.y)) }));
               }
-              if (mark.rect.width && mark.rect.height && marks.length < preview.remaining) add(mark);
+              if (mark.rect.width && mark.rect.height && marks.length < remaining) add(mark);
             }}
             onPointerCancel={() => { anchor.current = null; setDraft(null); }}>
             <defs><marker id="preview-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0L6 3L0 6z" fill="#09BFD9" /></marker></defs>

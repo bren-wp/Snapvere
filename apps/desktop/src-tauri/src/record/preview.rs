@@ -187,7 +187,12 @@ impl Preview {
             width: self.small.0,
             height: self.small.1,
             remaining: MAX_MARKS - self.history.layers.len(),
-            undo_count: self.history.layers.iter().filter(|l| l.kind != MarkKind::Mask).count(),
+            undo_count: self
+                .history
+                .layers
+                .iter()
+                .filter(|l| l.kind != MarkKind::Mask)
+                .count(),
             redo_count: self.history.redo.len(),
             image: crate::capture::to_png_data_url(frame).map_err(|e| e.to_string())?,
         })
@@ -217,7 +222,8 @@ impl Preview {
         }
         let glyph_kind = matches!(mark.kind, MarkKind::Text | MarkKind::Step);
         if glyph_kind {
-            if r.width > 256 || r.height > 64
+            if r.width > 256
+                || r.height > 64
                 || mark.glyph.len() != (r.width * r.height) as usize
                 || mark.glyph.iter().any(|&v| v > 1)
                 || !mark.glyph.contains(&1)
@@ -271,13 +277,22 @@ impl Preview {
                 }
             }
             MarkKind::Line | MarkKind::Arrow | MarkKind::Pen | MarkKind::Marker => {
-                let points = mark.points.iter().copied().map(project).collect::<Result<Vec<_>, _>>()?;
+                let points = mark
+                    .points
+                    .iter()
+                    .copied()
+                    .map(project)
+                    .collect::<Result<Vec<_>, _>>()?;
                 if points.len() < 2
                     || (matches!(mark.kind, MarkKind::Line | MarkKind::Arrow) && points.len() != 2)
                 {
                     return Err("Invalid stroke points".into());
                 }
-                let radius = if mark.kind == MarkKind::Marker { border * 2 } else { border / 2 };
+                let radius = if mark.kind == MarkKind::Marker {
+                    border * 2
+                } else {
+                    border / 2
+                };
                 for segment in points.windows(2) {
                     raster.stroke(segment[0], segment[1], radius)?;
                 }
@@ -292,10 +307,14 @@ impl Preview {
                         for side in [-1.0, 1.0] {
                             let x = f64::from(b.x) - head * (dx + side * dy * 0.6) / length;
                             let y = f64::from(b.y) - head * (dy - side * dx * 0.6) / length;
-                            raster.stroke(b, Point {
-                                x: x.clamp(0.0, f64::from(self.width - 1)) as u32,
-                                y: y.clamp(0.0, f64::from(self.height - 1)) as u32,
-                            }, radius)?;
+                            raster.stroke(
+                                b,
+                                Point {
+                                    x: x.clamp(0.0, f64::from(self.width - 1)) as u32,
+                                    y: y.clamp(0.0, f64::from(self.height - 1)) as u32,
+                                },
+                                radius,
+                            )?;
                         }
                     }
                 }
@@ -321,7 +340,10 @@ impl Preview {
         if spans.is_empty() {
             return Err("Empty annotation".into());
         }
-        Ok(Layer { kind: mark.kind, spans })
+        Ok(Layer {
+            kind: mark.kind,
+            spans,
+        })
     }
 
     // Build the complete edit transaction without mutating the live engine.
@@ -334,7 +356,9 @@ impl Preview {
         let mut redo = self.history.redo.clone();
         for _ in 0..delta.unsigned_abs() {
             if delta < 0 {
-                let index = layers.iter().rposition(|l| l.kind != MarkKind::Mask)
+                let index = layers
+                    .iter()
+                    .rposition(|l| l.kind != MarkKind::Mask)
                     .ok_or("No drawing to undo")?;
                 redo.push(layers.remove(index));
             } else {
@@ -347,13 +371,23 @@ impl Preview {
         if !marks.is_empty() {
             redo.clear();
         }
+        let mut span_count: usize = layers.iter().chain(&redo).map(|l| l.spans.len()).sum();
         for mark in marks {
-            layers.push(self.compile(mark)?);
+            let layer = self.compile(mark)?;
+            span_count = span_count
+                .checked_add(layer.spans.len())
+                .ok_or("Annotation span count overflow")?;
+            if span_count > MAX_SPANS {
+                return Err("Annotation coverage exceeds the recording work budget".into());
+            }
+            layers.push(layer);
         }
-        let area: u64 = layers.iter().flat_map(|l| &l.spans)
-            .map(|&(_, a, b)| u64::from(b - a)).sum();
-        let count: usize = layers.iter().chain(&redo).map(|l| l.spans.len()).sum();
-        if area > u64::from(self.width) * u64::from(self.height) * 2 || count > MAX_SPANS {
+        let area: u64 = layers
+            .iter()
+            .flat_map(|l| &l.spans)
+            .map(|&(_, a, b)| u64::from(b - a))
+            .sum();
+        if area > u64::from(self.width) * u64::from(self.height) * 2 || span_count > MAX_SPANS {
             return Err("Annotation coverage exceeds the recording work budget".into());
         }
         Ok(History { layers, redo })
@@ -420,7 +454,12 @@ mod tests {
     fn mark(kind: MarkKind, x: u32, y: u32, w: u32, h: u32) -> Mark {
         Mark {
             kind,
-            rect: PixelRect { x, y, width: w, height: h },
+            rect: PixelRect {
+                x,
+                y,
+                width: w,
+                height: h,
+            },
             points: Vec::new(),
             glyph: Vec::new(),
         }
@@ -433,7 +472,12 @@ mod tests {
             mark(MarkKind::Rectangle, 4, 4, 120, 88),
             mark(MarkKind::Ellipse, 8, 8, 112, 80),
         ];
-        for kind in [MarkKind::Line, MarkKind::Arrow, MarkKind::Pen, MarkKind::Marker] {
+        for kind in [
+            MarkKind::Line,
+            MarkKind::Arrow,
+            MarkKind::Pen,
+            MarkKind::Marker,
+        ] {
             let mut stroke = mark(kind, 1, 1, 126, 94);
             stroke.points = vec![Point { x: 4, y: 4 }, Point { x: 120, y: 88 }];
             marks.push(stroke);
@@ -476,7 +520,10 @@ mod tests {
         preview.apply(plan);
         assert_eq!(preview.history.layers.len(), 9);
         preview.remember(&frame).unwrap();
-        assert_eq!(preview.frame.as_ref().unwrap().get_pixel(64, 48).0, [0, 0, 0, 255]);
+        assert_eq!(
+            preview.frame.as_ref().unwrap().get_pixel(64, 48).0,
+            [0, 0, 0, 255]
+        );
         assert!(preview.compose(&mut frame[..8]).is_err());
     }
 
@@ -500,7 +547,8 @@ mod tests {
         #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
         let mp4 = dir.path().join("annotated.mp4");
         #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
-        let mut video = super::super::linux_mp4::LinuxMp4::new(&mp4, 128, 96, 10, 90, false).unwrap();
+        let mut video =
+            super::super::linux_mp4::LinuxMp4::new(&mp4, 128, 96, 10, 90, false).unwrap();
         for tick in 0..12 {
             let mut frame = vec![255; 128 * 96 * 4];
             frame[..4].copy_from_slice(&[tick as u8 * 10, 100, 180, 255]);
