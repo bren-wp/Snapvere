@@ -123,32 +123,7 @@ for _ in {1..100}; do [[ -S "$runtime/pipewire-0" ]] && break; sleep .1; done
 wireplumber >"$runtime/wireplumber.log" 2>&1 & pids+=("$!")
 # Start the actual distribution backend with diagnostics captured. Resolve
 # its packaged executable rather than relying on an old libexec layout.
-backend="$(dpkg-query -L xdg-desktop-portal-wlr | grep -E '/(libexec|lib)/xdg-desktop-portal-wlr -Wextra -Werror -O2 -I"$root/apps/desktop/src-tauri/native" \
-    "$root/tools/native/wayland_portal_probe.c" "$root/apps/desktop/src-tauri/native/linux_wayland.c" \
-    -o "$runtime/portal-probe" $(pkg-config --cflags --libs gio-unix-2.0 gstreamer-app-1.0 gstreamer-video-1.0)
-timeout 105 "$runtime/portal-probe" >"$runtime/probe.log" 2>&1 & probe=$!; pids+=("$probe")
-for _ in {1..900}; do
-  grep -q '^SEPARATE_OUTPUT_MARKER_ABSENT$' "$runtime/probe.log" && break
-  kill -0 "$probe" 2>/dev/null || { cat "$runtime/probe.log"; exit 1; }
-  sleep .1
-done
-grep -q '^SEPARATE_OUTPUT_MARKER_ABSENT$' "$runtime/probe.log"
-# Both monotonic readings use Linux CLOCK_MONOTONIC on the same machine.
-started="$(python3 -c 'import time; print(time.monotonic_ns()//1000)')"
-swaymsg '[title="Snapvere QA marker"] fullscreen disable'
-swaymsg '[title="Snapvere QA marker"] move container to output HEADLESS-1'
-swaymsg '[title="Snapvere QA marker"] fullscreen enable'
-wait "$probe"
-cat "$runtime/probe.log"
-python3 - "$started" "$runtime/probe.log" <<'PY'
-import sys
-lines=open(sys.argv[2], encoding="utf-8").read().splitlines()
-received=[int(s.split()[1]) for s in lines if s.startswith("SAME_OUTPUT_MARKER_PRESENT ")]
-assert len(received)==1 and received[0]>=int(sys.argv[1])
-print(f"Native compositor move-to-PipeWire sample: {(received[0]-int(sys.argv[1]))/1000:.3f} ms")
-print("Same-output exclusion is NOT supported by this tested path.")
-PY
-)"
+backend="$(dpkg-query -L xdg-desktop-portal-wlr | grep -E '/(libexec|lib)/xdg-desktop-portal-wlr$')"
 [[ -x "$backend" ]]
 "$backend" -l DEBUG -c "$XDG_CONFIG_HOME/xdg-desktop-portal-wlr/config" >"$runtime/portal-wlr.log" 2>&1 & backend_pid=$!; pids+=("$backend_pid")
 backend_ready=0

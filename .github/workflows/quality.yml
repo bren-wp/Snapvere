@@ -370,6 +370,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - name: Validate native shell test syntax before installing prerequisites
+        run: |
+          for script in tools/native/*.sh; do
+            bash -n "$script"
+          done
       - name: Install isolated compositor and portal prerequisites
         run: |
           sudo apt-get update
