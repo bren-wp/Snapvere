@@ -8,7 +8,7 @@ type FrameIdentity = {
   revision: number;
 };
 
-export function decodePreviewPacket(packet: ArrayBuffer, expected: FrameIdentity): Uint8ClampedArray {
+export function decodePreviewPacket(packet: ArrayBuffer, expected: FrameIdentity): Uint8ClampedArray<ArrayBuffer> {
   const { width, height, frameId, timestamp100ns, revision } = expected;
   if (![width, height, frameId, timestamp100ns, revision].every(Number.isSafeInteger)
       || width < 1 || width > 960 || height < 1 || height > 540

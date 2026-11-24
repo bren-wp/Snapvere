@@ -141,3 +141,5 @@ Frontend screenshots are not native WebView2 or WebKitGTK verification. Existing
 - Add configurable RGB, stroke width and opacity for drawings; masks remain black and fully opaque regardless of style. Use direct span fill for opaque pixels and blend translucent spans. Test latest-frame sequence gaps, revision, monotonic timestamps and mask opacity. Correct previous reported formatting diffs. Latest CI pending; visual parity and real codec timing measurements remain open.
 
 - Extract strict binary packet validation into a shared frontend helper; reject unsafe numeric metadata, excess dimensions, mismatched identity and truncated frames before constructing ImageData. Add Node regression tests and localize opacity in existing feedback dictionaries. Live display remains disabled during Wayland recording.
+
+- Register the new packet tests in the explicit frontend unit-test command; keep the decoded typed-array backing type as ArrayBuffer for the DOM ImageData contract.
