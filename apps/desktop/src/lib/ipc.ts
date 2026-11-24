@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { CapturePreferences } from "./capturePreferences";
 import type { ProExportPreset } from "./proSelection";
 import type {
+  BatchExportReport,
   CaptureAction,
   ImageFormat,
   MonitorInfo,
@@ -113,7 +114,7 @@ export const ipc = {
   copyMediaPath: (id: string) => invoke<void>("copy_media_path", { id }),
   /** Pro native builds only: bounded, ID-based, user-approved local folder export. */
   proExportBatch: (ids: string[], preset: ProExportPreset) =>
-    invoke<number>("pro_export_batch", { ids, preset }),
+    invoke<BatchExportReport>("pro_export_batch", { ids, preset }),
 
   // ── sustav ──
   showHome: () => invoke<void>("show_home"),

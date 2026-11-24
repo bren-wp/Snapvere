@@ -4,6 +4,21 @@
 
 use serde::{Deserialize, Serialize};
 
+/// One result per requested gallery ID; no local paths or raw OS errors.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchExportItem {
+    pub id: String,
+    pub succeeded: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchExportReport {
+    pub cancelled: bool,
+    pub items: Vec<BatchExportItem>,
+}
+
 /// Izlazni format slike.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]

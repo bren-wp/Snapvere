@@ -1709,7 +1709,7 @@ pub async fn pro_export_batch(
     window: tauri::WebviewWindow,
     ids: Vec<String>,
     preset: String,
-) -> Result<u32, String> {
+) -> Result<crate::models::BatchExportReport, String> {
     require_window_label(window.label(), &["home"])?;
     #[cfg(feature = "pro")]
     {

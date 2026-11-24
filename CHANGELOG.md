@@ -2,6 +2,9 @@
 
 ## v0.2.32 — Release integrity (development)
 
+- Pro batch export continues after individual failures, returns per-capture success status and keeps failed IDs selected for retry; cancellation preserves selection.
+- Open and validate source handles, reject final symlink/reparse redirection on Linux/Windows, and bound original-copy writes to the validated size. Parent directory races and crash-safe publication remain under review.
+
 - Gate preview publication on successful quality and frontend visual checks for the exact main commit.
 - Reconcile unsigned Tauri release metadata from v0.2.25 onward, including future releases, without touching drafts or the legacy channel.
 - Keep all ten native packages as unsigned previews until signing and real native acceptance are verified.

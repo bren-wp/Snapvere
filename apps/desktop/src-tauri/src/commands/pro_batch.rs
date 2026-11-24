@@ -12,6 +12,76 @@ const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 const MAX_IMAGE_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_IMAGE_PIXELS: u64 = 24_000_000;
 
+// Validate the opened handle, not only a pathname inspected before opening.
+// Linux rejects final symlinks and avoids blocking on substituted FIFOs.
+// Windows opens the reparse point itself, then rejects reparse attributes.
+// Parent-directory replacement and hard links need a separate containment audit.
+fn open_bounded_source(source: &Path, max: u64) -> Result<(File, u64), String> {
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.custom_flags(0x00200000); // FILE_FLAG_OPEN_REPARSE_POINT
+    }
+    let before = fs::symlink_metadata(source).map_err(estr)?;
+    if !before.is_file() || before.file_type().is_symlink() {
+        return Err("Invalid or redirected gallery file".into());
+    }
+    let reader = options.open(source).map_err(estr)?;
+    let metadata = reader.metadata().map_err(estr)?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if metadata.file_attributes() & 0x400 != 0 {
+            return Err("Reparse-point gallery file".into());
+        }
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != metadata.dev() || before.ino() != metadata.ino() {
+            return Err("Source changed before export".into());
+        }
+    }
+    if !metadata.is_file() || metadata.len() == 0 || metadata.len() > max {
+        return Err("Invalid or oversized gallery file".into());
+    }
+    Ok((reader, metadata.len()))
+}
+
+fn copy_bounded(
+    reader: &mut impl Read,
+    writer: &mut impl std::io::Write,
+    expected: u64,
+) -> io::Result<()> {
+    // Write no more than the validated initial size even if a source grows.
+    let copied = io::copy(&mut reader.take(expected), writer)?;
+    let mut extra = [0_u8; 1];
+    if copied != expected || reader.read(&mut extra)? != 0 {
+        return Err(io::Error::other("Source changed during export"));
+    }
+    Ok(())
+}
+
+fn export_results<T>(
+    items: impl IntoIterator<Item = (String, T)>,
+    mut export_one: impl FnMut(T) -> Result<(), String>,
+) -> Vec<crate::models::BatchExportItem> {
+    items
+        .into_iter()
+        .map(|(id, item)| crate::models::BatchExportItem {
+            id,
+            succeeded: export_one(item).is_ok(),
+        })
+        .collect()
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum BatchPreset {
     Original,
@@ -61,21 +131,13 @@ fn read_bounded_image(
     source: &Path,
     format: image::ImageFormat,
 ) -> Result<image::DynamicImage, String> {
-    let metadata = fs::symlink_metadata(source).map_err(estr)?;
-    if !metadata.is_file()
-        || metadata.file_type().is_symlink()
-        || metadata.len() == 0
-        || metadata.len() > MAX_IMAGE_BYTES
-    {
-        return Err("Invalid, redirected or oversized source image".into());
-    }
+    let (reader, expected) = open_bounded_source(source, MAX_IMAGE_BYTES)?;
     let mut bytes = Vec::new();
-    File::open(source)
-        .map_err(estr)?
-        .take(MAX_IMAGE_BYTES + 1)
+    reader
+        .take(expected + 1)
         .read_to_end(&mut bytes)
         .map_err(estr)?;
-    if bytes.len() as u64 != metadata.len() {
+    if bytes.len() as u64 != expected {
         return Err("Source changed during image export".into());
     }
     let (width, height) = image::ImageReader::with_format(Cursor::new(&bytes), format)
@@ -145,7 +207,9 @@ fn validate_ids(ids: &[String]) -> Result<(), String> {
     }
     let mut seen = HashSet::with_capacity(ids.len());
     for id in ids {
-        if uuid::Uuid::parse_str(id).is_err() || !seen.insert(id) {
+        if !uuid::Uuid::parse_str(id).is_ok_and(|value| value.to_string() == *id)
+            || !seen.insert(id)
+        {
             return Err("Invalid or duplicate gallery item".into());
         }
     }
@@ -166,26 +230,13 @@ fn accepted_extension(format: &str) -> Result<&'static str, String> {
 fn copy_exclusively(source: &Path, destination: &Path) -> Result<(), String> {
     // Symlinks in the gallery must not turn a batch operation into a private
     // file-exfiltration primitive. The destination path is generated, not input.
-    let metadata = fs::symlink_metadata(source).map_err(estr)?;
-    if !metadata.is_file()
-        || metadata.file_type().is_symlink()
-        || metadata.len() == 0
-        || metadata.len() > MAX_FILE_BYTES
-    {
-        return Err("Invalid, redirected or oversized gallery file".into());
-    }
-    let mut reader = File::open(source).map_err(estr)?;
+    let (mut reader, expected) = open_bounded_source(source, MAX_FILE_BYTES)?;
     let mut writer = OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(destination)
         .map_err(estr)?;
-    let result = io::copy(&mut reader, &mut writer).and_then(|copied| {
-        if copied != metadata.len() {
-            return Err(io::Error::other("Source changed during export"));
-        }
-        writer.sync_all()
-    });
+    let result = copy_bounded(&mut reader, &mut writer, expected).and_then(|()| writer.sync_all());
     drop(writer);
     if let Err(error) = result {
         if let Err(cleanup) = fs::remove_file(destination) {
@@ -203,7 +254,7 @@ pub(super) async fn export(
     window: tauri::WebviewWindow,
     ids: Vec<String>,
     preset: String,
-) -> Result<u32, String> {
+) -> Result<crate::models::BatchExportReport, String> {
     validate_ids(&ids)?;
     let preset = BatchPreset::parse(&preset)?;
     tauri::async_runtime::spawn_blocking(move || {
@@ -211,25 +262,13 @@ pub(super) async fn export(
         let state = app.state::<AppState>();
         let items = {
             let db = lock(&state.db);
-            ids.iter()
+            ids.into_iter()
                 .map(|id| {
-                    db.get(id)
-                        .map_err(estr)?
-                        .ok_or_else(|| "Gallery item no longer exists".into())
+                    let shot = db.get(&id).map_err(estr)?;
+                    Ok((id, shot))
                 })
                 .collect::<Result<Vec<_>, String>>()?
         };
-        // Reject incompatible selections before the picker or any file write.
-        for shot in &items {
-            if preset == BatchPreset::Original {
-                accepted_extension(&shot.format)?;
-            } else {
-                if shot.source == "recording" {
-                    return Err("Image presets do not convert recordings".into());
-                }
-                still_format(&shot.format)?;
-            }
-        }
         let selected = app
             .dialog()
             .file()
@@ -237,7 +276,10 @@ pub(super) async fn export(
             .set_title("Export selected Snapvere Pro captures")
             .blocking_pick_folder();
         let Some(folder) = selected else {
-            return Ok(0);
+            return Ok(crate::models::BatchExportReport {
+                cancelled: true,
+                items: Vec::new(),
+            });
         };
         let destination = folder.into_path().map_err(estr)?;
         // Native picker decides the directory; don't accept a renderer path.
@@ -245,8 +287,11 @@ pub(super) async fn export(
         if !metadata.is_dir() || metadata.file_type().is_symlink() {
             return Err("Selected folder is invalid".into());
         }
-        let mut completed = 0;
-        for shot in items {
+        let items = export_results(items, |shot| {
+            let shot = shot.ok_or_else(|| "Gallery item no longer exists".to_string())?;
+            if preset != BatchPreset::Original && shot.source == "recording" {
+                return Err("Image presets do not convert recordings".into());
+            }
             let ext = preset.extension(&shot.format)?;
             let src = PathBuf::from(shot.file_path);
             let file = destination.join(format!(
@@ -255,13 +300,15 @@ pub(super) async fn export(
                 ext
             ));
             if preset == BatchPreset::Original {
-                copy_exclusively(&src, &file)?;
+                copy_exclusively(&src, &file)
             } else {
-                transform_exclusively(&src, &file, still_format(&shot.format)?, preset)?;
+                transform_exclusively(&src, &file, still_format(&shot.format)?, preset)
             }
-            completed += 1;
-        }
-        Ok(completed)
+        });
+        Ok(crate::models::BatchExportReport {
+            cancelled: false,
+            items,
+        })
     })
     .await
     .map_err(|error| format!("Local export task failed: {error}"))?
@@ -270,6 +317,42 @@ pub(super) async fn export(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn partial_results_preserve_order_and_continue_after_failure() {
+        let report = export_results(
+            [
+                ("first".into(), true),
+                ("second".into(), false),
+                ("third".into(), true),
+            ],
+            |success| {
+                if success {
+                    Ok(())
+                } else {
+                    Err("write failed".into())
+                }
+            },
+        );
+        assert_eq!(report.len(), 3);
+        assert_eq!(report[1].id, "second");
+        assert!(report[0].succeeded);
+        assert!(!report[1].succeeded);
+        assert!(report[2].succeeded);
+    }
+
+    #[test]
+    fn bounded_copy_detects_growth_and_truncation() {
+        let mut output = Vec::new();
+        assert!(copy_bounded(&mut Cursor::new(b"abcd"), &mut output, 3).is_err());
+        assert_eq!(output, b"abc");
+        output.clear();
+        assert!(copy_bounded(&mut Cursor::new(b"a"), &mut output, 3).is_err());
+        assert_eq!(output, b"a");
+        output.clear();
+        assert!(copy_bounded(&mut Cursor::new(b"abc"), &mut output, 3).is_ok());
+        assert_eq!(output, b"abc");
+    }
 
     #[test]
     fn rejects_duplicate_invalid_and_oversized_batch_requests() {

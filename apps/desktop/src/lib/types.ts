@@ -1,6 +1,11 @@
 // Snapvere by Brendigo
 // TS ogledalo Rust modela (serde camelCase). Vidi src-tauri/src/models.rs.
 
+export interface BatchExportReport {
+  cancelled: boolean;
+  items: { id: string; succeeded: boolean }[];
+}
+
 export type ImageFormat = "png" | "jpg" | "webp";
 export type CaptureSource = "region" | "fullscreen" | "window" | "recording";
 export type CaptureAction = "copy" | "save" | "edit";
