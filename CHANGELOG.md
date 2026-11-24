@@ -2,6 +2,8 @@
 
 ## v0.2.32 — Release integrity (development)
 
+- Validate explicit portal monitor geometry and native overlay coordinates for experimental regional capture and single-monitor selection in unscaled multi-monitor layouts; reject ambiguous or scaled layouts.
+
 - Harden experimental Wayland portal ownership, revocation, bounded paused-frame discard, stream metadata validation and teardown before file finalization.
 
 - Add an opt-in continuous Wayland ScreenCast Portal/PipeWire video source for one full monitor, with consent-scoped remote, bounded startup and validated BGRA capture. Native compositor acceptance pending.

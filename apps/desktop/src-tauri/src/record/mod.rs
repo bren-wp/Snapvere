@@ -27,7 +27,7 @@ mod linux_mp4;
 mod pixels;
 mod transport;
 #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
-mod wayland;
+pub(crate) mod wayland;
 mod worker;
 
 pub use pixels::crop_rect;

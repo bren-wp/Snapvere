@@ -28,6 +28,7 @@ typedef struct {
     GstBus *video_bus;
     int fd;
     guint width, height;
+    gint x, y;
     gint64 last_frame;
 } PortalVideo;
 
@@ -183,7 +184,16 @@ static GVariant *request(PortalVideo *ctx, const gchar *method, const gchar *id,
     return response.results;
 }
 
-static gboolean parse_stream(GVariant *result, guint32 *node, guint64 *serial) {
+static gboolean matches_geometry(GVariant *props, gint x, gint y, guint w, guint h) {
+    gint px, py, pw, ph;
+    return g_variant_lookup(props, "position", "(ii)", &px, &py) &&
+        g_variant_lookup(props, "size", "(ii)", &pw, &ph) &&
+        pw > 0 && ph > 0 && px == x && py == y &&
+        (guint)pw == w && (guint)ph == h;
+}
+
+static gboolean parse_stream(GVariant *result, guint32 *node, guint64 *serial,
+                             gint x, gint y, guint w, guint h) {
     *node = 0;
     *serial = 0;
     GVariant *streams = g_variant_lookup_value(result, "streams", G_VARIANT_TYPE("a(ua{sv})"));
@@ -204,7 +214,8 @@ static gboolean parse_stream(GVariant *result, guint32 *node, guint64 *serial) {
                 if (!*serial) valid = FALSE;
             }
         }
-        valid = valid && (*node != 0 || *serial != 0);
+        valid = valid && (*node != 0 || *serial != 0) &&
+            matches_geometry(props, x, y, w, h);
         if (type) g_variant_unref(type);
         if (identity) g_variant_unref(identity);
         g_variant_unref(props);
@@ -259,7 +270,10 @@ static gboolean negotiate(PortalVideo *ctx, guint32 *node, guint64 *serial) {
                      g_variant_new("(osa{sv})", ctx->session, "", &options), deadline);
     g_free(id);
     if (!result) return FALSE;
-    gboolean valid = parse_stream(result, node, serial);
+    // Portal positions and sizes are compositor-logical. This first safe
+    // integration accepts only a separately verified unit-scale layout.
+    gboolean valid = parse_stream(result, node, serial,
+                                  ctx->x, ctx->y, ctx->width, ctx->height);
     g_variant_unref(result);
     if (!valid || !session_alive(ctx)) return FALSE;
 
@@ -340,7 +354,7 @@ void snapvere_wayland_free(void *handle) {
     g_free(ctx);
 }
 
-void *snapvere_wayland_open(guint width, guint height) {
+void *snapvere_wayland_open(gint x, gint y, guint width, guint height) {
     if (!width || !height || width > 8192 || height > 8192 ||
         (guint64)width * height > 28000000) return NULL;
     if (!gst_init_check(NULL, NULL, NULL)) return NULL;
@@ -348,6 +362,8 @@ void *snapvere_wayland_open(guint width, guint height) {
     ctx->fd = -1;
     ctx->width = width;
     ctx->height = height;
+    ctx->x = x;
+    ctx->y = y;
     ctx->context = g_main_context_new();
     g_main_context_push_thread_default(ctx->context);
     guint32 node = 0;
@@ -488,21 +504,26 @@ int snapvere_wayland_test_frame(void) {
     gst_caps_unref(caps);
 
     const gchar *fixtures[] = {
-        "{'streams': <[(uint32 42, {'source_type': <uint32 1>})]>}",
-        "{'streams': <[(uint32 42, {'source_type': <uint32 2>})]>}",
-        "{'streams': <[(uint32 42, {'source_type': <'monitor'>})]>}",
-        "{'streams': <[(uint32 42, {'pipewire-serial': <uint64 777>})]>}",
-        "{'streams': <[(uint32 42, {'pipewire-serial': <uint64 0>})]>}",
-        "{'streams': <[(uint32 42, {'pipewire-serial': <'777'>})]>}",
-        "{'streams': <[(uint32 0, @a{sv} {})]>}",
-        "{'streams': <[(uint32 42, @a{sv} {}), (uint32 43, @a{sv} {})]>}"
+        "{'streams': <[(uint32 42, {'source_type': <uint32 1>, 'position': <(-1920, 0)>, 'size': <(1920, 1080)>})]>}",
+        "{'streams': <[(uint32 42, {'source_type': <uint32 2>, 'position': <(-1920, 0)>, 'size': <(1920, 1080)>})]>}",
+        "{'streams': <[(uint32 42, {'source_type': <'monitor'>, 'position': <(-1920, 0)>, 'size': <(1920, 1080)>})]>}",
+        "{'streams': <[(uint32 42, {'pipewire-serial': <uint64 777>, 'position': <(-1920, 0)>, 'size': <(1920, 1080)>})]>}",
+        "{'streams': <[(uint32 42, {'pipewire-serial': <uint64 0>, 'position': <(-1920, 0)>, 'size': <(1920, 1080)>})]>}",
+        "{'streams': <[(uint32 42, {'pipewire-serial': <'777'>, 'position': <(-1920, 0)>, 'size': <(1920, 1080)>})]>}",
+        "{'streams': <[(uint32 42, {'position': <(0, 0)>, 'size': <(1920, 1080)>})]>}",
+        "{'streams': <[(uint32 42, {'position': <(-1920, 0)>, 'size': <(1280, 720)>})]>}",
+        "{'streams': <[(uint32 42, {'position': <(-1920, 0)>})]>}",
+        "{'streams': <[(uint32 42, {'position': <(-1920, 0)>, 'size': <(-1920, 1080)>})]>}",
+        "{'streams': <[(uint32 42, {'position': <'wrong'>, 'size': <(1920, 1080)>})]>}",
+        "{'streams': <[(uint32 0, {'position': <(-1920, 0)>, 'size': <(1920, 1080)>})]>}",
+        "{'streams': <[(uint32 42, {'position': <(-1920, 0)>, 'size': <(1920, 1080)>}), (uint32 43, @a{sv} {})]>}"
     };
     for (guint i = 0; i < G_N_ELEMENTS(fixtures); i++) {
         GVariant *result = g_variant_parse(G_VARIANT_TYPE_VARDICT, fixtures[i], NULL, NULL, NULL);
         if (!result) return 1;
         guint32 node;
         guint64 serial;
-        gboolean accepted = parse_stream(result, &node, &serial);
+        gboolean accepted = parse_stream(result, &node, &serial, -1920, 0, 1920, 1080);
         valid = valid && accepted == (i == 0 || i == 3);
         if (i == 3) valid = valid && serial == 777;
         g_variant_unref(result);

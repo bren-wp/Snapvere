@@ -1348,6 +1348,34 @@ fn start_recording_inner(
     opts: RecordOptions,
 ) -> Result<RecordStatus, String> {
     let target = resolve_target(app, region, monitor_id)?;
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    if record::wayland::active() {
+        record::wayland::validate_layout(&target, &capture::list_monitors().map_err(estr)?)?;
+        if region.is_some() {
+            let overlay = app
+                .get_webview_window("overlay")
+                .ok_or("Recording selection window is unavailable")?;
+            let monitor = overlay
+                .current_monitor()
+                .map_err(estr)?
+                .ok_or("Recording selection monitor is unavailable")?;
+            let origin = overlay.inner_position().map_err(estr)?;
+            let size = overlay.inner_size().map_err(estr)?;
+            if overlay.scale_factor().map_err(estr)? != 1.0
+                || monitor.scale_factor() != 1.0
+                || (origin.x, origin.y) != (target.monitor_x, target.monitor_y)
+                || (size.width, size.height) != (target.monitor_w, target.monitor_h)
+                || (monitor.position().x, monitor.position().y)
+                    != (target.monitor_x, target.monitor_y)
+                || (monitor.size().width, monitor.size().height)
+                    != (target.monitor_w, target.monitor_h)
+            {
+                return Err(
+                    "Wayland selection window does not match the authorized monitor".into(),
+                );
+            }
+        }
+    }
     let (ox, oy, ow, oh) = record::crop_rect(&target)?;
 
     // Overlay se sklanja TEK nakon uspješnog starta — ako DXGI ili enkoder padnu,

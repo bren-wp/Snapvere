@@ -214,7 +214,7 @@ impl Mixer {
             if self.pending.len() + size / FRAME_BYTES > MAX_PENDING_FRAMES {
                 return Err("PipeWire audio backlog exceeded 500 ms".into());
             }
-            for sample in block[..size].chunks_exact(FRAME_BYTES) {
+            for sample in block[..size].as_chunks::<FRAME_BYTES>().0 {
                 self.pending.push_back([
                     i16::from_le_bytes([sample[0], sample[1]]),
                     i16::from_le_bytes([sample[2], sample[3]]),

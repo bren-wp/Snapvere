@@ -430,6 +430,7 @@ jobs:
         run: |
           set -euo pipefail
           export SNAPVERE_TEST_MP4_PATH="$RUNNER_TEMP/snapvere-native-test.mp4"
+          cargo test --locked --features linux-native-media record::wayland::tests
           cargo test --locked --features linux-native-media record::audio_clock::tests
           cargo test --locked --features linux-native-media record::linux_mp4::tests
           cargo clippy --all-targets --locked --features linux-native-media -- -D warnings
