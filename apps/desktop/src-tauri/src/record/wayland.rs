@@ -42,10 +42,9 @@ impl PortalSource {
         }
         let frame = allocate_bgra(target.monitor_w, target.monitor_h)?;
         // SAFETY: the worker owns the portal session and its video pipeline.
-        let handle = NonNull::new(unsafe {
-            snapvere_wayland_open(target.monitor_w, target.monitor_h)
-        })
-        .ok_or("Screen sharing was declined or the Wayland video stream is unavailable")?;
+        let handle =
+            NonNull::new(unsafe { snapvere_wayland_open(target.monitor_w, target.monitor_h) })
+                .ok_or("Screen sharing was declined or the Wayland video stream is unavailable")?;
         let mut source = Self {
             handle,
             frame,

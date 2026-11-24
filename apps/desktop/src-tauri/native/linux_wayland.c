@@ -99,7 +99,8 @@ static GVariant *request(PortalVideo *ctx, const gchar *method, const gchar *id,
     if (reply) g_variant_get(reply, "(&o)", &returned);
     if (returned && !strcmp(returned, expected)) {
         while (!response.done && !ctx->closed && g_get_monotonic_time() < deadline) {
-            while (g_main_context_iteration(ctx->context, FALSE)) {}
+            for (guint i = 0; i < 64; i++)
+                if (!g_main_context_iteration(ctx->context, FALSE)) break;
             if (!response.done) g_usleep(10000);
         }
     }
@@ -110,7 +111,7 @@ static GVariant *request(PortalVideo *ctx, const gchar *method, const gchar *id,
     return response.results;
 }
 
-static gboolean negotiate(PortalVideo *ctx, guint32 *node) {
+static gboolean negotiate(PortalVideo *ctx, guint32 *node, guint64 *serial) {
     gint64 deadline = g_get_monotonic_time() + 75 * G_TIME_SPAN_SECOND;
     gchar *id = token();
     gchar *session_id = token();
@@ -163,7 +164,8 @@ static gboolean negotiate(PortalVideo *ctx, guint32 *node) {
         guint32 type = 1;
         g_variant_get_child(streams, 0, "(u@a{sv})", node, &props);
         (void)g_variant_lookup(props, "source_type", "u", &type);
-        valid = *node != 0 && type == 1;
+        (void)g_variant_lookup(props, "pipewire-serial", "t", serial);
+        valid = (*serial != 0 || *node != 0) && type == 1;
         g_variant_unref(props);
     }
     if (streams) g_variant_unref(streams);
@@ -227,6 +229,8 @@ void snapvere_wayland_free(void *handle) {
     if (ctx->sink) gst_object_unref(ctx->sink);
     if (ctx->video_bus) gst_object_unref(ctx->video_bus);
     if (ctx->pipeline) gst_object_unref(ctx->pipeline);
+    // The supported PipeWire GStreamer core duplicates the supplied fd
+    // (F_DUPFD_CLOEXEC) before connecting; this descriptor remains ours.
     if (ctx->fd >= 0) close(ctx->fd);
     if (ctx->closed_subscription)
         g_dbus_connection_signal_unsubscribe(ctx->bus, ctx->closed_subscription);
@@ -249,7 +253,8 @@ void *snapvere_wayland_open(guint width, guint height) {
     g_main_context_push_thread_default(ctx->context);
     ctx->bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, NULL);
     guint32 node = 0;
-    gboolean ok = ctx->bus && negotiate(ctx, &node);
+    guint64 serial = 0;
+    gboolean ok = ctx->bus && negotiate(ctx, &node, &serial);
     g_main_context_pop_thread_default(ctx->context);
     if (!ok) goto fail;
     GError *error = NULL;
@@ -267,19 +272,23 @@ void *snapvere_wayland_open(guint width, guint height) {
         if (input) gst_object_unref(input);
         goto fail;
     }
+    const gchar *target_property = serial ? "target-object" : "path";
     if (!g_object_class_find_property(G_OBJECT_GET_CLASS(input), "fd") ||
-        !g_object_class_find_property(G_OBJECT_GET_CLASS(input), "path")) {
+        !g_object_class_find_property(G_OBJECT_GET_CLASS(input), target_property)) {
         gst_object_unref(input);
         goto fail;
     }
-    gchar *path = g_strdup_printf("%u", node);
+    // Portal v6 serials cannot be confused with reused numeric node IDs.
+    // Older portals only expose the ID in their restricted remote.
+    gchar *path = serial ? g_strdup_printf("%" G_GUINT64_FORMAT, serial)
+                         : g_strdup_printf("%u", node);
     GstStructure *props = gst_structure_new(
         "props", "media.type", G_TYPE_STRING, "Video",
         "media.category", G_TYPE_STRING, "Capture",
         "node.dont-fallback", G_TYPE_STRING, "true",
         "node.dont-reconnect", G_TYPE_STRING, "true",
         "node.dont-move", G_TYPE_STRING, "true", NULL);
-    g_object_set(input, "fd", ctx->fd, "path", path, "stream-properties", props, NULL);
+    g_object_set(input, "fd", ctx->fd, target_property, path, "stream-properties", props, NULL);
     gst_structure_free(props);
     g_free(path);
     gst_object_unref(input);
@@ -295,7 +304,8 @@ fail:
 int snapvere_wayland_pull(void *handle, guint8 *data, gsize capacity, guint timeout_ms) {
     PortalVideo *ctx = handle;
     if (!ctx) return -1;
-    while (g_main_context_iteration(ctx->context, FALSE)) {}
+    for (guint i = 0; i < 64; i++)
+        if (!g_main_context_iteration(ctx->context, FALSE)) break;
     if (ctx->closed || g_dbus_connection_is_closed(ctx->bus)) return -1;
     GstMessage *message = gst_bus_pop_filtered(ctx->video_bus, GST_MESSAGE_ERROR | GST_MESSAGE_EOS);
     if (message) {
@@ -317,6 +327,7 @@ int snapvere_wayland_pull(void *handle, guint8 *data, gsize capacity, guint time
 }
 
 // Native buffer regression; no fake portal or claim of compositor consent.
+#ifdef SNAPVERE_WAYLAND_TEST
 int snapvere_wayland_test_frame(void) {
     if (!gst_init_check(NULL, NULL, NULL)) return 1;
     GstCaps *caps = gst_caps_from_string("video/x-raw,format=BGRA,width=2,height=2");
@@ -344,3 +355,5 @@ int snapvere_wayland_test_frame(void) {
     gst_caps_unref(caps);
     return valid ? 0 : 1;
 }
+
+#endif
