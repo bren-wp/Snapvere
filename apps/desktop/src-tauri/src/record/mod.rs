@@ -247,7 +247,9 @@ pub fn start(
     validate_audio_options(&opts)?;
     #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
     if opts.format == RecordFormat::Mp4 && (opts.mic || opts.system_audio || opts.capture_cursor) {
-        return Err("Experimental Linux MP4 requires audio and cursor capture to be disabled".into());
+        return Err(
+            "Experimental Linux MP4 requires audio and cursor capture to be disabled".into(),
+        );
     }
 
     let fps = opts.fps.clamp(5, 60);

@@ -63,13 +63,14 @@ impl LinuxMp4 {
             )
             .map_err(|e| format!("Secure recording staging unavailable: {e}"))?,
         );
-        let bitrate = (u64::from(w) * u64::from(h) * u64::from(fps)
-            * u64::from(quality.clamp(30, 100))
-            / 1000)
-            .clamp(256_000, 30_000_000) as u32;
+        let bitrate =
+            (u64::from(w) * u64::from(h) * u64::from(fps) * u64::from(quality.clamp(30, 100))
+                / 1000)
+                .clamp(256_000, 30_000_000) as u32;
         // SAFETY: file remains open until the native pipeline has stopped.
-        let encoder = NonNull::new(unsafe { snapvere_mp4_open(file.as_raw_fd(), w, h, fps, bitrate) })
-            .ok_or("Linux H.264 encoder unavailable; check local GStreamer plugins")?;
+        let encoder =
+            NonNull::new(unsafe { snapvere_mp4_open(file.as_raw_fd(), w, h, fps, bitrate) })
+                .ok_or("Linux H.264 encoder unavailable; check local GStreamer plugins")?;
         Ok(Self {
             encoder,
             file,
@@ -125,7 +126,8 @@ impl LinuxMp4 {
         if self.failed || self.last_pts.is_none() {
             return Err("Cannot publish failed or empty Linux MP4".into());
         }
-        self.failed = true; // never retry a partially finalized pipeline
+        // Never retry a partially finalized pipeline.
+        self.failed = true;
         // SAFETY: the encoder is owned by self and has not been finalized.
         if unsafe { snapvere_mp4_finish(self.encoder.as_ptr()) } != 0 {
             return Err("Linux MP4 finalization failed or timed out".into());

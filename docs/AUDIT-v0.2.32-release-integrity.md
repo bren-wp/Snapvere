@@ -32,3 +32,8 @@ Frontend screenshots are not native WebView2 or WebKitGTK verification. Existing
 - The quality workflow installs distro GStreamer development/runtime plugins only for CI, runs real encoding tests and verifies the generated H.264 MP4 with ffprobe and ffmpeg decoding. This is synthetic-frame testing, not interactive desktop QA. No public packages enable linux-native-media and Linux MP4/audio capability flags remain disabled.
 - PipeWire microphone and monitor source selection, audio timestamp mapping, pause/resume synchronization, portal-session permissions, plugin distribution/license review, and actual desktop acceptance are still open. Existing pipewire/ashpd dependencies are not evidence of a working audio implementation.
 - Fixed the reported Linux Clippy chunks-exact lint using fixed-size slice arrays; no warning suppression.
+
+### Follow-up: formatter and native C privacy audit
+
+- Applied the exact rustfmt changes reported by both native runners. The MP4 encode/decode step was not reached in that run.
+- Extend the first-party source privacy guard to native C adapters, including process spawning, socket APIs and external URLs. This is a source-pattern guard, not a runtime sandbox or proof of dependency behavior.
