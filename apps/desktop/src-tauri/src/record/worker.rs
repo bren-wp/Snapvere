@@ -301,8 +301,10 @@ pub(super) fn run(
         }
 
         if let Some(preview) = &ctl.preview {
-            if last_preview.is_none_or(|last| last.elapsed() >= Duration::from_millis(250)) {
-                if let Err(error) = crate::state::lock(preview).remember(&frame_buf) {
+            if last_preview.is_none_or(|last| last.elapsed() >= Duration::from_millis(100)) {
+                let id = ctl.frames.load(Ordering::Relaxed) + 1;
+                let timestamp = time_100ns as u64;
+                if let Err(error) = crate::state::lock(preview).remember(&frame_buf, id, timestamp) {
                     recording_error = Some(error);
                     break;
                 }

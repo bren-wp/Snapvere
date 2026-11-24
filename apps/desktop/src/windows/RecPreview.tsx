@@ -14,6 +14,10 @@ export default function RecPreview() {
   const [redo, setRedo] = useState<PreviewMark[]>([]);
   const [historyDelta, setHistoryDelta] = useState(0);
   const [textValue, setTextValue] = useState("");
+  const [image, setImage] = useState("");
+  const [color, setColor] = useState("#09bfd9");
+  const [width, setWidth] = useState(2);
+  const [opacity, setOpacity] = useState(100);
   const stroke = useRef<Point[]>([]);
   const [kind, setKind] = useState<PreviewMark["kind"]>("rectangle");
   const [draft, setDraft] = useState<PreviewMark | null>(null);
@@ -27,6 +31,7 @@ export default function RecPreview() {
   const load = useCallback(async () => {
     const id = ++epoch.current;
     setPreview(null);
+    setImage("");
     setMarks([]);
     setRedo([]);
     setHistoryDelta(0);
@@ -35,7 +40,24 @@ export default function RecPreview() {
     setError(false);
     try {
       const result = await ipc.getCropPreview();
-      if (id === epoch.current) setPreview(result);
+      const packet = await ipc.getCropPreviewPacket(result.session, 0);
+      const header = new DataView(packet);
+      if (packet.byteLength !== 32 + result.width * result.height * 4 ||
+          header.getUint32(0, true) !== result.width ||
+          header.getUint32(4, true) !== result.height ||
+          Number(header.getBigUint64(8, true)) !== result.frameId ||
+          Number(header.getBigUint64(16, true)) !== result.timestamp100ns ||
+          Number(header.getBigUint64(24, true)) !== result.revision) throw new Error("Invalid preview frame");
+      const bitmap = document.createElement("canvas");
+      bitmap.width = result.width;
+      bitmap.height = result.height;
+      const context = bitmap.getContext("2d");
+      if (!context) throw new Error("Preview canvas unavailable");
+      context.putImageData(new ImageData(new Uint8ClampedArray(packet, 32), result.width, result.height), 0, 0);
+      if (id === epoch.current) {
+        setImage(bitmap.toDataURL("image/png"));
+        setPreview(result);
+      }
     } catch {
       if (id === epoch.current) setError(true);
     }
@@ -49,6 +71,7 @@ export default function RecPreview() {
         if ((event.payload as { phase?: string })?.phase !== "paused") {
           ++epoch.current;
           setPreview(null);
+          setImage("");
           setMarks([]);
           setDraft(null);
           anchor.current = null;
@@ -57,6 +80,7 @@ export default function RecPreview() {
       listen("snapvere:rec-done", () => {
         ++epoch.current;
         setPreview(null);
+        setImage("");
         setMarks([]);
         setDraft(null);
       }),
@@ -81,6 +105,14 @@ export default function RecPreview() {
     };
   }
 
+  function style(): NonNullable<PreviewMark["style"]> {
+    return {
+      rgb: [1, 3, 5].map((start) => parseInt(color.slice(start, start + 2), 16)) as [number, number, number],
+      width,
+      opacity: Math.max(1, Math.round(opacity * 2.55)),
+    };
+  }
+
   function rectangle(a: Point, b: Point): PreviewMark {
     const x = Math.floor(Math.min(a.x, b.x));
     const y = Math.floor(Math.min(a.y, b.y));
@@ -90,6 +122,7 @@ export default function RecPreview() {
     }));
     return {
       kind,
+      style: style(),
       rect: {
         x: Math.min(x, (preview?.width ?? 1) - 1),
         y: Math.min(y, (preview?.height ?? 1) - 1),
@@ -118,7 +151,7 @@ export default function RecPreview() {
     const data = ctx.getImageData(0, 0, bitmap.width, bitmap.height).data;
     const glyph = Array.from({ length: bitmap.width * bitmap.height }, (_, i) => data[i * 4 + 3] >= 64 ? 1 : 0);
     if (!glyph.includes(1)) return null;
-    return { kind, rect: { x, y, width: bitmap.width, height: bitmap.height }, glyph };
+    return { kind, style: style(), rect: { x, y, width: bitmap.width, height: bitmap.height }, glyph };
   }
 
   function add(mark: PreviewMark) {
@@ -162,6 +195,9 @@ export default function RecPreview() {
             {([["rectangle","Rectangle"],["mask","Opaque mask"],["ellipse","Ellipse"],["line","Line"],["arrow","Arrow"],["pen","Pen"],["marker","Marker"],["text","Text"],["step","Numbered step"]] as const).map(([id, label]) =>
               <option key={id} value={id}>{t(label)}</option>)}
           </select>
+          <input type="color" aria-label={t("Colour")} value={color} disabled={busy || Boolean(draft) || kind === "mask"} onChange={(e) => setColor(e.target.value)} />
+          <input type="range" aria-label={t("Size")} min={1} max={12} value={width} disabled={busy || Boolean(draft) || kind === "mask"} onChange={(e) => setWidth(Number(e.target.value))} />
+          <input type="range" aria-label={t("Opacity")} min={10} max={100} value={opacity} disabled={busy || Boolean(draft) || kind === "mask"} onChange={(e) => setOpacity(Number(e.target.value))} />
           {kind === "text" && <input aria-label={t("Text")} maxLength={64} value={textValue} onChange={(e) => setTextValue(e.target.value)} className="w-32 rounded-lg border border-border bg-background px-2 py-2 text-sm" />}
           <button disabled={busy || (!marks.length && (!preview || -historyDelta >= preview.undoCount))} onClick={() => {
             if (marks.length) {
@@ -234,13 +270,13 @@ export default function RecPreview() {
             }}
             onPointerCancel={() => { anchor.current = null; setDraft(null); }}>
             <defs><marker id="preview-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0L6 3L0 6z" fill="#09BFD9" /></marker></defs>
-            <image href={preview.image} width={preview.width} height={preview.height} />
+            <image href={image} width={preview.width} height={preview.height} />
             {[...marks, ...(draft ? [draft] : [])].sort((a, b) => Number(a.kind === "mask") - Number(b.kind === "mask")).map((mark, i) => (
-              <g key={i}>
-                {mark.kind === "ellipse" ? <ellipse cx={mark.rect.x + mark.rect.width / 2} cy={mark.rect.y + mark.rect.height / 2} rx={mark.rect.width / 2} ry={mark.rect.height / 2} fill="none" stroke="#09BFD9" strokeWidth={2} />
-                  : mark.points ? <polyline points={mark.points.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke={mark.kind === "marker" ? "#ffdc00" : "#09BFD9"} strokeOpacity={mark.kind === "marker" ? .5 : 1} strokeWidth={mark.kind === "marker" ? 8 : 2} markerEnd={mark.kind === "arrow" ? "url(#preview-arrow)" : undefined} />
-                  : mark.glyph ? <path fill="#09BFD9" d={mark.glyph.map((bit, index) => bit ? `M${mark.rect.x + index % mark.rect.width} ${mark.rect.y + Math.floor(index / mark.rect.width)}h1v1h-1z` : "").join("")} />
-                  : <rect {...mark.rect} fill={mark.kind === "mask" ? "#000" : "none"} stroke={mark.kind === "mask" ? "none" : "#09BFD9"} strokeWidth={2} />}
+              <g key={i} opacity={mark.kind === "mask" ? 1 : (mark.style?.opacity ?? 255) / 255} color={mark.style ? `rgb(${mark.style.rgb.join(",")})` : "#09BFD9"}>
+                {mark.kind === "ellipse" ? <ellipse cx={mark.rect.x + mark.rect.width / 2} cy={mark.rect.y + mark.rect.height / 2} rx={mark.rect.width / 2} ry={mark.rect.height / 2} fill="none" stroke="currentColor" strokeWidth={mark.style?.width ?? 2} />
+                  : mark.points ? <polyline points={mark.points.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="currentColor" strokeWidth={mark.kind === "marker" ? (mark.style?.width ?? 2) * 4 : mark.style?.width ?? 2} markerEnd={mark.kind === "arrow" ? "url(#preview-arrow)" : undefined} />
+                  : mark.glyph ? <path fill="currentColor" d={mark.glyph.map((bit, index) => bit ? `M${mark.rect.x + index % mark.rect.width} ${mark.rect.y + Math.floor(index / mark.rect.width)}h1v1h-1z` : "").join("")} />
+                  : <rect {...mark.rect} fill={mark.kind === "mask" ? "#000" : "none"} stroke={mark.kind === "mask" ? "none" : "currentColor"} strokeWidth={mark.style?.width ?? 2} />}
               </g>
             ))}
           </svg>

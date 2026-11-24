@@ -37,12 +37,33 @@ pub struct Mark {
     pub points: Vec<Point>,
     #[serde(default)]
     pub glyph: Vec<u8>,
+    #[serde(default)]
+    pub style: Style,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Style {
+    pub rgb: [u8; 3],
+    pub width: u8,
+    pub opacity: u8,
+}
+
+impl Default for Style {
+    fn default() -> Self {
+        Self {
+            rgb: [9, 191, 217],
+            width: 2,
+            opacity: 255,
+        }
+    }
 }
 
 #[derive(Clone)]
 pub(super) struct Layer {
     kind: MarkKind,
     spans: Vec<Span>,
+    color: [u8; 4],
 }
 
 pub(super) struct History {
@@ -59,7 +80,9 @@ pub struct Snapshot {
     pub remaining: usize,
     pub undo_count: usize,
     pub redo_count: usize,
-    pub image: String,
+    pub frame_id: u64,
+    pub timestamp_100ns: u64,
+    pub revision: u64,
 }
 
 pub(super) struct Preview {
@@ -69,6 +92,10 @@ pub(super) struct Preview {
     small: (u32, u32),
     history: History,
     frame: Option<image::RgbaImage>,
+    frame_id: u64,
+    timestamp_100ns: u64,
+    revision: u64,
+    frame_revision: u64,
 }
 
 struct Raster {
@@ -163,6 +190,10 @@ impl Preview {
                 redo: Vec::new(),
             },
             frame: None,
+            frame_id: 0,
+            timestamp_100ns: 0,
+            revision: 0,
+            frame_revision: 0,
         }
     }
 
@@ -178,10 +209,9 @@ impl Preview {
     }
 
     pub(super) fn snapshot(&self) -> Result<Snapshot, String> {
-        let frame = self
-            .frame
-            .as_ref()
-            .ok_or("Recording has no preview frame")?;
+        if self.frame.is_none() {
+            return Err("Recording has no preview frame".into());
+        }
         Ok(Snapshot {
             session: self.session.clone(),
             width: self.small.0,
@@ -194,8 +224,30 @@ impl Preview {
                 .filter(|l| l.kind != MarkKind::Mask)
                 .count(),
             redo_count: self.history.redo.len(),
-            image: crate::capture::to_png_data_url(frame).map_err(|e| e.to_string())?,
+            frame_id: self.frame_id,
+            timestamp_100ns: self.timestamp_100ns,
+            revision: self.frame_revision,
         })
+    }
+
+    // Fixed little-endian header: dimensions, sequence, recorder PTS,
+    // annotation revision. A slow reader sees the newest frame only.
+    pub(super) fn packet(&self, after: u64) -> Result<Vec<u8>, String> {
+        let frame = self
+            .frame
+            .as_ref()
+            .ok_or("Recording has no preview frame")?;
+        if after >= self.frame_id {
+            return Ok(Vec::new());
+        }
+        let mut packet = Vec::with_capacity(32 + frame.as_raw().len());
+        packet.extend_from_slice(&self.small.0.to_le_bytes());
+        packet.extend_from_slice(&self.small.1.to_le_bytes());
+        packet.extend_from_slice(&self.frame_id.to_le_bytes());
+        packet.extend_from_slice(&self.timestamp_100ns.to_le_bytes());
+        packet.extend_from_slice(&self.frame_revision.to_le_bytes());
+        packet.extend_from_slice(frame.as_raw());
+        Ok(packet)
     }
 
     pub(super) fn ready(&self) -> bool {
@@ -234,7 +286,12 @@ impl Preview {
             return Err("Unexpected annotation glyph".into());
         }
         let mut raster = Raster::new(self.width, self.height);
-        let border = i64::from((self.width / 320).clamp(2, 12));
+        if !(1..=24).contains(&mark.style.width) || mark.style.opacity == 0 {
+            return Err("Invalid annotation style".into());
+        }
+        let border = (u64::from(mark.style.width) * u64::from(self.width))
+            .div_ceil(u64::from(self.small.0))
+            .clamp(1, 48) as i64;
         let project = |p: Point| -> Result<Point, String> {
             if p.x >= self.small.0 || p.y >= self.small.1 {
                 return Err("Stroke outside preview".into());
@@ -321,8 +378,8 @@ impl Preview {
             }
             MarkKind::Text | MarkKind::Step => {
                 for row in 0..r.height {
-                    let (top, bottom) = axis(r.y + row, 1, self.small.1, self.height)
-                        .ok_or("Invalid glyph row")?;
+                    let (top, bottom) =
+                        axis(r.y + row, 1, self.small.1, self.height).ok_or("Invalid glyph row")?;
                     for col in 0..r.width {
                         if mark.glyph[(row * r.width + col) as usize] == 0 {
                             continue;
@@ -340,9 +397,16 @@ impl Preview {
         if spans.is_empty() {
             return Err("Empty annotation".into());
         }
+        let [r, g, b] = mark.style.rgb;
+        let color = if mark.kind == MarkKind::Mask {
+            [0, 0, 0, 255]
+        } else {
+            [b, g, r, mark.style.opacity]
+        };
         Ok(Layer {
             kind: mark.kind,
             spans,
+            color,
         })
     }
 
@@ -395,6 +459,7 @@ impl Preview {
 
     pub(super) fn apply(&mut self, history: History) {
         self.history = history;
+        self.revision = self.revision.saturating_add(1);
     }
 
     pub(super) fn compose(&self, bgra: &mut [u8]) -> Result<(), String> {
@@ -409,17 +474,20 @@ impl Preview {
                 }
                 for &(y, a, b) in &layer.spans {
                     let offset = y as usize * stride;
-                    for pixel in bgra[offset + a as usize * 4..offset + b as usize * 4]
-                        .as_chunks_mut::<4>().0
-                    {
-                        if mask_pass {
-                            *pixel = [0, 0, 0, 255];
-                        } else if layer.kind == MarkKind::Marker {
-                            for (channel, color) in pixel[..3].iter_mut().zip([0_u16, 220, 255]) {
-                                *channel = ((u16::from(*channel) + color) / 2) as u8;
+                    let (pixels, _) =
+                        bgra[offset + a as usize * 4..offset + b as usize * 4].as_chunks_mut::<4>();
+                    let alpha = u16::from(layer.color[3]);
+                    if alpha == 255 {
+                        pixels.fill(layer.color);
+                    } else {
+                        for pixel in pixels {
+                            for (channel, color) in pixel[..3].iter_mut().zip(layer.color) {
+                                *channel = ((u16::from(*channel) * (255 - alpha)
+                                    + u16::from(color) * alpha
+                                    + 127)
+                                    / 255) as u8;
                             }
-                        } else {
-                            *pixel = [217, 191, 9, 255];
+                            pixel[3] = 255;
                         }
                     }
                 }
@@ -428,12 +496,24 @@ impl Preview {
         Ok(())
     }
 
-    pub(super) fn remember(&mut self, bgra: &[u8]) -> Result<(), String> {
+    pub(super) fn remember(
+        &mut self,
+        bgra: &[u8],
+        frame_id: u64,
+        timestamp_100ns: u64,
+    ) -> Result<(), String> {
+        if frame_id <= self.frame_id
+            || (self.frame_id != 0 && timestamp_100ns <= self.timestamp_100ns)
+        {
+            return Err("Non-monotonic recording preview frame".into());
+        }
         if bgra.len() != super::pixels::checked_bgra_len(self.width, self.height)? {
             return Err("Invalid recording preview frame".into());
         }
         let (w, h) = self.small;
-        let mut rgba = image::RgbaImage::new(w, h);
+        let rgba = self
+            .frame
+            .get_or_insert_with(|| image::RgbaImage::new(w, h));
         for y in 0..h {
             for x in 0..w {
                 let sx = u64::from(x) * u64::from(self.width) / u64::from(w);
@@ -442,7 +522,9 @@ impl Preview {
                 rgba.put_pixel(x, y, image::Rgba([bgra[p + 2], bgra[p + 1], bgra[p], 255]));
             }
         }
-        self.frame = Some(rgba);
+        self.frame_id = frame_id;
+        self.timestamp_100ns = timestamp_100ns;
+        self.frame_revision = self.revision;
         Ok(())
     }
 }
@@ -462,6 +544,7 @@ mod tests {
             },
             points: Vec::new(),
             glyph: Vec::new(),
+            style: Style::default(),
         }
     }
 
@@ -480,6 +563,13 @@ mod tests {
         ] {
             let mut stroke = mark(kind, 1, 1, 126, 94);
             stroke.points = vec![Point { x: 4, y: 4 }, Point { x: 120, y: 88 }];
+            if kind == MarkKind::Marker {
+                stroke.style = Style {
+                    rgb: [255, 220, 0],
+                    width: 2,
+                    opacity: 128,
+                };
+            }
             marks.push(stroke);
         }
         for kind in [MarkKind::Text, MarkKind::Step] {
@@ -508,7 +598,10 @@ mod tests {
         let mut frame = vec![255; 128 * 96 * 4];
         preview.compose(&mut frame).unwrap();
         assert_pixels(&frame);
-        assert_ne!(&frame[(4 * 128 + 16) * 4..(4 * 128 + 16) * 4 + 4], &[255; 4]);
+        assert_ne!(
+            &frame[(4 * 128 + 16) * 4..(4 * 128 + 16) * 4 + 4],
+            &[255; 4]
+        );
         let plan = preview.plan(&[], -8).unwrap();
         preview.apply(plan);
         assert_eq!(preview.history.layers.len(), 1);
@@ -519,7 +612,7 @@ mod tests {
         let plan = preview.plan(&[], 8).unwrap();
         preview.apply(plan);
         assert_eq!(preview.history.layers.len(), 9);
-        preview.remember(&frame).unwrap();
+        preview.remember(&frame, 1, 0).unwrap();
         assert_eq!(
             preview.frame.as_ref().unwrap().get_pixel(64, 48).0,
             [0, 0, 0, 255]
@@ -533,9 +626,37 @@ mod tests {
         let old = preview.session.clone();
         preview.begin_pause();
         assert!(preview.check_session(&old).is_err());
-        assert!(preview.plan(&[mark(MarkKind::Mask, u32::MAX, 0, 2, 2)], 0).is_err());
-        assert!(preview.plan(&[mark(MarkKind::Text, 0, 0, 4, 4)], 0).is_err());
+        assert!(preview
+            .plan(&[mark(MarkKind::Mask, u32::MAX, 0, 2, 2)], 0)
+            .is_err());
+        assert!(preview
+            .plan(&[mark(MarkKind::Text, 0, 0, 4, 4)], 0)
+            .is_err());
         assert_eq!(preview.history.layers.len(), 9);
+    }
+
+    #[test]
+    fn latest_packet_keeps_encoder_sequence_timestamp_and_revision() {
+        let mut preview = Preview::new(32, 32);
+        let mut mask = mark(MarkKind::Mask, 8, 8, 8, 8);
+        mask.style.opacity = 1;
+        mask.style.rgb = [255, 0, 0];
+        let plan = preview.plan(&[mask], 0).unwrap();
+        preview.apply(plan);
+        let mut frame = vec![255; 32 * 32 * 4];
+        preview.compose(&mut frame).unwrap();
+        preview.remember(&frame, 2, 100).unwrap();
+        preview.remember(&frame, 5, 400).unwrap();
+        assert!(preview.remember(&frame, 4, 500).is_err());
+        assert!(preview.remember(&frame, 6, 400).is_err());
+        let packet = preview.packet(2).unwrap();
+        assert_eq!(packet.len(), 32 + frame.len());
+        assert_eq!(&packet[8..16], &5_u64.to_le_bytes());
+        assert_eq!(&packet[16..24], &400_u64.to_le_bytes());
+        assert_eq!(&packet[24..32], &1_u64.to_le_bytes());
+        let center = 32 + (10 * 32 + 10) * 4;
+        assert_eq!(&packet[center..center + 4], &[0, 0, 0, 255]);
+        assert!(preview.packet(5).unwrap().is_empty());
     }
 
     #[test]

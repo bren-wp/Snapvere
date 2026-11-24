@@ -2,6 +2,8 @@
 
 ## v0.2.32 — Release integrity (development)
 
+- Add bounded timestamped latest-frame binary preview transport and configurable annotation color, width and opacity with enforced opaque masks.
+
 - Expand crop-local annotations with bounded cached raster spans, transactional drawing-only undo/redo, protected committed masks and real encoder/decode fixtures.
 
 - Add experimental paused crop-local preview and native rectangular annotations/opaque masks applied to future encoder frames, independent of global Wayland window placement.

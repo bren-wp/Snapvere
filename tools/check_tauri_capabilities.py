@@ -72,6 +72,7 @@ protected_ipc = {
     "pause_recording": ["recbar", "recdraw"],
     "recording_status": ["recbar", "recdraw"],
     "get_crop_preview": ["recpreview"],
+    "get_crop_preview_packet": ["recpreview"],
     "resume_crop_preview": ["recpreview"],
     "rec_frame_rect": ["recframe"],
     "set_draw_interactive": ["recdraw"],

@@ -153,6 +153,7 @@ pub fn run() {
             commands::set_rec_hud_expanded,
             commands::rec_frame_rect,
             commands::get_crop_preview,
+            commands::get_crop_preview_packet,
             commands::resume_crop_preview,
             commands::list_screenshots,
             commands::search_screenshots,

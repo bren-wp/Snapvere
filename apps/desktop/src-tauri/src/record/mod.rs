@@ -498,6 +498,22 @@ pub fn crop_preview(app: &AppHandle) -> Result<preview::Snapshot, String> {
     preview.snapshot()
 }
 
+pub fn crop_preview_packet(app: &AppHandle, session: &str, after: u64) -> Result<Vec<u8>, String> {
+    let state = app.state::<AppState>();
+    let slot = crate::state::lock(&state.recorder);
+    let ctl = &slot.as_ref().ok_or("No active recording")?.ctl;
+    if ctl.phase.load(Ordering::Acquire) != PHASE_PAUSED || !ctl.pause_ack.load(Ordering::Acquire) {
+        return Err("Recording preview requires an acknowledged pause".into());
+    }
+    let preview = ctl
+        .preview
+        .as_ref()
+        .ok_or("Recording preview is unavailable")?;
+    let preview = crate::state::lock(preview);
+    preview.check_session(session)?;
+    preview.packet(after)
+}
+
 pub fn resume_crop_preview(
     app: &AppHandle,
     session: &str,

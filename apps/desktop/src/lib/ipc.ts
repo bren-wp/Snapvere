@@ -26,6 +26,7 @@ export type PreviewMark = {
   rect: PixelRect;
   points?: { x: number; y: number }[];
   glyph?: number[];
+  style?: { rgb: [number, number, number]; width: number; opacity: number };
 };
 export type CropPreview = {
   session: string;
@@ -34,7 +35,9 @@ export type CropPreview = {
   remaining: number;
   undoCount: number;
   redoCount: number;
-  image: string;
+  frameId: number;
+  timestamp100ns: number;
+  revision: number;
 };
 
 export const ipc = {
@@ -94,6 +97,8 @@ export const ipc = {
     invoke<RecordStatus>("pause_recording", { paused }),
   recordingStatus: () => invoke<RecordStatus>("recording_status"),
   getCropPreview: () => invoke<CropPreview>("get_crop_preview"),
+  getCropPreviewPacket: (session: string, after: number) =>
+    invoke<ArrayBuffer>("get_crop_preview_packet", { session, after }),
   resumeCropPreview: (session: string, marks: PreviewMark[], historyDelta: number) =>
     invoke<RecordStatus>("resume_crop_preview", { session, marks, historyDelta }),
   closeRecHud: () => invoke<void>("close_rec_hud"),
