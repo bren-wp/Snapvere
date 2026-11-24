@@ -276,6 +276,10 @@ impl Preview {
         Ok(packet)
     }
 
+    pub(super) fn needs_sample(&self, frame_id: u64) -> bool {
+        frame_id > self.frame_id
+    }
+
     pub(super) fn ready(&self) -> bool {
         self.frame.is_some()
     }
@@ -688,6 +692,8 @@ mod tests {
         preview.remember(&frame, stamp(5, 400)).unwrap();
         assert!(preview.remember(&frame, stamp(4, 500)).is_err());
         assert!(preview.remember(&frame, stamp(6, 400)).is_err());
+        assert!(preview.needs_sample(6));
+        assert!(!preview.needs_sample(5));
         let packet = preview.packet(2).unwrap();
         assert_eq!(packet.len(), 32 + frame.len());
         assert_eq!(&packet[8..16], &5_u64.to_le_bytes());
@@ -698,6 +704,22 @@ mod tests {
         assert!(preview.packet(5).unwrap().is_empty());
         let snapshot = preview.snapshot().unwrap();
         assert!(snapshot.capture_to_sample_us >= snapshot.encoder_to_sample_us);
+    }
+
+    #[test]
+    fn gif_preview_clock_tracks_quantized_delays_not_capture_wall_time() {
+        let dir = tempfile::tempdir().unwrap();
+        let cases = [(30, 300_000), (60, 200_000), (10, 1_000_000)];
+        for (fps, delay) in cases {
+            let path = dir.path().join(format!("{fps}.gif"));
+            let mut encoder =
+                super::super::gifenc::GifEncoder::new(&path, 16, 16, fps, 80).unwrap();
+            assert_eq!(encoder.presentation_pts_100ns(1), 0);
+            assert_eq!(encoder.presentation_pts_100ns(2), delay);
+            assert_eq!(encoder.presentation_pts_100ns(100), delay * 99);
+            encoder.write(&[255; 16 * 16 * 4]).unwrap();
+            encoder.finish().unwrap();
+        }
     }
 
     // Distinct source-frame markers survive lossy H.264 and GIF palettes.
@@ -737,6 +759,7 @@ mod tests {
             }
             preview.compose(&mut frame).unwrap();
             let pts = (id - 1) * 1_000_000;
+            assert_eq!(encoder.presentation_pts_100ns(id), pts);
             encoder.write(&frame).unwrap();
             #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
             video.write(&frame, pts as i64, 1_000_000).unwrap();

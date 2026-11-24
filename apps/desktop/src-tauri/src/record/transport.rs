@@ -153,6 +153,18 @@ pub(super) enum Encoder {
 }
 
 impl Encoder {
+    pub(super) fn preview_pts_100ns(&self, frame_id: u64, input_pts: u64) -> u64 {
+        #[cfg(not(any(windows, all(target_os = "linux", feature = "linux-native-media"))))]
+        let _ = input_pts;
+        match self {
+            Encoder::Gif(encoder) => encoder.presentation_pts_100ns(frame_id),
+            #[cfg(windows)]
+            Encoder::Mp4(_) => input_pts,
+            #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+            Encoder::LinuxMp4(_) => input_pts,
+        }
+    }
+
     pub(super) fn write(
         &mut self,
         bgra: &[u8],

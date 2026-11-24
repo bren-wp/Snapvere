@@ -102,6 +102,15 @@ impl GifEncoder {
         })
     }
 
+    /// GIF uses an integral centisecond delay, not the recorder's wall clock.
+    /// Even when identical frames merge, their logical presentation intervals
+    /// remain on this timeline.
+    pub(super) fn presentation_pts_100ns(&self, frame_id: u64) -> u64 {
+        frame_id
+            .saturating_sub(1)
+            .saturating_mul(u64::from(self.delay_cs) * 100_000)
+    }
+
     /// Accept one frame on every recorder tick. Consecutive identical pixels
     /// do not need separate GIF image descriptors: the pending frame's delay
     /// accumulates instead. Split the delay when it would exceed GIF's u16

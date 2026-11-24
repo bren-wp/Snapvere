@@ -189,14 +189,11 @@ pub(super) fn run(
                     let mut preview = crate::state::lock(preview);
                     // The worker still owns the most recent accepted frame.
                     // Freeze that exact frame, not a throttled older sample.
-                    if let Some(stamp) = last_accepted {
-                        if preview.snapshot().is_ok_and(|s| s.frame_id < stamp.id)
-                            || !preview.ready()
-                        {
-                            if let Err(error) = preview.remember(&frame_buf, stamp) {
-                                recording_error = Some(error);
-                                break;
-                            }
+                    let pending = last_accepted.filter(|stamp| preview.needs_sample(stamp.id));
+                    if let Some(stamp) = pending {
+                        if let Err(error) = preview.remember(&frame_buf, stamp) {
+                            recording_error = Some(error);
+                            break;
                         }
                     }
                     preview.begin_pause();
@@ -315,9 +312,10 @@ pub(super) fn run(
         }
 
         if let Some(preview) = &ctl.preview {
+            let id = ctl.frames.load(Ordering::Relaxed) + 1;
             let stamp = preview::FrameStamp {
-                id: ctl.frames.load(Ordering::Relaxed) + 1,
-                timestamp_100ns: time_100ns as u64,
+                id,
+                timestamp_100ns: encoder.preview_pts_100ns(id, time_100ns as u64),
                 capture_started: work_started,
                 encoder_accepted: Instant::now(),
             };
