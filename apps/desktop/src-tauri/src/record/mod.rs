@@ -19,7 +19,7 @@ mod mp4;
 
 mod gifenc;
 #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
-mod linux_audio;
+pub(crate) mod linux_audio;
 #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
 mod linux_mp4;
 mod pixels;

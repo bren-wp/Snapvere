@@ -252,3 +252,21 @@ impl RecordStatus {
         }
     }
 }
+
+// Read-only native device metadata; serials are strings to preserve full u64 identity.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinuxAudioDevice {
+    pub serial: String,
+    pub role: &'static str,
+    pub name: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinuxAudioSnapshot {
+    pub cookie: u32,
+    pub devices: Vec<LinuxAudioDevice>,
+    pub microphone: Option<String>,
+    pub monitor: Option<String>,
+}

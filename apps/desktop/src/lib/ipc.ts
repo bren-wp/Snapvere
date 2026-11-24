@@ -9,6 +9,7 @@ import type {
   BatchExportReport,
   CaptureAction,
   ImageFormat,
+  LinuxAudioSnapshot,
   MonitorInfo,
   PixelRect,
   PlatformCapabilities,
@@ -23,6 +24,9 @@ export const ipc = {
   // Language preferences are read-only to non-settings windows.
   getAppLanguage: () => invoke<string>("get_app_language"),
   getPlatformCapabilities: () => invoke<PlatformCapabilities>("get_platform_capabilities"),
+  listLinuxAudioDevices: () => invoke<LinuxAudioSnapshot | null>("list_linux_audio_devices"),
+  selectLinuxAudioDevices: (cookie: number, microphone: string | null, monitor: string | null) =>
+    invoke<void>("select_linux_audio_devices", { cookie, microphone, monitor }),
   setAppLanguage: (language: string) =>
     invoke<void>("set_app_language", { language }),
   // ── least-privilege settings snapshots ──

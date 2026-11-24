@@ -3,6 +3,12 @@
 #include <gst/gst.h>
 #include <stdlib.h>
 
+typedef struct {
+    guint64 serial;
+    guint32 role;
+    char name[256];
+} AudioNode;
+int snapvere_audio_list(AudioNode *nodes, guint capacity, guint32 *cookie);
 void *snapvere_audio_open(guint64 mic, guint64 monitor, guint32 cookie);
 int snapvere_audio_validate(guint64 mic, guint64 monitor, guint32 expected_cookie,
                             guint32 *actual_cookie);
@@ -15,6 +21,15 @@ int main(int argc, char **argv) {
     guint64 monitor = g_ascii_strtoull(argv[2], NULL, 10);
     if (!mic || !monitor || mic == monitor) return 2;
     guint32 cookie = 0;
+    AudioNode nodes[128] = {0};
+    int count = snapvere_audio_list(nodes, 128, &cookie);
+    if (count < 2 || count > 128 || !cookie) return 1;
+    gboolean found_mic = FALSE, found_monitor = FALSE;
+    for (int i = 0; i < count; i++) {
+        if (nodes[i].serial == mic && nodes[i].role == 1) found_mic = TRUE;
+        if (nodes[i].serial == monitor && nodes[i].role == 2) found_monitor = TRUE;
+    }
+    if (!found_mic || !found_monitor) return 1;
     if (snapvere_audio_validate(mic, monitor, 0, &cookie) || !cookie) return 1;
     // Reject reversed roles and an identity from a different server instance.
     if (!snapvere_audio_validate(monitor, mic, cookie, NULL)) return 3;

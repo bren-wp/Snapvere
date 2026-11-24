@@ -97,6 +97,46 @@ pub fn get_platform_capabilities(
     Ok(platform_capabilities())
 }
 
+/// Device discovery is available only in the explicitly enabled native Linux build.
+#[tauri::command]
+pub async fn list_linux_audio_devices(
+    window: tauri::WebviewWindow,
+) -> Result<Option<crate::models::LinuxAudioSnapshot>, String> {
+    require_window_label(window.label(), &["settings"])?;
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    {
+        tauri::async_runtime::spawn_blocking(|| record::linux_audio::devices().map(Some))
+            .await
+            .map_err(estr)?
+    }
+    #[cfg(not(all(target_os = "linux", feature = "linux-native-media")))]
+    Ok(None)
+}
+
+/// Only Settings may approve explicitly selected live node identities.
+#[tauri::command]
+pub async fn select_linux_audio_devices(
+    window: tauri::WebviewWindow,
+    cookie: u32,
+    microphone: Option<String>,
+    monitor: Option<String>,
+) -> Result<(), String> {
+    require_window_label(window.label(), &["settings"])?;
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    {
+        tauri::async_runtime::spawn_blocking(move || {
+            record::linux_audio::select(cookie, microphone, monitor)
+        })
+        .await
+        .map_err(estr)?
+    }
+    #[cfg(not(all(target_os = "linux", feature = "linux-native-media")))]
+    {
+        let _ = (cookie, microphone, monitor);
+        Err("Audio device selection is unavailable".into())
+    }
+}
+
 #[cfg(test)]
 #[test]
 fn native_capabilities_never_advertise_missing_linux_features() {

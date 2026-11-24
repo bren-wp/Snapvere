@@ -160,3 +160,10 @@ export interface RecFrameRect {
   /** Snima se cijeli monitor: nema zatamnjenja, samo rub. */
   full: boolean;
 }
+
+export interface LinuxAudioSnapshot {
+  cookie: number;
+  devices: { serial: string; role: "microphone" | "monitor"; name: string }[];
+  microphone: string | null;
+  monitor: string | null;
+}

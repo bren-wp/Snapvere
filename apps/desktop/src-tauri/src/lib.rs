@@ -124,6 +124,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_app_language,
             commands::get_platform_capabilities,
+            commands::list_linux_audio_devices,
+            commands::select_linux_audio_devices,
             commands::set_app_language,
             commands::get_capture_preferences,
             commands::get_overlay_recording_preferences,

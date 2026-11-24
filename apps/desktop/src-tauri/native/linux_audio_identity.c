@@ -6,7 +6,15 @@
 #include <string.h>
 
 typedef struct {
+    guint64 serial;
+    guint32 role;
+    char name[256];
+} AudioNode;
+
+typedef struct {
     guint64 mic, monitor;
+    AudioNode *nodes;
+    guint capacity, length;
     guint32 cookie;
     guint32 ids[2];
     guint count[2];
@@ -43,6 +51,19 @@ static void on_global(void *data, uint32_t id, uint32_t permissions,
     errno = 0;
     guint64 number = g_ascii_strtoull(serial, &end, 10);
     if (errno || end == serial || *end || !number) return;
+    guint role = !strcmp(kind, "Audio/Source") ? 1 : !strcmp(kind, "Audio/Sink") ? 2 : 0;
+    if (ctx->nodes && role) {
+        if (ctx->length >= ctx->capacity) {
+            ctx->error = TRUE;
+            return;
+        }
+        const char *description = spa_dict_lookup(props, "node.description");
+        AudioNode *node = &ctx->nodes[ctx->length++];
+        node->serial = number;
+        node->role = role;
+        g_strlcpy(node->name, description && *description ? description : name,
+                  sizeof(node->name));
+    }
     if (number == ctx->mic && !strcmp(kind, "Audio/Source")) {
         ctx->ids[0] = id;
         ctx->count[0]++;
@@ -55,6 +76,7 @@ static void on_global(void *data, uint32_t id, uint32_t permissions,
 
 static void on_remove(void *data, uint32_t id) {
     Identity *ctx = data;
+    if (ctx->nodes) ctx->error = TRUE;
     for (guint i = 0; i < 2; i++)
         if (ctx->count[i] && ctx->ids[i] == id) ctx->error = TRUE;
 }
@@ -72,9 +94,9 @@ static const struct pw_registry_events registry_events = {
 // A cookie identifies the current PipeWire server instance. Serial numbers
 // alone may be reused after a restart. A zero expected cookie is enumeration
 // mode for the isolated test; recorder calls always require a nonzero cookie.
-int snapvere_audio_validate(guint64 mic, guint64 monitor, guint32 expected_cookie,
-                            guint32 *actual_cookie) {
-    if ((!mic && !monitor) || (mic && mic == monitor)) return -1;
+static int query_registry(guint64 mic, guint64 monitor, guint32 expected_cookie,
+                          guint32 *actual_cookie, AudioNode *nodes, guint capacity) {
+    if ((!nodes && !mic && !monitor) || (mic && mic == monitor)) return -1;
     if (actual_cookie) *actual_cookie = 0;
     static gsize initialized = 0;
     if (g_once_init_enter(&initialized)) {
@@ -83,7 +105,9 @@ int snapvere_audio_validate(guint64 mic, guint64 monitor, guint32 expected_cooki
     }
 
     int result = -1;
-    Identity identity = { .mic = mic, .monitor = monitor };
+    Identity identity = {
+        .mic = mic, .monitor = monitor, .nodes = nodes, .capacity = capacity,
+    };
     struct pw_main_loop *main_loop = pw_main_loop_new(NULL);
     if (!main_loop) return -1;
     struct pw_loop *loop = pw_main_loop_get_loop(main_loop);
@@ -116,7 +140,7 @@ int snapvere_audio_validate(guint64 mic, guint64 monitor, guint32 expected_cooki
         (!mic || identity.count[0] == 1) &&
         (!monitor || identity.count[1] == 1)) {
         if (actual_cookie) *actual_cookie = identity.cookie;
-        result = 0;
+        result = nodes ? (int)identity.length : 0;
     }
 done:
     if (registry_listening) spa_hook_remove(&registry_listener);
@@ -126,4 +150,14 @@ done:
     if (context) pw_context_destroy(context);
     pw_main_loop_destroy(main_loop);
     return result;
+}
+
+int snapvere_audio_validate(guint64 mic, guint64 monitor, guint32 expected_cookie,
+                            guint32 *actual_cookie) {
+    return query_registry(mic, monitor, expected_cookie, actual_cookie, NULL, 0);
+}
+
+int snapvere_audio_list(AudioNode *nodes, guint capacity, guint32 *cookie) {
+    if (!nodes || !capacity || capacity > 128 || !cookie) return -1;
+    return query_registry(0, 0, 0, cookie, nodes, capacity);
 }
