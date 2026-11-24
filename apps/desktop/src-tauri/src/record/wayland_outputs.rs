@@ -128,12 +128,11 @@ impl Dispatch<wl_registry::WlRegistry, ()> for Inventory {
                     }
                 }
             }
-            wl_registry::Event::GlobalRemove { name } => {
+            wl_registry::Event::GlobalRemove { name }
                 if state.globals.contains_key(&name)
-                    || state.manager.is_some_and(|(id, _)| id == name)
-                {
-                    state.changed = true;
-                }
+                    || state.manager.is_some_and(|(id, _)| id == name) =>
+            {
+                state.changed = true;
             }
             _ => {}
         }

@@ -55,7 +55,7 @@ swaymsg -t get_outputs | python3 -c 'import json,sys; outputs={o["name"]:o["rect
 swaymsg 'focus output HEADLESS-2; workspace 2'
 /usr/bin/python3 "$root/tools/native/wayland_marker.py" >"$runtime/marker.log" 2>&1 & pids+=("$!")
 for _ in {1..100}; do
-  swaymsg -t get_tree | grep -q 'Snapvere QA marker' && break
+  swaymsg -t get_tree | grep 'Snapvere QA marker' >/dev/null && break
   sleep .1
 done
 swaymsg '[title="Snapvere QA marker"] move container to output HEADLESS-2'
@@ -77,6 +77,14 @@ from PIL import Image
 import sys
 r,g,b=Image.open(sys.argv[1]).convert("RGB").getpixel((320,240))
 assert r>220 and g<35 and b>220, "Control window is not visible on the other output"
+PY
+# Independently verify that the selected output shows the known background.
+grim -o HEADLESS-1 "$runtime/background.png"
+/usr/bin/python3 - "$runtime/background.png" <<'PY'
+from PIL import Image
+import sys
+r,g,b=Image.open(sys.argv[1]).convert("RGB").getpixel((320,240))
+assert abs(r-18)<=12 and abs(g-52)<=12 and abs(b-86)<=12, (r,g,b)
 PY
 # This chooser policy exists ONLY in the disposable test session. Production
 # still uses the desktop's real consent dialog and strict stream metadata.

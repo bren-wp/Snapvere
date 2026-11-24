@@ -41,8 +41,15 @@ int main(void) {
                 fputs("Marker unexpectedly present on separate output\n", stderr);
                 break;
             }
-            // The harness independently verifies that the marker is visible
-            // on the other virtual monitor before opening this stream.
+            // Reject blank, unrelated or uninitialized streams. The harness
+            // verifies the selected output's known background independently.
+            gsize center = ((gsize)(HEIGHT / 2) * WIDTH + WIDTH / 2) * 4;
+            if (ABS((int)frame[center] - 86) > 12 ||
+                ABS((int)frame[center + 1] - 52) > 12 ||
+                ABS((int)frame[center + 2] - 18) > 12) {
+                fputs("Selected output background does not match fixture\n", stderr);
+                break;
+            }
             baseline = TRUE;
             puts("SEPARATE_OUTPUT_MARKER_ABSENT");
             fflush(stdout);
