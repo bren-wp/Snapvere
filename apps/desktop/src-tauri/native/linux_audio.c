@@ -17,6 +17,7 @@ typedef struct {
     InputHealth health[2];
     gboolean selected[2];
     GstClockTime last_end;
+    gboolean terminal_error;
 } SnapvereAudio;
 
 static GstPadProbeReturn observe_input(GstPad *pad, GstPadProbeInfo *info, gpointer user) {
@@ -33,9 +34,11 @@ static GstPadProbeReturn observe_input(GstPad *pad, GstPadProbeInfo *info, gpoin
 }
 
 static gboolean healthy(SnapvereAudio *ctx) {
+    if (ctx->terminal_error) return FALSE;
     GstMessage *message = gst_bus_pop_filtered(ctx->bus, GST_MESSAGE_ERROR | GST_MESSAGE_EOS);
     if (message) {
         gst_message_unref(message);
+        ctx->terminal_error = TRUE;
         return FALSE;
     }
     for (guint i = 0; i < 2; i++) {
@@ -134,6 +137,7 @@ void *snapvere_audio_open(guint64 mic, guint64 monitor) {
         GstSample *sample = gst_app_sink_try_pull_sample(ctx->sink, 20 * GST_MSECOND);
         if (sample) gst_sample_unref(sample);
         if (healthy(ctx)) return ctx;
+        if (ctx->terminal_error) break;
     }
 fail:
     snapvere_audio_free(ctx);

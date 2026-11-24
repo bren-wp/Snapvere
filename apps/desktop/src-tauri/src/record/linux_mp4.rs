@@ -216,6 +216,24 @@ mod tests {
     }
 
     #[test]
+    fn rust_encoder_muxes_pcm_and_video_without_publishing_early() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("audio-video.mp4");
+        let mut encoder = LinuxMp4::new(&path, 64, 48, 10, 80, true).unwrap();
+        let pixels = [128_u8; 64 * 48 * 4];
+        let pcm = [0_u8; 4800 * 4];
+        for tick in 0..12 {
+            encoder.write(&pixels, tick * 1_000_000, 1_000_000).unwrap();
+            encoder.write_pcm(&pcm).unwrap();
+        }
+        assert!(!path.exists());
+        encoder.finish().unwrap();
+        let bytes = std::fs::read(path).unwrap();
+        assert!(bytes.windows(4).any(|v| v == b"mp4a"));
+        assert!(bytes.windows(4).any(|v| v == b"avc1"));
+    }
+
+    #[test]
     fn rejects_malformed_frames_and_drops_unpublished_output() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("capture.mp4");

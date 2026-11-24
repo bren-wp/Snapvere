@@ -90,9 +90,8 @@ impl Mixer {
         let mut block = [0_u8; MAX_BLOCK];
         for _ in 0..32 {
             // SAFETY: the native adapter validates capacity before copying.
-            let size = unsafe {
-                snapvere_audio_pull(capture.0.as_ptr(), block.as_mut_ptr(), block.len())
-            };
+            let size =
+                unsafe { snapvere_audio_pull(capture.0.as_ptr(), block.as_mut_ptr(), block.len()) };
             let size = usize::try_from(size).map_err(|_| "Requested PipeWire stream failed")?;
             if size == 0 {
                 break;
