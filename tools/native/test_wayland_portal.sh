@@ -139,7 +139,7 @@ done
 cc -Wall -Wextra -Werror -O2 -I"$root/apps/desktop/src-tauri/native" \
     "$root/tools/native/wayland_portal_probe.c" "$root/apps/desktop/src-tauri/native/linux_wayland.c" \
     -o "$runtime/portal-probe" $(pkg-config --cflags --libs gio-unix-2.0 gstreamer-app-1.0 gstreamer-video-1.0)
-timeout 105 "$runtime/portal-probe" >"$runtime/probe.log" 2>&1 & probe=$!; pids+=("$probe")
+G_MESSAGES_DEBUG=all timeout 105 "$runtime/portal-probe" >"$runtime/probe.log" 2>&1 & probe=$!; pids+=("$probe")
 for _ in {1..900}; do
   grep -q '^SEPARATE_OUTPUT_MARKER_ABSENT$' "$runtime/probe.log" && break
   kill -0 "$probe" 2>/dev/null || { cat "$runtime/probe.log"; exit 1; }
@@ -150,7 +150,25 @@ grep -q '^SEPARATE_OUTPUT_MARKER_ABSENT$' "$runtime/probe.log"
 started="$(python3 -c 'import time; print(time.monotonic_ns()//1000)')"
 swaymsg '[title="Snapvere QA marker"] fullscreen disable'
 swaymsg '[title="Snapvere QA marker"] move container to output HEADLESS-1'
+swaymsg 'focus output HEADLESS-1'
+swaymsg '[title="Snapvere QA marker"] focus'
 swaymsg '[title="Snapvere QA marker"] fullscreen enable'
+# Independently prove that the moved native window actually reached the
+# captured output. Do not use this screenshot as a portal test substitute.
+visible=0
+for _ in {1..20}; do
+  grim -o HEADLESS-1 "$runtime/moved.png"
+  if /usr/bin/python3 - "$runtime/moved.png" <<'PY'
+from PIL import Image
+import sys
+r,g,b=Image.open(sys.argv[1]).convert("RGB").getpixel((320,240))
+sys.exit(0 if r>220 and g<35 and b>220 else 1)
+PY
+  then visible=1; break; fi
+  sleep .05
+done
+[[ "$visible" == 1 ]] || { echo "Moved marker not visible on captured output"; exit 1; }
+echo "Native marker verified visible on captured output"
 wait "$probe"
 cat "$runtime/probe.log"
 python3 - "$started" "$runtime/probe.log" <<'PY'

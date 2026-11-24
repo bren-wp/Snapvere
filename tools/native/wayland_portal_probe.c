@@ -27,14 +27,16 @@ int main(void) {
     guint8 *frame = g_malloc(BYTES);
     int status = 1;
     gboolean baseline = FALSE;
+    guint samples = 0;
     gint64 deadline = g_get_monotonic_time() + 12 * G_TIME_SPAN_SECOND;
     while (g_get_monotonic_time() < deadline) {
         int result = snapvere_wayland_pull(portal, frame, BYTES, 250);
         if (result < 0) {
-            fputs("Authorized video stream failed\n", stderr);
+            fprintf(stderr, "Authorized video stream failed after %u valid samples\n", samples);
             break;
         }
         if (result == 0) continue;
+        samples++;
         gboolean present = marker_present(frame);
         if (!baseline) {
             if (present) {

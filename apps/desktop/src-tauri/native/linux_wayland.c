@@ -377,9 +377,12 @@ void *snapvere_wayland_open(gint x, gint y, guint logical_width, guint logical_h
     g_main_context_pop_thread_default(ctx->context);
     if (!ok) goto fail;
     GError *error = NULL;
+    // Return producer buffers promptly: the recorder already copies BGRA
+    // into its own bounded memory. Do not pin the portal's last pool buffer.
     ctx->pipeline = gst_parse_launch(
-        "pipewiresrc name=video ! videoconvert ! video/x-raw,format=BGRA "
-        "! appsink name=frames sync=false max-buffers=2 drop=true", &error);
+        "pipewiresrc name=video always-copy=true ! videoconvert ! video/x-raw,format=BGRA "
+        "! appsink name=frames sync=false max-buffers=2 drop=true "
+        "enable-last-sample=false wait-on-eos=false", &error);
     if (error || !ctx->pipeline) {
         g_clear_error(&error);
         goto fail;
@@ -426,14 +429,18 @@ fail:
 }
 
 static gboolean video_alive(PortalVideo *ctx) {
-    if (!ctx || !session_alive(ctx) || gst_app_sink_is_eos(ctx->sink)) return FALSE;
+    if (!ctx || !session_alive(ctx)) return FALSE;
     GstMessage *message = gst_bus_pop_filtered(ctx->video_bus, GST_MESSAGE_ERROR | GST_MESSAGE_EOS);
     if (message) {
+        // Fixed categories only: do not log desktop contents, arbitrary
+        // GStreamer error strings, or authorization identifiers.
+        g_debug("Wayland video pipeline terminated: %s",
+                GST_MESSAGE_TYPE(message) == GST_MESSAGE_ERROR ? "error" : "EOS");
         gst_message_unref(message);
         ctx->closed = TRUE;
         return FALSE;
     }
-    return TRUE;
+    return !gst_app_sink_is_eos(ctx->sink);
 }
 
 int snapvere_wayland_discard(void *handle) {
@@ -456,14 +463,20 @@ int snapvere_wayland_pull(void *handle, guint8 *data, gsize capacity, guint time
     GstSample *sample = gst_app_sink_try_pull_sample(ctx->sink,
                             MIN(timeout_ms, 2000) * GST_MSECOND);
     if (!sample) {
-        if (gst_app_sink_is_eos(ctx->sink) ||
-            g_get_monotonic_time() - ctx->last_frame > 3 * G_TIME_SPAN_SECOND) return -1;
+        if (!video_alive(ctx)) return -1;
+        if (g_get_monotonic_time() - ctx->last_frame > 3 * G_TIME_SPAN_SECOND) {
+            g_debug("Wayland video frame delivery timed out");
+            return -1;
+        }
         return 0;
     }
     gboolean ok = video_alive(ctx) &&
         copy_frame(sample, ctx->width, ctx->height, data, capacity);
     gst_sample_unref(sample);
-    if (!ok) return -1;
+    if (!ok) {
+        g_debug("Wayland video sample rejected or session ended");
+        return -1;
+    }
     ctx->last_frame = g_get_monotonic_time();
     return 1;
 }
