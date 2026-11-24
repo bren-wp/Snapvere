@@ -2,6 +2,8 @@
 
 ## v0.2.32 — Release integrity (development)
 
+- Add an isolated native PipeWire PCM transport acceptance test with virtual source and sink-monitor devices, explicit target selection and missing-target rejection. No audio capability enabled yet.
+
 - Introduce an opt-in native Linux H.264/MP4 encoder using GStreamer and an anonymous output inode, with real codec/decode CI tests. It is not enabled in public packages; PipeWire audio and native acceptance remain open.
 - Fix Clippy pixel conversion lint without disabling checks.
 

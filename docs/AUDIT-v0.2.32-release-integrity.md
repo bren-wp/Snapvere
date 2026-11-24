@@ -37,3 +37,8 @@ Frontend screenshots are not native WebView2 or WebKitGTK verification. Existing
 
 - Applied the exact rustfmt changes reported by both native runners. The MP4 encode/decode step was not reached in that run.
 - Extend the first-party source privacy guard to native C adapters, including process spawning, socket APIs and external URLs. This is a source-pattern guard, not a runtime sandbox or proof of dependency behavior.
+
+### Isolated PipeWire transport acceptance
+
+- Added a dedicated Linux CI job with a native GStreamer PipeWire appsink probe. The test creates a private PipeWire/WirePlumber/Pulse-compatible session, a virtual sink and remapped virtual source, resolves their explicit object.serial and media.class, and feeds a generated local sine wave. It requires non-silent 48 kHz stereo S16LE samples, monotonic timestamps, bounded buffers, bounded runtime, and rejection of a missing target without default-device fallback. No microphone or physical speaker is used; no audio is saved.
+- The probe is test-only, compiled outside the application package. The desktop recorder still does not enable PipeWire audio. The test is a prerequisite to integrating AAC multiplexing, device selection, stream-loss handling and pause/resume synchronization. CI results pending; no hardware acceptance claimed.
