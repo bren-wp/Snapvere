@@ -106,8 +106,7 @@ pub(super) fn show_rec_hud(app: &AppHandle, target: &RecordTarget) -> Result<(),
     let monitors = win.available_monitors().map_err(estr)?;
     let mut matches = monitors.iter().filter(|monitor| {
         (monitor.position().x, monitor.position().y) == (target.monitor_x, target.monitor_y)
-            && (monitor.size().width, monitor.size().height)
-                == (target.monitor_w, target.monitor_h)
+            && (monitor.size().width, monitor.size().height) == (target.monitor_w, target.monitor_h)
     });
     let monitor = matches
         .next()

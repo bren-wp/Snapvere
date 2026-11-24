@@ -132,6 +132,7 @@ pub(super) fn run(
     let mut pause_started: Option<Instant> = None;
     let mut next_due = Instant::now();
     let mut last_tick = Instant::now();
+    let mut last_preview: Option<Instant> = None;
     let mut last_time_100ns = -1i64;
 
     let mut frame_buf = allocate_bgra(ow, oh)?;
@@ -182,10 +183,18 @@ pub(super) fn run(
                 recording_error = Some(error);
                 break;
             }
+            if !ctl.pause_ack.swap(true, Ordering::AcqRel) && ctl.preview.is_some() {
+                offer_preview(app, ctl);
+            }
             std::thread::sleep(Duration::from_millis(40));
             continue;
         }
         if let Some(p) = pause_started.take() {
+            // The ordinary preview is hidden before resume. Allow compositor
+            // presentation to settle, then drain the bounded video queue.
+            if ctl.preview.is_some() {
+                std::thread::sleep(Duration::from_millis(250));
+            }
             #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
             if let Err(error) = source.discard_paused() {
                 recording_error = Some(error);
@@ -258,6 +267,13 @@ pub(super) fn run(
             }
         }
 
+        if let Some(preview) = &ctl.preview {
+            if let Err(error) = crate::state::lock(preview).compose(&mut frame_buf) {
+                recording_error = Some(error);
+                break;
+            }
+        }
+
         if thumb.is_none() {
             thumb = Some(bgra_to_rgba_image(&frame_buf, ow, oh));
         }
@@ -276,6 +292,16 @@ pub(super) fn run(
             log(&error);
             recording_error = Some(error);
             break;
+        }
+
+        if let Some(preview) = &ctl.preview {
+            if last_preview.is_none_or(|last| last.elapsed() >= Duration::from_millis(250)) {
+                if let Err(error) = crate::state::lock(preview).remember(&frame_buf) {
+                    recording_error = Some(error);
+                    break;
+                }
+                last_preview = Some(Instant::now());
+            }
         }
 
         #[cfg(windows)]

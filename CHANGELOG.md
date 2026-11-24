@@ -2,6 +2,8 @@
 
 ## v0.2.32 — Release integrity (development)
 
+- Add experimental paused crop-local preview and native rectangular annotations/opaque masks applied to future encoder frames, independent of global Wayland window placement.
+
 - Validate output-local redaction viewport and map mask edges outward in Rust; add headless wlroots mixed-DPI compositor geometry acceptance.
 
 - Bind experimental Wayland logical overlay selection to validated per-output physical crop dimensions and portal video caps, with strict monitor/viewport identity checks.

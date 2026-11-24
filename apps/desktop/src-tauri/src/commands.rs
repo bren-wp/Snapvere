@@ -1615,7 +1615,11 @@ pub fn pause_recording(
     app: AppHandle,
     paused: bool,
 ) -> Result<RecordStatus, String> {
-    require_window_label(window.label(), &["recbar"])?;
+    if paused {
+        require_window_label(window.label(), &["recbar", "recdraw"])?;
+    } else {
+        require_window_label(window.label(), &["recbar"])?;
+    }
     record::set_paused(&app, paused)
 }
 
@@ -1624,8 +1628,50 @@ pub fn recording_status(
     window: tauri::WebviewWindow,
     app: AppHandle,
 ) -> Result<RecordStatus, String> {
-    require_window_label(window.label(), &["recbar"])?;
+    require_window_label(window.label(), &["recbar", "recdraw"])?;
     Ok(record::status(&app))
+}
+
+/// Ordinary crop-local editor, shown only after portal recording is paused.
+pub(crate) fn show_crop_preview(app: &AppHandle) -> Result<(), String> {
+    let win = if let Some(win) = app.get_webview_window("recpreview") {
+        win
+    } else {
+        WebviewWindowBuilder::new(
+            app,
+            "recpreview",
+            WebviewUrl::App("index.html#recpreview".into()),
+        )
+        .title("Snapvere — Recording")
+        .inner_size(980.0, 680.0)
+        .min_inner_size(400.0, 300.0)
+        .visible(false)
+        .build()
+        .map_err(estr)?
+    };
+    win.emit("snapvere:preview-refresh", ()).map_err(estr)?;
+    win.show().map_err(estr)?;
+    win.set_focus().map_err(estr)
+}
+
+#[tauri::command]
+pub fn get_crop_preview(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+) -> Result<record::preview::Snapshot, String> {
+    require_window_label(window.label(), &["recpreview"])?;
+    record::crop_preview(&app)
+}
+
+#[tauri::command]
+pub fn resume_crop_preview(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    session: String,
+    marks: Vec<record::preview::Mark>,
+) -> Result<RecordStatus, String> {
+    require_window_label(window.label(), &["recpreview"])?;
+    record::resume_crop_preview(&app, &session, marks)
 }
 
 /// Resize only the recording HUD, only to reviewed fixed dimensions.

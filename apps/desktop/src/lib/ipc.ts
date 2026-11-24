@@ -21,6 +21,15 @@ import type {
   Screenshot,
 } from "./types";
 
+export type PreviewMark = { kind: "rectangle" | "mask"; rect: PixelRect };
+export type CropPreview = {
+  session: string;
+  width: number;
+  height: number;
+  remaining: number;
+  image: string;
+};
+
 export const ipc = {
   // Language preferences are read-only to non-settings windows.
   getAppLanguage: () => invoke<string>("get_app_language"),
@@ -77,6 +86,9 @@ export const ipc = {
   pauseRecording: (paused: boolean) =>
     invoke<RecordStatus>("pause_recording", { paused }),
   recordingStatus: () => invoke<RecordStatus>("recording_status"),
+  getCropPreview: () => invoke<CropPreview>("get_crop_preview"),
+  resumeCropPreview: (session: string, marks: PreviewMark[]) =>
+    invoke<RecordStatus>("resume_crop_preview", { session, marks }),
   closeRecHud: () => invoke<void>("close_rec_hud"),
   /** Expand the native HUD viewport to show its palette/error, then shrink. */
   setRecHudExpanded: (expanded: boolean) =>

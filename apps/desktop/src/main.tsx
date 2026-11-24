@@ -11,6 +11,7 @@ import Settings from "./windows/Settings";
 import RecBar from "./windows/RecBar";
 import RecDraw from "./windows/RecDraw";
 import RecFrame from "./windows/RecFrame";
+import RecPreview from "./windows/RecPreview";
 import AppErrorBoundary from "./components/AppErrorBoundary";
 import { LanguageProvider } from "./lib/LanguageProvider";
 
@@ -79,6 +80,9 @@ switch (kind) {
   case "recdraw":
     document.body.classList.add("hud");
     node = <RecDraw />;
+    break;
+  case "recpreview":
+    node = <RecPreview />;
     break;
   case "recframe":
     document.body.classList.add("hud");

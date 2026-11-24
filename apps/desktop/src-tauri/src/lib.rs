@@ -152,6 +152,8 @@ pub fn run() {
             commands::close_rec_hud,
             commands::set_rec_hud_expanded,
             commands::rec_frame_rect,
+            commands::get_crop_preview,
+            commands::resume_crop_preview,
             commands::list_screenshots,
             commands::search_screenshots,
             commands::delete_screenshot,

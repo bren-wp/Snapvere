@@ -421,10 +421,7 @@ mod tests {
         assert_eq!(left.physical, (2400, 1350));
         assert_eq!(right.physical, (2880, 1620));
         assert_eq!(left.inward_crop(1, 1, 101, 101).unwrap(), (2, 2, 125, 125));
-        assert_eq!(
-            right.inward_crop(1, 1, 101, 101).unwrap(),
-            (2, 2, 151, 151)
-        );
+        assert_eq!(right.inward_crop(1, 1, 101, 101).unwrap(), (2, 2, 151, 151));
     }
 
     #[test]
