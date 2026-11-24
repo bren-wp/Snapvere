@@ -26,6 +26,8 @@ pub(crate) mod linux_audio;
 mod linux_mp4;
 mod pixels;
 mod transport;
+#[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+mod wayland;
 mod worker;
 
 pub use pixels::crop_rect;
@@ -312,7 +314,11 @@ pub fn start(
         .map_err(|e| format!("ne mogu pokrenuti dretvu snimanja: {e}"))?;
 
     // Otvaranje DXGI-ja + MF-a je ispod ~300 ms; timeout je samo zaštita od zaglavljivanja.
-    match ready_rx.recv_timeout(Duration::from_secs(10)) {
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    let startup_timeout = if wayland::active() { 100 } else { 10 };
+    #[cfg(not(all(target_os = "linux", feature = "linux-native-media")))]
+    let startup_timeout = 10;
+    match ready_rx.recv_timeout(Duration::from_secs(startup_timeout)) {
         Ok(Ok(())) => {}
         Ok(Err(e)) => {
             ctl.phase.store(PHASE_IDLE, Ordering::SeqCst);

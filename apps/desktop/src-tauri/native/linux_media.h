@@ -26,4 +26,9 @@ int snapvere_mp4_push_pcm(void *handle, const guint8 *data, gsize len);
 int snapvere_mp4_finish(void *handle);
 void snapvere_mp4_free(void *handle);
 
+void *snapvere_wayland_open(guint width, guint height);
+int snapvere_wayland_pull(void *handle, guint8 *data, gsize capacity, guint timeout_ms);
+void snapvere_wayland_free(void *handle);
+int snapvere_wayland_test_frame(void);
+
 #endif

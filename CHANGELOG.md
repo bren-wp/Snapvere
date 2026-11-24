@@ -2,6 +2,8 @@
 
 ## v0.2.32 — Release integrity (development)
 
+- Add an opt-in continuous Wayland ScreenCast Portal/PipeWire video source for one full monitor, with consent-scoped remote, bounded startup and validated BGRA capture. Native compositor acceptance pending.
+
 - Add experimental bounded fractional audio-clock drift compensation and four-hour simulations, plus native X11 framebuffer acceptance in Free/Pro and monitor-geometry checks.
 
 - Add experimental graphical audio source selection backed by the live native PipeWire registry, settings-window-only IPC and session-scoped selection, without persisting stale serials.

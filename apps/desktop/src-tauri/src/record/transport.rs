@@ -13,6 +13,8 @@ use crate::logging::log;
 pub(super) enum Source {
     #[cfg(windows)]
     Dxgi(Box<dxgi::DxgiGrabber>),
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    Wayland(Box<super::wayland::PortalSource>),
     /// Fallback: xcap BitBlt petlja (sporije, ali radi kad duplikacija nije dostupna —
     /// npr. RDP sesija ili zaključan output).
     Xcap {
@@ -30,6 +32,13 @@ impl Source {
                 Ok(g) => return Ok(Source::Dxgi(Box::new(g))),
                 Err(e) => log(&format!("DXGI nedostupan ({e}); prelazim na xcap fallback")),
             }
+        }
+
+        #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+        if super::wayland::active() {
+            return super::wayland::PortalSource::open(target)
+                .map(Box::new)
+                .map(Source::Wayland);
         }
 
         let monitors = xcap::Monitor::all().map_err(|e| format!("xcap monitors: {e}"))?;
@@ -52,6 +61,8 @@ impl Source {
         match self {
             #[cfg(windows)]
             Source::Dxgi(g) => g.grab(timeout_ms),
+            #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+            Source::Wayland(g) => g.grab(timeout_ms),
             Source::Xcap {
                 monitor,
                 buf,
@@ -75,6 +86,8 @@ impl Source {
         match self {
             #[cfg(windows)]
             Source::Dxgi(g) => (g.width, g.height),
+            #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+            Source::Wayland(g) => g.size(),
             Source::Xcap { target, .. } => (target.monitor_w, target.monitor_h),
         }
     }
@@ -84,6 +97,8 @@ impl Source {
         match self {
             #[cfg(windows)]
             Source::Dxgi(g) => g.has_frame(),
+            #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+            Source::Wayland(g) => g.has_frame(),
             Source::Xcap { .. } => true,
         }
     }

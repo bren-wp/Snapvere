@@ -348,6 +348,13 @@ jobs:
             gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
             gstreamer1.0-pipewire gstreamer1.0-plugins-bad ffmpeg libpipewire-0.3-dev \
             pipewire pipewire-bin pipewire-pulse wireplumber pulseaudio-utils dbus-daemon
+      - name: Compile native Wayland adapter and verify padded BGRA frames
+        run: |
+          cc -Wall -Wextra -Werror -O2 -Iapps/desktop/src-tauri/native \
+            tools/native/wayland_frame_probe.c apps/desktop/src-tauri/native/linux_wayland.c \
+            -o "$RUNNER_TEMP/wayland-frame-probe" \
+            $(pkg-config --cflags --libs gio-unix-2.0 gstreamer-app-1.0 gstreamer-video-1.0)
+          "$RUNNER_TEMP/wayland-frame-probe"
       - name: Verify real PCM from explicitly selected source and sink monitor
         run: bash tools/native/test_pipewire_audio.sh
 
