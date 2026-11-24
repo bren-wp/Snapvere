@@ -19,6 +19,7 @@ cleanup() {
 }
 trap cleanup EXIT
 cat > "$runtime/sway.conf" <<'CONF'
+xwayland disable
 output HEADLESS-1 mode --custom 2400x1350 position -1920 0 scale 1.25
 output HEADLESS-2 mode --custom 2880x1620 position 0 0 scale 1.5
 CONF

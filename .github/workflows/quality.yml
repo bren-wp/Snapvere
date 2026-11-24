@@ -374,7 +374,7 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             build-essential pkg-config libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             gstreamer1.0-pipewire gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
-            sway swaybg grim python3-gi python3-pil gir1.2-gtk-3.0 \
+            sway swaybg grim python3-gi python3-gi-cairo python3-pil gir1.2-gtk-3.0 \
             pipewire wireplumber dbus-daemon xdg-desktop-portal xdg-desktop-portal-wlr
       - name: Verify actual authorized video before and after moving a native window
         run: bash tools/native/test_wayland_portal.sh

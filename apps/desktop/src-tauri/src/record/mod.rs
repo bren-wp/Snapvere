@@ -530,7 +530,9 @@ pub fn acknowledge_crop_preview(
         .as_ref()
         .ok_or("Recording preview is unavailable")?;
     let total = crate::state::lock(preview).acknowledge(session, frame_id)?;
-    log(&format!("Paused preview render receipt: {total} us (includes IPC and pause)"));
+    log(&format!(
+        "Paused preview render receipt: {total} us (includes IPC and pause)"
+    ));
     Ok(total)
 }
 

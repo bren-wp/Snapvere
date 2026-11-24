@@ -14,6 +14,7 @@ export XDG_STATE_HOME="$runtime/state" XDG_DATA_HOME="$runtime/data"
 export XDG_CURRENT_DESKTOP=sway XDG_SESSION_DESKTOP=sway XDG_SESSION_TYPE=wayland
 export WLR_BACKENDS=headless WLR_HEADLESS_OUTPUTS=2 WLR_RENDERER=pixman
 export WLR_LIBINPUT_NO_DEVICES=1 GDK_BACKEND=wayland GTK_USE_PORTAL=0
+export NO_AT_BRIDGE=1
 export PIPEWIRE_REMOTE=pipewire-0
 unset DISPLAY WAYLAND_DISPLAY WAYLAND_SOCKET SWAYSOCK
 mkdir -p "$XDG_CONFIG_HOME/xdg-desktop-portal" "$XDG_CONFIG_HOME/xdg-desktop-portal-wlr" "$XDG_CACHE_HOME" "$XDG_STATE_HOME" "$XDG_DATA_HOME"
@@ -31,6 +32,7 @@ cleanup() {
 }
 trap cleanup EXIT
 cat > "$runtime/sway.conf" <<'CONF'
+xwayland disable
 output HEADLESS-1 mode --custom 640x480 position 0 0 scale 1 bg #123456 solid_color
 output HEADLESS-2 mode --custom 640x480 position 640 0 scale 1 bg #123456 solid_color
 workspace 1 output HEADLESS-1
@@ -53,11 +55,17 @@ done
 [[ -n "${WAYLAND_DISPLAY:-}" && -n "${SWAYSOCK:-}" ]]
 swaymsg -t get_outputs | python3 -c 'import json,sys; outputs={o["name"]:o["rect"] for o in json.load(sys.stdin) if o["active"]}; assert outputs["HEADLESS-1"]==dict(x=0,y=0,width=640,height=480); assert outputs["HEADLESS-2"]==dict(x=640,y=0,width=640,height=480)'
 swaymsg 'focus output HEADLESS-2; workspace 2'
-/usr/bin/python3 "$root/tools/native/wayland_marker.py" >"$runtime/marker.log" 2>&1 & pids+=("$!")
+/usr/bin/python3 "$root/tools/native/wayland_marker.py" >"$runtime/marker.log" 2>&1 & marker_pid=$!; pids+=("$marker_pid")
+marker_ready=0
 for _ in {1..100}; do
-  swaymsg -t get_tree | grep 'Snapvere QA marker' >/dev/null && break
+  kill -0 "$marker_pid" || { cat "$runtime/marker.log"; exit 1; }
+  if swaymsg -t get_tree | grep 'Snapvere QA marker' >/dev/null; then
+    marker_ready=1
+    break
+  fi
   sleep .1
 done
+[[ "$marker_ready" == 1 ]] || { echo "GTK control window did not map"; exit 1; }
 swaymsg '[title="Snapvere QA marker"] move container to output HEADLESS-2'
 swaymsg '[title="Snapvere QA marker"] fullscreen enable'
 # Prove that the control window is actually visible on the other output.
@@ -67,16 +75,17 @@ for _ in {1..30}; do
 from PIL import Image
 import sys
 r,g,b=Image.open(sys.argv[1]).convert("RGB").getpixel((320,240))
-assert r>220 and g<35 and b>220
+sys.exit(0 if r>220 and g<35 and b>220 else 1)
 PY
   then break; fi
+  kill -0 "$marker_pid" || { cat "$runtime/marker.log"; exit 1; }
   sleep .1
 done
 /usr/bin/python3 - "$runtime/control.png" <<'PY'
 from PIL import Image
 import sys
 r,g,b=Image.open(sys.argv[1]).convert("RGB").getpixel((320,240))
-assert r>220 and g<35 and b>220, "Control window is not visible on the other output"
+assert r>220 and g<35 and b>220, ("Control window is not visible on the other output", (r,g,b))
 PY
 # Independently verify that the selected output shows the known background.
 grim -o HEADLESS-1 "$runtime/background.png"
