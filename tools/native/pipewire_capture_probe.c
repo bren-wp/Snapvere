@@ -4,6 +4,38 @@
 #include <gst/gst.h>
 #include <gst/app/gstappsink.h>
 #include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <stdio.h>
+
+void *snapvere_mp4_open_av(int fd, guint w, guint h, guint fps, guint bitrate,
+                            gboolean with_audio);
+int snapvere_mp4_push(void *handle, const guint8 *data, gsize len,
+                      guint64 pts_ns, guint64 duration_ns);
+int snapvere_mp4_push_pcm(void *handle, const guint8 *data, gsize len);
+int snapvere_mp4_finish(void *handle);
+void snapvere_mp4_free(void *handle);
+
+static gboolean append_audio_video(void *encoder, const guint8 *pcm, gsize bytes,
+                                   guint64 *frames, guint64 *video_frames) {
+    // Synthetic video is test-only; audio is real PCM from the virtual device.
+    guint8 pixels[64 * 48 * 4];
+    memset(pixels, 128, sizeof(pixels));
+    while (bytes) {
+        gsize block = MIN(bytes, (gsize)4800 * 4);
+        if (snapvere_mp4_push_pcm(encoder, pcm, block)) return FALSE;
+        *frames += block / 4;
+        while (*video_frames * 4800 < *frames) {
+            guint64 pts = *video_frames * 100 * GST_MSECOND;
+            if (snapvere_mp4_push(encoder, pixels, sizeof(pixels),
+                                  pts, 100 * GST_MSECOND)) return FALSE;
+            (*video_frames)++;
+        }
+        bytes -= block;
+        pcm += block;
+    }
+    return TRUE;
+}
 
 static gboolean check_bus(GstBus *bus) {
     GstMessage *message = gst_bus_pop_filtered(bus, GST_MESSAGE_ERROR | GST_MESSAGE_EOS);
@@ -19,7 +51,7 @@ static gboolean check_bus(GstBus *bus) {
 }
 
 int main(int argc, char **argv) {
-    if (argc != 3 || !argv[1][0] ||
+    if ((argc != 3 && argc != 4) || !argv[1][0] ||
         (strcmp(argv[2], "source") && strcmp(argv[2], "monitor"))) return 2;
     gst_init(NULL, NULL);
     GError *error = NULL;
@@ -31,6 +63,10 @@ int main(int argc, char **argv) {
     GstAppSink *sink = NULL;
     GstBus *bus = NULL;
     int result = 1;
+    int fd = -1;
+    void *encoder = NULL;
+    guint64 mux_frames = 0, video_frames = 0;
+    guint segments = 0;
     if (error || !pipeline) {
         g_clear_error(&error);
         goto done;
@@ -53,6 +89,13 @@ int main(int argc, char **argv) {
         !strcmp(argv[2], "monitor") ? "true" : "false", NULL);
     g_object_set(input, "target-object", argv[1], "stream-properties", props, NULL);
     gst_structure_free(props);
+    if (argc == 4) {
+        // This is an isolated CI path, never an application/user destination.
+        fd = open(argv[3], O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+        if (fd < 0) goto done;
+        encoder = snapvere_mp4_open_av(fd, 64, 48, 10, 256000, TRUE);
+        if (!encoder) goto done;
+    }
     if (gst_element_set_state(pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
         goto done;
 
@@ -90,12 +133,38 @@ int main(int argc, char **argv) {
             gint16 value = (gint16)GST_READ_UINT16_LE(map.data + i);
             if (value > 512 || value < -512) audible++;
         }
+        if (encoder && !append_audio_video(encoder, map.data, map.size,
+                                           &mux_frames, &video_frames)) {
+            gst_buffer_unmap(buffer, &map);
+            gst_sample_unref(sample);
+            goto done;
+        }
         gst_buffer_unmap(buffer, &map);
         gst_sample_unref(sample);
         if (frames >= 24000 && audible >= 4800) {
             g_print("Verified %s: %" G_GUINT64_FORMAT
                     " frames, %" G_GUINT64_FORMAT " audible samples at 48000 Hz stereo\n",
                     argv[2], frames, audible);
+            segments++;
+            if (encoder && segments == 1) {
+                // Fully stop the input graph: discard queued data and do not
+                // capture audio during the pause. Reopen the same target only.
+                if (gst_element_set_state(pipeline, GST_STATE_NULL) == GST_STATE_CHANGE_FAILURE)
+                    goto done;
+                g_print("PAUSED: input stopped\n");
+                fflush(stdout);
+                g_usleep(1500000);
+                GstMessage *old_message;
+                while ((old_message = gst_bus_pop(bus))) gst_message_unref(old_message);
+                if (gst_element_set_state(pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
+                    goto done;
+                previous = GST_CLOCK_TIME_NONE;
+                frames = 0;
+                audible = 0;
+                deadline = g_get_monotonic_time() + 8 * G_USEC_PER_SEC;
+                continue;
+            }
+            if (encoder && (snapvere_mp4_finish(encoder) || fsync(fd))) goto done;
             result = 0;
             break;
         }
@@ -106,5 +175,10 @@ done:
     if (sink) gst_object_unref(sink);
     if (input) gst_object_unref(input);
     if (pipeline) gst_object_unref(pipeline);
+    if (encoder) snapvere_mp4_free(encoder);
+    if (fd >= 0) {
+        close(fd);
+        if (result) unlink(argv[3]);
+    }
     return result;
 }
