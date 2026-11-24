@@ -2,6 +2,9 @@
 
 ## v0.2.32 — Release integrity (development)
 
+- Linux Pro export publishes from an anonymous synced inode without a replaceable staging pathname; unsupported destination filesystems fail safely. Windows named staging remains under audit.
+- Reject changed capture geometry in the native xcap fallback to preserve region and redaction correctness; validate lockfile registry provenance and integrity.
+
 - Pro export stages and syncs output before publishing without replacement, pins the selected destination and rejects multiply linked source handles. Linux and Windows native regression verification pending.
 
 - Pro batch export continues after individual failures, returns per-capture success status and keeps failed IDs selected for retry; cancellation preserves selection.

@@ -57,26 +57,10 @@ impl Source {
                 let img = monitor
                     .capture_image()
                     .map_err(|e| format!("xcap capture: {e}"))?;
-                let iw = img.width().min(*w) as usize;
-                let ih = img.height().min(*h) as usize;
-                let src = img.as_raw();
-                let sw = img.width() as usize;
-                let dw = *w as usize;
-                // Clear only short frames; otherwise previous pixels could leak.
-                if iw < dw || ih < *h as usize {
-                    buf.fill(0);
-                }
-                // RGBA → BGRA
-                for y in 0..ih {
-                    for x in 0..iw {
-                        let s = (y * sw + x) * 4;
-                        let d = (y * dw + x) * 4;
-                        buf[d] = src[s + 2];
-                        buf[d + 1] = src[s + 1];
-                        buf[d + 2] = src[s];
-                        buf[d + 3] = 255;
-                    }
-                }
+                // A changed monitor geometry invalidates crop and redaction
+                // coordinates. Stop rather than encode pixels from a different
+                // region or silently pad a partial frame.
+                rgba_to_bgra_frame(&img, *w, *h, buf)?;
                 Ok(buf)
             }
         }
@@ -98,6 +82,27 @@ impl Source {
             Source::Xcap { .. } => true,
         }
     }
+}
+
+fn rgba_to_bgra_frame(
+    image: &image::RgbaImage,
+    width: u32,
+    height: u32,
+    destination: &mut [u8],
+) -> Result<(), String> {
+    if image.dimensions() != (width, height) || image.as_raw().len() != destination.len() {
+        return Err(
+            "Capture dimensions changed; restart recording to protect the selected region".into(),
+        );
+    }
+    for (source, target) in image
+        .as_raw()
+        .chunks_exact(4)
+        .zip(destination.chunks_exact_mut(4))
+    {
+        target.copy_from_slice(&[source[2], source[1], source[0], 255]);
+    }
+    Ok(())
 }
 
 /// Enkoder — MP4 na Windowsu, GIF svugdje.
@@ -143,5 +148,21 @@ impl Encoder {
             Encoder::Mp4(e) => e.finish(),
             Encoder::Gif(e) => e.finish(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn capture_frame_rejects_geometry_changes_before_touching_destination() {
+        let frame = image::RgbaImage::from_pixel(2, 1, image::Rgba([10, 20, 30, 40]));
+        let mut output = [99; 8];
+        assert!(rgba_to_bgra_frame(&frame, 1, 2, &mut output).is_err());
+        assert_eq!(output, [99; 8]);
+        assert!(rgba_to_bgra_frame(&frame, 2, 1, &mut output[..4]).is_err());
+        rgba_to_bgra_frame(&frame, 2, 1, &mut output).unwrap();
+        assert_eq!(output, [30, 20, 10, 255, 30, 20, 10, 255]);
     }
 }

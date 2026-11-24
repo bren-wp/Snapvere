@@ -131,9 +131,7 @@ fn open_bounded_source(source: &Path, max: u64) -> Result<(File, u64), String> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        if before.dev() != metadata.dev()
-            || before.ino() != metadata.ino()
-            || metadata.nlink() != 1
+        if before.dev() != metadata.dev() || before.ino() != metadata.ino() || metadata.nlink() != 1
         {
             return Err("Source changed or has multiple hard links".into());
         }
@@ -144,9 +142,49 @@ fn open_bounded_source(source: &Path, max: u64) -> Result<(File, u64), String> {
     Ok((reader, metadata.len()))
 }
 
-// Stage on the same filesystem, sync the completed file, then publish without
-// replacing any existing name. A crash can leave a .partial staging file,
-// but no incomplete image or video is published at its final name.
+// Linux stages in an anonymous inode, not a pathname another process could
+// replace between writing and publishing. Link the exact opened inode after
+// sync, without replacing any existing destination.
+#[cfg(target_os = "linux")]
+fn publish_exclusively(
+    destination: &Path,
+    write: impl FnOnce(&mut File) -> Result<(), String>,
+) -> Result<(), String> {
+    use rustix::fs::{linkat, openat, AtFlags, Mode, OFlags, CWD};
+    use std::os::fd::AsRawFd;
+
+    let parent = destination.parent().ok_or("Missing export directory")?;
+    let name = destination.file_name().ok_or("Missing export filename")?;
+    let directory = File::open(parent).map_err(estr)?;
+    let flags = OFlags::TMPFILE | OFlags::RDWR | OFlags::CLOEXEC;
+    let mut staged = File::from(
+        openat(&directory, ".", flags, Mode::RUSR | Mode::WUSR)
+            .map_err(|error| format!("Destination does not support secure staging: {error}"))?,
+    );
+    write(&mut staged)?;
+    staged.sync_all().map_err(estr)?;
+    let descriptor = format!("/proc/self/fd/{}", staged.as_raw_fd());
+    linkat(
+        CWD,
+        descriptor.as_str(),
+        &directory,
+        name,
+        AtFlags::SYMLINK_FOLLOW,
+    )
+    .map_err(estr)?;
+    // Publication succeeded; do not report a failed copy and induce a duplicate
+    // retry just because this filesystem does not support directory fsync.
+    if let Err(error) = directory.sync_all() {
+        log(&format!(
+            "Export published; directory sync unavailable: {error}"
+        ));
+    }
+    Ok(())
+}
+
+// Windows uses same-filesystem staging and no-clobber publication. The named
+// staging entry is still subject to same-user manipulation; audit separately.
+#[cfg(not(target_os = "linux"))]
 fn publish_exclusively(
     destination: &Path,
     write: impl FnOnce(&mut File) -> Result<(), String>,
@@ -159,12 +197,9 @@ fn publish_exclusively(
         .map_err(estr)?;
     write(staged.as_file_mut())?;
     staged.as_file().sync_all().map_err(estr)?;
-    staged.persist_noclobber(destination).map_err(|error| estr(error.error))?;
-    // Directory metadata durability is separate from content durability.
-    #[cfg(target_os = "linux")]
-    if let Err(error) = File::open(parent).and_then(|directory| directory.sync_all()) {
-        log(&format!("Export published; directory sync unavailable: {error}"));
-    }
+    staged
+        .persist_noclobber(destination)
+        .map_err(|error| estr(error.error))?;
     Ok(())
 }
 
@@ -546,6 +581,22 @@ mod tests {
         fs::hard_link(&source, &linked).expect("hard link");
         assert!(open_bounded_source(&linked, MAX_FILE_BYTES).is_err());
         assert!(open_bounded_source(&source, MAX_FILE_BYTES).is_err());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn staged_inode_has_no_name_and_collision_never_replaces_user_data() {
+        let dir = tempfile::tempdir().expect("fixture");
+        let target = dir.path().join("capture.png");
+        let result = publish_exclusively(&target, |file| {
+            assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
+            file.write_all(b"private capture").map_err(estr)?;
+            // Simulate a competing creator during export.
+            fs::write(&target, b"existing user data").map_err(estr)
+        });
+        assert!(result.is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"existing user data");
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
     }
 
     #[cfg(target_os = "linux")]
