@@ -439,6 +439,11 @@ jobs:
           export SNAPVERE_ANNOTATED_GIF="$RUNNER_TEMP/annotated.gif"
           cargo test --locked --features linux-native-media annotated_gif_and_mp4_encoder_fixtures
           python ../../../tools/native/verify_annotation_frames.py "$SNAPVERE_ANNOTATED_MP4" "$SNAPVERE_ANNOTATED_GIF"
+          export SNAPVERE_TIMING_MP4="$RUNNER_TEMP/timing.mp4"
+          export SNAPVERE_TIMING_GIF="$RUNNER_TEMP/timing.gif"
+          export SNAPVERE_TIMING_MANIFEST="$RUNNER_TEMP/preview-timing.csv"
+          cargo test --locked --features linux-native-media preview_timing_encoder_fixtures
+          python ../../../tools/native/verify_preview_timing.py "$SNAPVERE_TIMING_MANIFEST" "$SNAPVERE_TIMING_MP4" "$SNAPVERE_TIMING_GIF"
           cargo clippy --all-targets --locked --features linux-native-media -- -D warnings
           test "$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 "$SNAPVERE_TEST_MP4_PATH")" = h264
           test "$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$SNAPVERE_TEST_MP4_PATH")" = "64,48"

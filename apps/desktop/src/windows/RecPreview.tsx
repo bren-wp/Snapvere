@@ -1,5 +1,5 @@
 // Snapvere by Brendigo
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { EyeOff, Play, Square, Undo2, Redo2 } from "lucide-react";
 import { ipc, type CropPreview, type PreviewMark } from "../lib/ipc";
@@ -15,7 +15,8 @@ export default function RecPreview() {
   const [redo, setRedo] = useState<PreviewMark[]>([]);
   const [historyDelta, setHistoryDelta] = useState(0);
   const [textValue, setTextValue] = useState("");
-  const [image, setImage] = useState("");
+  const pixelsRef = useRef<Uint8ClampedArray<ArrayBuffer> | null>(null);
+  const bitmapRef = useRef<HTMLCanvasElement>(null);
   const [color, setColor] = useState("#09bfd9");
   const [width, setWidth] = useState(2);
   const [opacity, setOpacity] = useState(100);
@@ -32,7 +33,7 @@ export default function RecPreview() {
   const load = useCallback(async () => {
     const id = ++epoch.current;
     setPreview(null);
-    setImage("");
+    pixelsRef.current = null;
     setMarks([]);
     setRedo([]);
     setHistoryDelta(0);
@@ -43,20 +44,28 @@ export default function RecPreview() {
       const result = await ipc.getCropPreview();
       const packet = await ipc.getCropPreviewPacket(result.session, 0);
       const pixels = decodePreviewPacket(packet, result);
-      const bitmap = document.createElement("canvas");
-      bitmap.width = result.width;
-      bitmap.height = result.height;
-      const context = bitmap.getContext("2d");
-      if (!context) throw new Error("Preview canvas unavailable");
-      context.putImageData(new ImageData(pixels, result.width, result.height), 0, 0);
       if (id === epoch.current) {
-        setImage(bitmap.toDataURL("image/png"));
+        pixelsRef.current = pixels;
         setPreview(result);
       }
     } catch {
       if (id === epoch.current) setError(true);
     }
   }, []);
+
+  // Draw raw RGBA once into the actual canvas. Avoid PNG compression,
+  // base64 encoding and a second browser image decode for every sample.
+  useLayoutEffect(() => {
+    const bitmap = bitmapRef.current;
+    const pixels = pixelsRef.current;
+    if (!preview || !bitmap || !pixels) return;
+    const context = bitmap.getContext("2d");
+    if (!context) {
+      setError(true);
+      return;
+    }
+    context.putImageData(new ImageData(pixels, preview.width, preview.height), 0, 0);
+  }, [preview]);
 
   useEffect(() => {
     void load();
@@ -66,7 +75,7 @@ export default function RecPreview() {
         if ((event.payload as { phase?: string })?.phase !== "paused") {
           ++epoch.current;
           setPreview(null);
-          setImage("");
+          pixelsRef.current = null;
           setMarks([]);
           setDraft(null);
           anchor.current = null;
@@ -75,7 +84,7 @@ export default function RecPreview() {
       listen("snapvere:rec-done", () => {
         ++epoch.current;
         setPreview(null);
-        setImage("");
+        pixelsRef.current = null;
         setMarks([]);
         setDraft(null);
       }),
@@ -265,7 +274,9 @@ export default function RecPreview() {
             }}
             onPointerCancel={() => { anchor.current = null; setDraft(null); }}>
             <defs><marker id="preview-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0L6 3L0 6z" fill="context-stroke" /></marker></defs>
-            <image href={image} width={preview.width} height={preview.height} />
+            <foreignObject x={0} y={0} width={preview.width} height={preview.height} pointerEvents="none">
+              <canvas ref={bitmapRef} width={preview.width} height={preview.height} className="block h-full w-full" />
+            </foreignObject>
             {[...marks, ...(draft ? [draft] : [])].sort((a, b) => Number(a.kind === "mask") - Number(b.kind === "mask")).map((mark, i) => (
               <g key={i} opacity={mark.kind === "mask" ? 1 : (mark.style?.opacity ?? 255) / 255} color={mark.style ? `rgb(${mark.style.rgb.join(",")})` : "#09BFD9"}>
                 {mark.kind === "ellipse" ? <ellipse cx={mark.rect.x + mark.rect.width / 2} cy={mark.rect.y + mark.rect.height / 2} rx={mark.rect.width / 2} ry={mark.rect.height / 2} fill="none" stroke="currentColor" strokeWidth={mark.style?.width ?? 2} />

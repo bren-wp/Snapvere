@@ -143,3 +143,9 @@ Frontend screenshots are not native WebView2 or WebKitGTK verification. Existing
 - Extract strict binary packet validation into a shared frontend helper; reject unsafe numeric metadata, excess dimensions, mismatched identity and truncated frames before constructing ImageData. Add Node regression tests and localize opacity in existing feedback dictionaries. Live display remains disabled during Wayland recording.
 
 - Register the new packet tests in the explicit frontend unit-test command; keep the decoded typed-array backing type as ArrayBuffer for the DOM ImageData contract.
+
+### Preview timing and exact pause boundary
+
+- Measure monotonic capture-work-start to preview sample and encoder-acceptance to sample; expose sample age separately. These are CPU/encoder-submission measurements, not screen-to-photon latency or encoded output presentation latency. Force the most recent accepted frame into the paused preview even if sampling was throttled. Keep the frame ID, input PTS and annotation revision associated with that frame; no new capture is made while paused.
+- Paint validated binary RGBA directly into a canvas in the crop-local SVG rather than round-tripping via PNG/base64. No pixel broadcast, unrestricted live IPC, or visible live Wayland window while capture is running. Native compositor exclusion and real display latency remain unverified.
+- Add actual recorder GIF/H.264 timing fixtures with 12 uniquely marked source frames. Compare the marker encoded in each preview packet against each decoded frame, verify mask interior, count/order, and relative presentation timestamp within 10 ms at 10 FPS; print measured fixture processing latency and initial PTS separately. This is a synthetic content test (not a real compositor, audio or arbitrary variable-rate timing test). Correct latest reported Rust formatting diagnostics. CI pending.

@@ -38,6 +38,9 @@ export type CropPreview = {
   frameId: number;
   timestamp100ns: number;
   revision: number;
+  captureToSampleUs: number;
+  encoderToSampleUs: number;
+  sampleAgeUs: number;
 };
 
 export const ipc = {

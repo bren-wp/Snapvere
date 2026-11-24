@@ -133,6 +133,7 @@ pub(super) fn run(
     let mut next_due = Instant::now();
     let mut last_tick = Instant::now();
     let mut last_preview: Option<Instant> = None;
+    let mut last_accepted: Option<preview::FrameStamp> = None;
     let mut last_time_100ns = -1i64;
 
     let mut frame_buf = allocate_bgra(ow, oh)?;
@@ -185,7 +186,20 @@ pub(super) fn run(
             }
             if !ctl.pause_ack.load(Ordering::Acquire) {
                 if let Some(preview) = &ctl.preview {
-                    crate::state::lock(preview).begin_pause();
+                    let mut preview = crate::state::lock(preview);
+                    // The worker still owns the most recent accepted frame.
+                    // Freeze that exact frame, not a throttled older sample.
+                    if let Some(stamp) = last_accepted {
+                        if preview.snapshot().is_ok_and(|s| s.frame_id < stamp.id)
+                            || !preview.ready()
+                        {
+                            if let Err(error) = preview.remember(&frame_buf, stamp) {
+                                recording_error = Some(error);
+                                break;
+                            }
+                        }
+                    }
+                    preview.begin_pause();
                 }
                 ctl.pause_ack.store(true, Ordering::Release);
                 if ctl.preview.is_some() {
@@ -301,10 +315,15 @@ pub(super) fn run(
         }
 
         if let Some(preview) = &ctl.preview {
+            let stamp = preview::FrameStamp {
+                id: ctl.frames.load(Ordering::Relaxed) + 1,
+                timestamp_100ns: time_100ns as u64,
+                capture_started: work_started,
+                encoder_accepted: Instant::now(),
+            };
+            last_accepted = Some(stamp);
             if last_preview.is_none_or(|last| last.elapsed() >= Duration::from_millis(100)) {
-                let id = ctl.frames.load(Ordering::Relaxed) + 1;
-                let timestamp = time_100ns as u64;
-                if let Err(error) = crate::state::lock(preview).remember(&frame_buf, id, timestamp) {
+                if let Err(error) = crate::state::lock(preview).remember(&frame_buf, stamp) {
                     recording_error = Some(error);
                     break;
                 }

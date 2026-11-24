@@ -3,6 +3,7 @@
 use crate::models::PixelRect;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::time::Instant;
 
 const MAX_MARKS: usize = 32;
 const MAX_POINTS: usize = 128;
@@ -83,6 +84,28 @@ pub struct Snapshot {
     pub frame_id: u64,
     pub timestamp_100ns: u64,
     pub revision: u64,
+    pub capture_to_sample_us: u64,
+    pub encoder_to_sample_us: u64,
+    pub sample_age_us: u64,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct FrameStamp {
+    pub id: u64,
+    pub timestamp_100ns: u64,
+    pub capture_started: Instant,
+    pub encoder_accepted: Instant,
+}
+
+#[derive(Clone, Copy)]
+struct SampleTiming {
+    sampled_at: Instant,
+    capture_to_sample_us: u64,
+    encoder_to_sample_us: u64,
+}
+
+fn micros(duration: std::time::Duration) -> u64 {
+    u64::try_from(duration.as_micros()).unwrap_or(u64::MAX)
 }
 
 pub(super) struct Preview {
@@ -96,6 +119,7 @@ pub(super) struct Preview {
     timestamp_100ns: u64,
     revision: u64,
     frame_revision: u64,
+    timing: Option<SampleTiming>,
 }
 
 struct Raster {
@@ -194,6 +218,7 @@ impl Preview {
             timestamp_100ns: 0,
             revision: 0,
             frame_revision: 0,
+            timing: None,
         }
     }
 
@@ -209,9 +234,7 @@ impl Preview {
     }
 
     pub(super) fn snapshot(&self) -> Result<Snapshot, String> {
-        if self.frame.is_none() {
-            return Err("Recording has no preview frame".into());
-        }
+        let timing = self.timing.ok_or("Recording has no preview frame")?;
         Ok(Snapshot {
             session: self.session.clone(),
             width: self.small.0,
@@ -227,6 +250,9 @@ impl Preview {
             frame_id: self.frame_id,
             timestamp_100ns: self.timestamp_100ns,
             revision: self.frame_revision,
+            capture_to_sample_us: timing.capture_to_sample_us,
+            encoder_to_sample_us: timing.encoder_to_sample_us,
+            sample_age_us: micros(timing.sampled_at.elapsed()),
         })
     }
 
@@ -496,14 +522,11 @@ impl Preview {
         Ok(())
     }
 
-    pub(super) fn remember(
-        &mut self,
-        bgra: &[u8],
-        frame_id: u64,
-        timestamp_100ns: u64,
-    ) -> Result<(), String> {
-        if frame_id <= self.frame_id
-            || (self.frame_id != 0 && timestamp_100ns <= self.timestamp_100ns)
+    pub(super) fn remember(&mut self, bgra: &[u8], stamp: FrameStamp) -> Result<(), String> {
+        if stamp.id <= self.frame_id
+            || (self.frame_id != 0 && stamp.timestamp_100ns <= self.timestamp_100ns)
+            || stamp.encoder_accepted < stamp.capture_started
+            || stamp.encoder_accepted > Instant::now()
         {
             return Err("Non-monotonic recording preview frame".into());
         }
@@ -522,9 +545,15 @@ impl Preview {
                 rgba.put_pixel(x, y, image::Rgba([bgra[p + 2], bgra[p + 1], bgra[p], 255]));
             }
         }
-        self.frame_id = frame_id;
-        self.timestamp_100ns = timestamp_100ns;
+        let sampled_at = Instant::now();
+        self.frame_id = stamp.id;
+        self.timestamp_100ns = stamp.timestamp_100ns;
         self.frame_revision = self.revision;
+        self.timing = Some(SampleTiming {
+            sampled_at,
+            capture_to_sample_us: micros(sampled_at.duration_since(stamp.capture_started)),
+            encoder_to_sample_us: micros(sampled_at.duration_since(stamp.encoder_accepted)),
+        });
         Ok(())
     }
 }
@@ -532,6 +561,16 @@ impl Preview {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn stamp(id: u64, timestamp_100ns: u64) -> FrameStamp {
+        let now = Instant::now();
+        FrameStamp {
+            id,
+            timestamp_100ns,
+            capture_started: now,
+            encoder_accepted: now,
+        }
+    }
 
     fn mark(kind: MarkKind, x: u32, y: u32, w: u32, h: u32) -> Mark {
         Mark {
@@ -612,7 +651,7 @@ mod tests {
         let plan = preview.plan(&[], 8).unwrap();
         preview.apply(plan);
         assert_eq!(preview.history.layers.len(), 9);
-        preview.remember(&frame, 1, 0).unwrap();
+        preview.remember(&frame, stamp(1, 0)).unwrap();
         assert_eq!(
             preview.frame.as_ref().unwrap().get_pixel(64, 48).0,
             [0, 0, 0, 255]
@@ -645,10 +684,10 @@ mod tests {
         preview.apply(plan);
         let mut frame = vec![255; 32 * 32 * 4];
         preview.compose(&mut frame).unwrap();
-        preview.remember(&frame, 2, 100).unwrap();
-        preview.remember(&frame, 5, 400).unwrap();
-        assert!(preview.remember(&frame, 4, 500).is_err());
-        assert!(preview.remember(&frame, 6, 400).is_err());
+        preview.remember(&frame, stamp(2, 100)).unwrap();
+        preview.remember(&frame, stamp(5, 400)).unwrap();
+        assert!(preview.remember(&frame, stamp(4, 500)).is_err());
+        assert!(preview.remember(&frame, stamp(6, 400)).is_err());
         let packet = preview.packet(2).unwrap();
         assert_eq!(packet.len(), 32 + frame.len());
         assert_eq!(&packet[8..16], &5_u64.to_le_bytes());
@@ -657,6 +696,99 @@ mod tests {
         let center = 32 + (10 * 32 + 10) * 4;
         assert_eq!(&packet[center..center + 4], &[0, 0, 0, 255]);
         assert!(preview.packet(5).unwrap().is_empty());
+        let snapshot = preview.snapshot().unwrap();
+        assert!(snapshot.capture_to_sample_us >= snapshot.encoder_to_sample_us);
+    }
+
+    // Distinct source-frame markers survive lossy H.264 and GIF palettes.
+    // Match the actual packet bytes to decoded frame identity and media PTS.
+    #[test]
+    fn preview_timing_encoder_fixtures() {
+        use super::super::gifenc::GifEncoder;
+
+        let mut preview = Preview::new(128, 96);
+        let plan = preview
+            .plan(&[mark(MarkKind::Mask, 32, 24, 64, 48)], 0)
+            .unwrap();
+        preview.apply(plan);
+        let dir = tempfile::tempdir().unwrap();
+        let gif = dir.path().join("timing.gif");
+        let mut encoder = GifEncoder::new(&gif, 128, 96, 10, 100).unwrap();
+        #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+        let mp4 = dir.path().join("timing.mp4");
+        #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+        let mut video =
+            super::super::linux_mp4::LinuxMp4::new(&mp4, 128, 96, 10, 90, false).unwrap();
+        let mut manifest = String::from(
+            "frame_id,pts_100ns,revision,marker,capture_to_sample_us,encoder_to_sample_us\n",
+        );
+        let mut after = 0;
+        for id in 1_u64..=12 {
+            let started = Instant::now();
+            let mut frame = vec![255; 128 * 96 * 4];
+            for bit in 0..4 {
+                let value = if id & (1 << bit) == 0 { 0 } else { 255 };
+                for y in 4..20 {
+                    for x in 8 + bit * 24..24 + bit * 24 {
+                        let p = (y * 128 + x) * 4;
+                        frame[p..p + 4].copy_from_slice(&[value, value, value, 255]);
+                    }
+                }
+            }
+            preview.compose(&mut frame).unwrap();
+            let pts = (id - 1) * 1_000_000;
+            encoder.write(&frame).unwrap();
+            #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+            video.write(&frame, pts as i64, 1_000_000).unwrap();
+            preview
+                .remember(
+                    &frame,
+                    FrameStamp {
+                        id,
+                        timestamp_100ns: pts,
+                        capture_started: started,
+                        encoder_accepted: Instant::now(),
+                    },
+                )
+                .unwrap();
+            let packet = preview.packet(after).unwrap();
+            let snapshot = preview.snapshot().unwrap();
+            assert_eq!(packet.len(), 32 + frame.len());
+            let mut marker = 0;
+            for bit in 0..4 {
+                let p = 32 + (12 * 128 + 16 + bit * 24) * 4;
+                if packet[p] > 128 {
+                    marker |= 1 << bit;
+                }
+            }
+            assert_eq!(marker, id);
+            assert_eq!(&packet[8..16], &id.to_le_bytes());
+            assert_eq!(&packet[16..24], &pts.to_le_bytes());
+            assert_eq!(&packet[24..32], &snapshot.revision.to_le_bytes());
+            assert!(preview.packet(id).unwrap().is_empty());
+            assert!(snapshot.capture_to_sample_us >= snapshot.encoder_to_sample_us);
+            manifest.push_str(&format!(
+                "{id},{pts},{},{marker},{},{}\n",
+                snapshot.revision, snapshot.capture_to_sample_us, snapshot.encoder_to_sample_us
+            ));
+            after = id;
+        }
+        encoder.finish().unwrap();
+        drop(encoder);
+        if let Some(path) = std::env::var_os("SNAPVERE_TIMING_GIF") {
+            std::fs::copy(&gif, path).unwrap();
+        }
+        #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+        {
+            video.finish().unwrap();
+            drop(video);
+            if let Some(path) = std::env::var_os("SNAPVERE_TIMING_MP4") {
+                std::fs::copy(&mp4, path).unwrap();
+            }
+        }
+        if let Some(path) = std::env::var_os("SNAPVERE_TIMING_MANIFEST") {
+            std::fs::write(path, manifest).unwrap();
+        }
     }
 
     #[test]

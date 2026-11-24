@@ -2,6 +2,8 @@
 
 ## v0.2.32 — Release integrity (development)
 
+- Measure preview sample latency, freeze the exact last accepted frame at pause, render binary RGBA directly and verify codec frame identity and timing against preview packets.
+
 - Add bounded timestamped latest-frame binary preview transport and configurable annotation color, width and opacity with enforced opaque masks.
 
 - Expand crop-local annotations with bounded cached raster spans, transactional drawing-only undo/redo, protected committed masks and real encoder/decode fixtures.

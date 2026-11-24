@@ -1671,7 +1671,9 @@ pub fn get_crop_preview_packet(
     after: u64,
 ) -> Result<Response, String> {
     require_window_label(window.label(), &["recpreview"])?;
-    Ok(Response::new(record::crop_preview_packet(&app, &session, after)?))
+    Ok(Response::new(record::crop_preview_packet(
+        &app, &session, after,
+    )?))
 }
 
 #[tauri::command]
