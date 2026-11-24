@@ -59,10 +59,14 @@ pub(crate) fn validate_layout(
         (x, y, x + i64::from(m.width), y + i64::from(m.height))
     };
     let (left, top, right, bottom) = bounds(m);
-    if monitors.iter().filter(|other| other.id != m.id).any(|other| {
-        let (x, y, r, b) = bounds(other);
-        left < r && x < right && top < b && y < bottom
-    }) {
+    if monitors
+        .iter()
+        .filter(|other| other.id != m.id)
+        .any(|other| {
+            let (x, y, r, b) = bounds(other);
+            left < r && x < right && top < b && y < bottom
+        })
+    {
         return Err("Overlapping or mirrored Wayland monitors cannot be matched safely".into());
     }
     if let Some(region) = target.region {
@@ -82,7 +86,25 @@ pub(crate) fn validate_layout(
 
 fn validate_current_layout(target: &RecordTarget) -> Result<(), String> {
     let monitors = crate::capture::list_monitors().map_err(|error| error.to_string())?;
-    validate_layout(target, &monitors)
+    validate_layout(target, &monitors)?;
+    let outputs = super::wayland_outputs::snapshot()?;
+    let output = super::wayland_outputs::select(
+        &outputs,
+        target.monitor_x,
+        target.monitor_y,
+        target.monitor_w,
+        target.monitor_h,
+    )?;
+    if output.physical != (target.monitor_w, target.monitor_h) {
+        return Err("Wayland stream requires a verified physical pixel mapping".into());
+    }
+    if let Some(region) = target.region {
+        let mapped = output.inward_crop(region.x, region.y, region.width, region.height)?;
+        if mapped != (region.x as u32, region.y as u32, region.width, region.height) {
+            return Err("Wayland recording region does not map to physical pixels".into());
+        }
+    }
+    Ok(())
 }
 
 pub(super) struct PortalSource {
@@ -247,10 +269,22 @@ mod tests {
         let original = t.region.unwrap();
         for region in [
             Region { x: -1, ..original },
-            Region { monitor_id: 1, ..original },
-            Region { width: u32::MAX, ..original },
-            Region { y: i32::MAX, ..original },
-            Region { width: 0, ..original },
+            Region {
+                monitor_id: 1,
+                ..original
+            },
+            Region {
+                width: u32::MAX,
+                ..original
+            },
+            Region {
+                y: i32::MAX,
+                ..original
+            },
+            Region {
+                width: 0,
+                ..original
+            },
         ] {
             t.region = Some(region);
             assert!(validate_layout(&t, &monitors).is_err());

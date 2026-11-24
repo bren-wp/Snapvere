@@ -4249,6 +4249,8 @@ dependencies = [
  "tauri-plugin-store",
  "tempfile",
  "uuid",
+ "wayland-client",
+ "wayland-protocols",
  "webp",
  "windows",
  "xcap",

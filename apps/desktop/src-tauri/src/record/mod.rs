@@ -28,6 +28,8 @@ mod pixels;
 mod transport;
 #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
 pub(crate) mod wayland;
+#[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+mod wayland_outputs;
 mod worker;
 
 pub use pixels::crop_rect;
