@@ -48,9 +48,8 @@ pub(crate) fn devices() -> Result<LinuxAudioSnapshot, String> {
     let mut nodes = [empty; MAX_DEVICES];
     let mut cookie = 0;
     // SAFETY: the native registry writes at most MAX_DEVICES fixed-layout nodes.
-    let count = unsafe {
-        snapvere_audio_list(nodes.as_mut_ptr(), MAX_DEVICES as u32, &mut cookie)
-    };
+    let count =
+        unsafe { snapvere_audio_list(nodes.as_mut_ptr(), MAX_DEVICES as u32, &mut cookie) };
     let count = usize::try_from(count).map_err(|_| "Could not enumerate PipeWire devices")?;
     if count > MAX_DEVICES || cookie == 0 {
         return Err("Invalid PipeWire device snapshot".into());
@@ -76,17 +75,30 @@ pub(crate) fn devices() -> Result<LinuxAudioSnapshot, String> {
     }
     let selected = *crate::state::lock(&SELECTED);
     let selected = selected.filter(|value| value.cookie == cookie);
+    let mic = selected.filter(|v| v.mic != 0).map(|v| v.mic.to_string());
+    let monitor = selected
+        .filter(|v| v.monitor != 0)
+        .map(|v| v.monitor.to_string());
+    let available = |serial: &str, role: &str| {
+        devices
+            .iter()
+            .any(|device| device.serial == serial && device.role == role)
+    };
+    let microphone = mic.filter(|serial| available(serial, "microphone"));
+    let monitor = monitor.filter(|serial| available(serial, "monitor"));
     Ok(LinuxAudioSnapshot {
         cookie,
         devices,
-        microphone: selected.filter(|v| v.mic != 0).map(|v| v.mic.to_string()),
-        monitor: selected
-            .filter(|v| v.monitor != 0)
-            .map(|v| v.monitor.to_string()),
+        microphone,
+        monitor,
     })
 }
 
-pub(crate) fn select(cookie: u32, mic: Option<String>, monitor: Option<String>) -> Result<(), String> {
+pub(crate) fn select(
+    cookie: u32,
+    mic: Option<String>,
+    monitor: Option<String>,
+) -> Result<(), String> {
     let parse = |value: Option<String>| -> Result<u64, String> {
         match value {
             None => Ok(0),

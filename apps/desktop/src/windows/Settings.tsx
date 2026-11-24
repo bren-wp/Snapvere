@@ -138,8 +138,8 @@ export default function Settings() {
   }
 
   useEffect(() => {
-    if (tab === "recording" && platform?.os === "linux") void refreshAudioDevices();
-  }, [tab, platform?.os]);
+    if (tab === "recording" && platform?.linuxAudioPicker) void refreshAudioDevices();
+  }, [tab, platform?.linuxAudioPicker]);
 
   async function saveAudioDevices() {
     if (!audioDevices || audioBusy) return;
@@ -506,7 +506,7 @@ export default function Settings() {
                 onChange={(v) => set("recordSystemAudio", v)}
               />
             </Row>
-            {audioDevices && (
+            {platform?.linuxAudioPicker && audioDevices && (
               <>
                 <Row label={t("Record microphone")}>
                   <select aria-label={t("Record microphone")} disabled={audioBusy}

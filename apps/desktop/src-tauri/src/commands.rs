@@ -69,6 +69,7 @@ pub struct PlatformCapabilities {
     microphone: bool,
     system_audio: bool,
     cursor_in_recordings: bool,
+    linux_audio_picker: bool,
 }
 
 /// Native platform contract; a shared React UI must not promise unsupported
@@ -86,6 +87,7 @@ fn platform_capabilities() -> PlatformCapabilities {
         microphone: cfg!(windows),
         system_audio: cfg!(windows),
         cursor_in_recordings: cfg!(windows),
+        linux_audio_picker: cfg!(all(target_os = "linux", feature = "linux-native-media")),
     }
 }
 
@@ -145,6 +147,10 @@ fn native_capabilities_never_advertise_missing_linux_features() {
     assert_eq!(capabilities.microphone, cfg!(windows));
     assert_eq!(capabilities.system_audio, cfg!(windows));
     assert_eq!(capabilities.cursor_in_recordings, cfg!(windows));
+    assert_eq!(
+        capabilities.linux_audio_picker,
+        cfg!(all(target_os = "linux", feature = "linux-native-media"))
+    );
 }
 
 // No arbitrary store keys or language identifiers may be supplied by a WebView.
