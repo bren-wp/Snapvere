@@ -2,6 +2,8 @@
 
 ## v0.2.32 — Release integrity (development)
 
+- Add isolated real Wayland portal inclusion test and session-bound browser render receipts for paused preview latency; retain live window safety gate.
+
 - Measure preview sample latency, freeze the exact last accepted frame at pause, render binary RGBA directly and verify codec frame identity and timing against preview packets.
 
 - Add bounded timestamped latest-frame binary preview transport and configurable annotation color, width and opacity with enforced opaque masks.

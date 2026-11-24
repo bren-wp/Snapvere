@@ -1677,6 +1677,17 @@ pub fn get_crop_preview_packet(
 }
 
 #[tauri::command]
+pub fn acknowledge_crop_preview(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    session: String,
+    frame_id: u64,
+) -> Result<u64, String> {
+    require_window_label(window.label(), &["recpreview"])?;
+    record::acknowledge_crop_preview(&app, &session, frame_id)
+}
+
+#[tauri::command]
 pub fn resume_crop_preview(
     window: tauri::WebviewWindow,
     app: AppHandle,

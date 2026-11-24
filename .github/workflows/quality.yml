@@ -358,6 +358,27 @@ jobs:
       - name: Verify real PCM from explicitly selected source and sink monitor
         run: bash tools/native/test_pipewire_audio.sh
 
+  wayland-portal:
+    name: Native Wayland portal window inclusion (isolated wlroots)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install isolated compositor and portal prerequisites
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential pkg-config libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-pipewire gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            sway swaybg grim python3-gi python3-pil gir1.2-gtk-3.0 \
+            pipewire wireplumber dbus-daemon xdg-desktop-portal xdg-desktop-portal-wlr
+      - name: Verify actual authorized video before and after moving a native window
+        run: bash tools/native/test_wayland_portal.sh
+
   linux:
     name: Linux x86_64 native tests and preview packages
     runs-on: ubuntu-24.04

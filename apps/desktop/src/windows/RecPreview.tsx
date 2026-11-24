@@ -65,6 +65,21 @@ export default function RecPreview() {
       return;
     }
     context.putImageData(new ImageData(pixels, preview.width, preview.height), 0, 0);
+    // A second rAF crosses a browser rendering opportunity. It is not a
+    // compositor presentation timestamp; the native receipt includes IPC.
+    const id = epoch.current;
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => {
+        if (id === epoch.current && document.visibilityState === "visible") {
+          void ipc.acknowledgeCropPreview(preview.session, preview.frameId).catch(() => undefined);
+        }
+      });
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
   }, [preview]);
 
   useEffect(() => {

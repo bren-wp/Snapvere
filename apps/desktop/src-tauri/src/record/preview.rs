@@ -120,6 +120,7 @@ pub(super) struct Preview {
     revision: u64,
     frame_revision: u64,
     timing: Option<SampleTiming>,
+    acknowledged: bool,
 }
 
 struct Raster {
@@ -219,11 +220,13 @@ impl Preview {
             revision: 0,
             frame_revision: 0,
             timing: None,
+            acknowledged: false,
         }
     }
 
     pub(super) fn begin_pause(&mut self) {
         self.session = uuid::Uuid::new_v4().to_string();
+        self.acknowledged = false;
     }
 
     pub(super) fn check_session(&self, session: &str) -> Result<(), String> {
@@ -274,6 +277,22 @@ impl Preview {
         packet.extend_from_slice(&self.frame_revision.to_le_bytes());
         packet.extend_from_slice(frame.as_raw());
         Ok(packet)
+    }
+
+    /// A browser acknowledgement after a rendering opportunity gives an
+    /// upper bound through the return IPC, not a physical display timestamp.
+    /// At most one receipt per pause token, with no renderer-supplied clock.
+    pub(super) fn acknowledge(&mut self, session: &str, frame_id: u64) -> Result<u64, String> {
+        self.check_session(session)?;
+        if self.acknowledged || self.frame_id != frame_id {
+            return Err("Stale or repeated preview acknowledgement".into());
+        }
+        let timing = self.timing.ok_or("Recording has no preview frame")?;
+        let total = timing
+            .capture_to_sample_us
+            .saturating_add(micros(timing.sampled_at.elapsed()));
+        self.acknowledged = true;
+        Ok(total)
     }
 
     pub(super) fn needs_sample(&self, frame_id: u64) -> bool {
@@ -553,6 +572,7 @@ impl Preview {
         self.frame_id = stamp.id;
         self.timestamp_100ns = stamp.timestamp_100ns;
         self.frame_revision = self.revision;
+        self.acknowledged = false;
         self.timing = Some(SampleTiming {
             sampled_at,
             capture_to_sample_us: micros(sampled_at.duration_since(stamp.capture_started)),
@@ -704,6 +724,23 @@ mod tests {
         assert!(preview.packet(5).unwrap().is_empty());
         let snapshot = preview.snapshot().unwrap();
         assert!(snapshot.capture_to_sample_us >= snapshot.encoder_to_sample_us);
+    }
+
+    #[test]
+    fn preview_acknowledgement_is_bound_to_frame_and_pause() {
+        let mut preview = Preview::new(16, 16);
+        let frame = vec![255; 16 * 16 * 4];
+        preview.remember(&frame, stamp(1, 0)).unwrap();
+        let snapshot = preview.snapshot().unwrap();
+        assert!(preview.acknowledge("stale", 1).is_err());
+        assert!(preview.acknowledge(&snapshot.session, 2).is_err());
+        let elapsed = preview.acknowledge(&snapshot.session, 1).unwrap();
+        assert!(elapsed >= snapshot.capture_to_sample_us);
+        assert!(preview.acknowledge(&snapshot.session, 1).is_err());
+        preview.begin_pause();
+        assert!(preview.acknowledge(&snapshot.session, 1).is_err());
+        let current = preview.snapshot().unwrap();
+        assert!(preview.acknowledge(&current.session, 1).is_ok());
     }
 
     #[test]

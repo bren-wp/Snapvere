@@ -154,6 +154,7 @@ pub fn run() {
             commands::rec_frame_rect,
             commands::get_crop_preview,
             commands::get_crop_preview_packet,
+            commands::acknowledge_crop_preview,
             commands::resume_crop_preview,
             commands::list_screenshots,
             commands::search_screenshots,

@@ -102,6 +102,8 @@ export const ipc = {
   getCropPreview: () => invoke<CropPreview>("get_crop_preview"),
   getCropPreviewPacket: (session: string, after: number) =>
     invoke<ArrayBuffer>("get_crop_preview_packet", { session, after }),
+  acknowledgeCropPreview: (session: string, frameId: number) =>
+    invoke<number>("acknowledge_crop_preview", { session, frameId }),
   resumeCropPreview: (session: string, marks: PreviewMark[], historyDelta: number) =>
     invoke<RecordStatus>("resume_crop_preview", { session, marks, historyDelta }),
   closeRecHud: () => invoke<void>("close_rec_hud"),
