@@ -18,8 +18,7 @@ pub(super) enum Source {
     Xcap {
         monitor: xcap::Monitor,
         buf: Vec<u8>,
-        w: u32,
-        h: u32,
+        target: RecordTarget,
     },
 }
 
@@ -38,12 +37,12 @@ impl Source {
             .into_iter()
             .find(|m| m.id().map(|id| id == target.monitor_id).unwrap_or(false))
             .ok_or("monitor za snimanje nije pronađen")?;
+        verify_monitor(&monitor, target)?;
         let buf = allocate_bgra(target.monitor_w, target.monitor_h)?;
         Ok(Source::Xcap {
             monitor,
             buf,
-            w: target.monitor_w,
-            h: target.monitor_h,
+            target: *target,
         })
     }
 
@@ -53,14 +52,20 @@ impl Source {
         match self {
             #[cfg(windows)]
             Source::Dxgi(g) => g.grab(timeout_ms),
-            Source::Xcap { monitor, buf, w, h } => {
+            Source::Xcap {
+                monitor,
+                buf,
+                target,
+            } => {
+                verify_monitor(monitor, target)?;
                 let img = monitor
                     .capture_image()
                     .map_err(|e| format!("xcap capture: {e}"))?;
                 // A changed monitor geometry invalidates crop and redaction
                 // coordinates. Stop rather than encode pixels from a different
                 // region or silently pad a partial frame.
-                rgba_to_bgra_frame(&img, *w, *h, buf)?;
+                verify_monitor(monitor, target)?;
+                rgba_to_bgra_frame(&img, target.monitor_w, target.monitor_h, buf)?;
                 Ok(buf)
             }
         }
@@ -70,7 +75,7 @@ impl Source {
         match self {
             #[cfg(windows)]
             Source::Dxgi(g) => (g.width, g.height),
-            Source::Xcap { w, h, .. } => (*w, *h),
+            Source::Xcap { target, .. } => (target.monitor_w, target.monitor_h),
         }
     }
 
@@ -82,6 +87,20 @@ impl Source {
             Source::Xcap { .. } => true,
         }
     }
+}
+
+fn verify_monitor(monitor: &xcap::Monitor, target: &RecordTarget) -> Result<(), String> {
+    let geometry_matches = monitor.id().ok() == Some(target.monitor_id)
+        && monitor.x().ok() == Some(target.monitor_x)
+        && monitor.y().ok() == Some(target.monitor_y)
+        && monitor.width().ok() == Some(target.monitor_w)
+        && monitor.height().ok() == Some(target.monitor_h);
+    if !geometry_matches {
+        return Err(
+            "Capture monitor changed; restart recording to protect the selected region".into(),
+        );
+    }
+    Ok(())
 }
 
 fn rgba_to_bgra_frame(
@@ -166,6 +185,30 @@ impl Encoder {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore = "requires the dedicated Xvfb display and known root pixels"]
+    fn native_x11_capture_checks_real_pixels_and_monitor_identity() {
+        let monitor = xcap::Monitor::all().unwrap().into_iter().next().unwrap();
+        let target = RecordTarget {
+            monitor_id: monitor.id().unwrap(),
+            monitor_x: monitor.x().unwrap(),
+            monitor_y: monitor.y().unwrap(),
+            monitor_w: monitor.width().unwrap(),
+            monitor_h: monitor.height().unwrap(),
+            region: None,
+        };
+        let mut source = Source::open(&target).unwrap();
+        assert_eq!(source.size(), (640, 480));
+        let frame = source.grab(100).unwrap();
+        assert_eq!(frame.len(), 640 * 480 * 4);
+        // The CI display root is painted #123456 using xsetroot.
+        assert_eq!(&frame[..4], &[0x56, 0x34, 0x12, 255]);
+        let mut stale = target;
+        stale.monitor_x += 1;
+        assert!(Source::open(&stale).is_err());
+    }
 
     #[test]
     fn capture_frame_rejects_geometry_changes_before_touching_destination() {

@@ -2,6 +2,8 @@
 
 ## v0.2.32 — Release integrity (development)
 
+- Add experimental bounded fractional audio-clock drift compensation and four-hour simulations, plus native X11 framebuffer acceptance in Free/Pro and monitor-geometry checks.
+
 - Add experimental graphical audio source selection backed by the live native PipeWire registry, settings-window-only IPC and session-scoped selection, without persisting stale serials.
 
 - Validate experimental Linux audio selections against native PipeWire node roles and server identity; reject stale sessions and reversed roles, and retain strict Rust formatting/dead-code checks.

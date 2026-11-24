@@ -68,3 +68,9 @@ Frontend screenshots are not native WebView2 or WebKitGTK verification. Existing
 - Add isolated CI coverage for discovery of both virtual nodes and retain invalid identity/role tests. Correct the exact remaining rustfmt difference. Native GUI screenshots and long-running drift acceptance are still required.
 
 - Gate discovery explicitly with a dedicated native capability bit; ordinary Windows/Linux builds do not invoke the new discovery command or render the selectors. Hide removed selections from the snapshot, without silently substituting another target. Existing public MP4/audio capability bits remain disabled on Linux.
+
+### Bounded drift correction and X11 native capture acceptance
+
+- Add a fractional stereo resampler to the experimental Linux recorder. It adjusts input consumption up to ±2,000 ppm from a smoothed queue error referenced to the active video sample clock, with an 80 ms latency budget and the existing fail-closed 250 ms lag/500 ms backlog limits. It preserves phase between chunks and resets phase and queued input on pause. Four-hour accelerated numerical simulations at ±1,000/±250/0 ppm and actual stereo interpolation tests are required by CI. This is queue-based compensation, not measured hardware-clock calibration; long real-device recording, pause alignment and sound quality remain to be verified.
+- Validate Xcap monitor ID, origin and dimensions at startup and before/after a frame. Add an explicit native Xvfb test with known root-window pixel colors and rejection of stale geometry, for both Free and Pro. This covers real virtual X11 pixels, not the Wayland portal or installed package UX, and the new CI results are pending.
+- Apply both exact rustfmt changes from the previous Windows runner. No dependency versions changed or public feature flags enabled.

@@ -17,6 +17,8 @@ mod dxgi;
 #[cfg(windows)]
 mod mp4;
 
+#[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+mod audio_clock;
 mod gifenc;
 #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
 pub(crate) mod linux_audio;

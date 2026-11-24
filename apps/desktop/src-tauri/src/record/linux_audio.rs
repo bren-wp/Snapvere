@@ -1,5 +1,6 @@
 // Snapvere by Brendigo
 //! Explicitly selected PipeWire inputs, a common mixer clock and bounded PCM.
+use super::audio_clock::DriftClock;
 use super::{Encoder, RecordOptions};
 use crate::models::{LinuxAudioDevice, LinuxAudioSnapshot};
 use std::collections::VecDeque;
@@ -9,7 +10,8 @@ use std::sync::Mutex;
 
 const RATE: u64 = 48_000;
 const FRAME_BYTES: usize = 4;
-const MAX_PENDING: usize = 96_000;
+const MAX_PENDING_FRAMES: usize = 24_000;
+const CLOCK_LAG_FRAMES: u64 = 3_840;
 const MAX_BLOCK: usize = 19_200;
 const MAX_DEVICES: usize = 128;
 
@@ -48,8 +50,7 @@ pub(crate) fn devices() -> Result<LinuxAudioSnapshot, String> {
     let mut nodes = [empty; MAX_DEVICES];
     let mut cookie = 0;
     // SAFETY: the native registry writes at most MAX_DEVICES fixed-layout nodes.
-    let count =
-        unsafe { snapvere_audio_list(nodes.as_mut_ptr(), MAX_DEVICES as u32, &mut cookie) };
+    let count = unsafe { snapvere_audio_list(nodes.as_mut_ptr(), MAX_DEVICES as u32, &mut cookie) };
     let count = usize::try_from(count).map_err(|_| "Could not enumerate PipeWire devices")?;
     if count > MAX_DEVICES || cookie == 0 {
         return Err("Invalid PipeWire device snapshot".into());
@@ -146,7 +147,8 @@ pub(super) struct Mixer {
     monitor: u64,
     cookie: u32,
     capture: Option<Capture>,
-    pending: VecDeque<u8>,
+    pending: VecDeque<[i16; 2]>,
+    clock: DriftClock,
     written: u64,
 }
 
@@ -158,7 +160,11 @@ impl Mixer {
         let selection = (*crate::state::lock(&SELECTED))
             .ok_or("Select audio targets in the current PipeWire session")?;
         let mic = if opts.mic { selection.mic } else { 0 };
-        let monitor = if opts.system_audio { selection.monitor } else { 0 };
+        let monitor = if opts.system_audio {
+            selection.monitor
+        } else {
+            0
+        };
         if (opts.mic && mic == 0) || (opts.system_audio && monitor == 0) {
             return Err("Select every requested audio device before recording".into());
         }
@@ -168,6 +174,7 @@ impl Mixer {
             cookie: selection.cookie,
             capture: None,
             pending: VecDeque::new(),
+            clock: DriftClock::default(),
             written: 0,
         }))
     }
@@ -187,6 +194,7 @@ impl Mixer {
     pub(super) fn pause(&mut self) {
         self.capture = None;
         self.pending.clear();
+        self.clock = DriftClock::default();
     }
 
     pub(super) fn pump(&mut self, encoder: &mut Encoder, video_end: i64) -> Result<(), String> {
@@ -203,22 +211,43 @@ impl Mixer {
             if size > block.len() || !size.is_multiple_of(FRAME_BYTES) {
                 return Err("Invalid PipeWire PCM block".into());
             }
-            if self.pending.len() + size > MAX_PENDING {
+            if self.pending.len() + size / FRAME_BYTES > MAX_PENDING_FRAMES {
                 return Err("PipeWire audio backlog exceeded 500 ms".into());
             }
-            self.pending.extend(&block[..size]);
+            for sample in block[..size].chunks_exact(FRAME_BYTES) {
+                self.pending.push_back([
+                    i16::from_le_bytes([sample[0], sample[1]]),
+                    i16::from_le_bytes([sample[2], sample[3]]),
+                ]);
+            }
         }
         let due = u64::try_from(video_end)
             .ok()
             .and_then(|ticks| ticks.checked_mul(RATE))
             .ok_or("Invalid video clock")?
             / 10_000_000;
-        while self.written < due && !self.pending.is_empty() {
-            let frames = (due - self.written).min((self.pending.len() / FRAME_BYTES) as u64);
-            let bytes = (frames as usize * FRAME_BYTES).min(MAX_BLOCK);
-            let pcm: Vec<u8> = self.pending.drain(..bytes).collect();
+        // Retain a small latency budget for real device scheduling jitter.
+        // Correct sustained queue drift with a bounded fractional sample clock,
+        // not by throwing away whole PCM packets or fabricating silent audio.
+        let target = due.saturating_sub(CLOCK_LAG_FRAMES);
+        let needed = target.saturating_sub(self.written);
+        self.clock.observe(self.pending.len(), needed);
+        while self.written < target {
+            let count = (target - self.written).min((MAX_BLOCK / FRAME_BYTES) as u64);
+            let mut pcm = Vec::with_capacity(count as usize * FRAME_BYTES);
+            for _ in 0..count {
+                let Some(sample) = self.clock.next(&mut self.pending) else {
+                    break;
+                };
+                for channel in sample {
+                    pcm.extend_from_slice(&channel.to_le_bytes());
+                }
+            }
+            if pcm.is_empty() {
+                break;
+            }
             encoder.write_pcm(&pcm)?;
-            self.written += (bytes / FRAME_BYTES) as u64;
+            self.written += (pcm.len() / FRAME_BYTES) as u64;
         }
         if due.saturating_sub(self.written) > RATE / 4 {
             return Err("PipeWire audio fell more than 250 ms behind video".into());
