@@ -10,7 +10,7 @@ use wayland_client::{Connection, Dispatch, EventQueue, QueueHandle, WEnum};
 use wayland_protocols::xdg::xdg_output::zv1::client::{zxdg_output_manager_v1, zxdg_output_v1};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct OutputGeometry {
+pub(crate) struct OutputGeometry {
     pub name: String,
     pub origin: (i32, i32),
     pub logical: (u32, u32),
@@ -53,10 +53,10 @@ impl OutputGeometry {
                 u32::try_from(last - first).ok()?,
             ))
         };
-        let (x, w) = axis(x, w, self.logical.0, self.physical.0)
-            .ok_or("Invalid Wayland horizontal region")?;
-        let (y, h) = axis(y, h, self.logical.1, self.physical.1)
-            .ok_or("Invalid Wayland vertical region")?;
+        let (x, w) =
+            axis(x, w, self.logical.0, self.physical.0).ok_or("Invalid Wayland horizontal region")?;
+        let (y, h) =
+            axis(y, h, self.logical.1, self.physical.1).ok_or("Invalid Wayland vertical region")?;
         Ok((x, y, w, h))
     }
 }
@@ -179,7 +179,8 @@ impl Dispatch<wl_output::WlOutput, u32> for Inventory {
                 height,
                 ..
             } => {
-                if matches!(flags, WEnum::Value(value) if value.contains(wl_output::Mode::Current)) {
+                if matches!(flags, WEnum::Value(value) if value.contains(wl_output::Mode::Current))
+                {
                     output.mode = Some((width, height));
                 }
             }
@@ -314,8 +315,8 @@ pub(super) fn snapshot() -> Result<Vec<OutputGeometry>, String> {
     let path = if path.is_absolute() {
         path
     } else {
-        let runtime =
-            std::env::var_os("XDG_RUNTIME_DIR").ok_or("Wayland runtime directory is unavailable")?;
+        let runtime = std::env::var_os("XDG_RUNTIME_DIR")
+            .ok_or("Wayland runtime directory is unavailable")?;
         PathBuf::from(runtime).join(path)
     };
     let stream = UnixStream::connect(path).map_err(|e| e.to_string())?;
@@ -328,7 +329,9 @@ pub(super) fn snapshot() -> Result<Vec<OutputGeometry>, String> {
     let deadline = Instant::now() + Duration::from_secs(2);
     let _first = display.sync(&qh, 1_u8);
     wait(&mut queue, &mut state, 1, deadline)?;
-    let (id, _) = state.manager.ok_or("Compositor has no xdg-output v2 support")?;
+    let (id, _) = state
+        .manager
+        .ok_or("Compositor has no xdg-output v2 support")?;
     if state.globals.is_empty() {
         return Err("Compositor has no active outputs".into());
     }
@@ -351,7 +354,10 @@ pub(super) fn snapshot() -> Result<Vec<OutputGeometry>, String> {
     // Connection and protocol objects live until the entire snapshot is complete.
     drop(proxies);
     for (index, output) in outputs.iter().enumerate() {
-        if outputs[..index].iter().any(|other| other.name == output.name) {
+        if outputs[..index]
+            .iter()
+            .any(|other| other.name == output.name)
+        {
             return Err("Duplicate Wayland output identities".into());
         }
     }
@@ -382,7 +388,10 @@ mod tests {
         let left = select(&outputs, -1920, 0, 1920, 1080).unwrap();
         assert_eq!(left.inward_crop(1, 1, 101, 101).unwrap(), (2, 2, 125, 125));
         let center = select(&outputs, 0, 0, 1920, 1080).unwrap();
-        assert_eq!(center.inward_crop(1, 1, 101, 101).unwrap(), (2, 2, 151, 151));
+        assert_eq!(
+            center.inward_crop(1, 1, 101, 101).unwrap(),
+            (2, 2, 151, 151)
+        );
         let right = select(&outputs, 1920, 0, 1920, 1080).unwrap();
         assert_eq!(right.inward_crop(1, 1, 101, 101).unwrap(), (2, 2, 202, 202));
     }

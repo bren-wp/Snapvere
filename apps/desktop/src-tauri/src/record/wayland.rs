@@ -1,15 +1,22 @@
 // Snapvere by Brendigo
 //! Continuous consent-scoped Wayland capture. No unrestricted PipeWire fallback.
 use super::pixels::allocate_bgra;
-use super::wayland_outputs::OutputGeometry;
+pub(crate) use super::wayland_outputs::OutputGeometry;
 use super::RecordTarget;
-use crate::models::MonitorInfo;
+use crate::models::{LogicalRecordingSelection, Region};
 use std::ffi::{c_int, c_void};
 use std::ptr::NonNull;
 use std::time::{Duration, Instant};
 
 unsafe extern "C" {
-    fn snapvere_wayland_open(x: i32, y: i32, width: u32, height: u32) -> *mut c_void;
+    fn snapvere_wayland_open(
+        x: i32,
+        y: i32,
+        logical_width: u32,
+        logical_height: u32,
+        width: u32,
+        height: u32,
+    ) -> *mut c_void;
     fn snapvere_wayland_pull(
         handle: *mut c_void,
         data: *mut u8,
@@ -25,87 +32,82 @@ pub(crate) fn active() -> bool {
         || std::env::var("XDG_SESSION_TYPE").as_deref() == Ok("wayland")
 }
 
-// Match only a uniquely identified, non-overlapping monitor in a unit-scale
-// topology. Xcap 0.9.10 reports a common Linux scale, not reliable independent
-// physical origins at fractional DPI. Never infer missing compositor metadata.
-pub(crate) fn validate_layout(
-    target: &RecordTarget,
-    monitors: &[MonitorInfo],
-) -> Result<(), String> {
-    if monitors.is_empty()
-        || monitors
-            .iter()
-            .any(|m| m.scale != 1.0 || m.width == 0 || m.height == 0)
-    {
-        return Err("Wayland capture requires a verified unscaled monitor layout".into());
-    }
-    let mut selected = monitors.iter().filter(|m| m.id == target.monitor_id);
-    let m = selected
+/// Resolve the explicitly requested Xcap monitor by connector name, not by
+/// Xwayland's globally scaled coordinates. Do not substitute another output.
+pub(crate) fn output_for_monitor(name: &str) -> Result<OutputGeometry, String> {
+    let outputs = super::wayland_outputs::snapshot()?;
+    let mut matches = outputs.iter().filter(|output| output.name == name);
+    let output = matches
         .next()
-        .ok_or("Selected Wayland monitor disappeared")?;
-    if selected.next().is_some()
-        || (m.x, m.y, m.width, m.height)
-            != (
-                target.monitor_x,
-                target.monitor_y,
-                target.monitor_w,
-                target.monitor_h,
-            )
-    {
-        return Err("Selected Wayland monitor geometry changed".into());
+        .ok_or("Native Wayland monitor name does not match")?;
+    if matches.next().is_some() {
+        return Err("Ambiguous Wayland monitor identity".into());
     }
-    let bounds = |m: &MonitorInfo| {
-        let x = i64::from(m.x);
-        let y = i64::from(m.y);
-        (x, y, x + i64::from(m.width), y + i64::from(m.height))
+    verify_layout(&outputs, output)?;
+    Ok(output.clone())
+}
+
+fn verify_layout(outputs: &[OutputGeometry], output: &OutputGeometry) -> Result<(), String> {
+    let selected = super::wayland_outputs::select(
+        outputs,
+        output.origin.0,
+        output.origin.1,
+        output.logical.0,
+        output.logical.1,
+    )?;
+    if selected != output {
+        return Err("Wayland monitor identity or geometry changed".into());
+    }
+    let bounds = |o: &OutputGeometry| {
+        let x = i64::from(o.origin.0);
+        let y = i64::from(o.origin.1);
+        (x, y, x + i64::from(o.logical.0), y + i64::from(o.logical.1))
     };
-    let (left, top, right, bottom) = bounds(m);
-    if monitors
+    let (left, top, right, bottom) = bounds(output);
+    if outputs
         .iter()
-        .filter(|other| other.id != m.id)
-        .any(|other| {
-            let (x, y, r, b) = bounds(other);
+        .filter(|o| o.name != output.name)
+        .any(|o| {
+            let (x, y, r, b) = bounds(o);
             left < r && x < right && top < b && y < bottom
         })
     {
         return Err("Overlapping or mirrored Wayland monitors cannot be matched safely".into());
     }
-    if let Some(region) = target.region {
-        if region.monitor_id != m.id
-            || region.x < 0
-            || region.y < 0
-            || region.width == 0
-            || region.height == 0
-            || i64::from(region.x) + i64::from(region.width) > i64::from(m.width)
-            || i64::from(region.y) + i64::from(region.height) > i64::from(m.height)
-        {
-            return Err("Selected recording region is outside the authorized monitor".into());
-        }
-    }
     Ok(())
 }
 
-fn validate_current_layout(target: &RecordTarget) -> Result<OutputGeometry, String> {
-    let monitors = crate::capture::list_monitors().map_err(|error| error.to_string())?;
-    validate_layout(target, &monitors)?;
-    let outputs = super::wayland_outputs::snapshot()?;
-    let output = super::wayland_outputs::select(
-        &outputs,
-        target.monitor_x,
-        target.monitor_y,
-        target.monitor_w,
-        target.monitor_h,
-    )?;
-    if output.physical != (target.monitor_w, target.monitor_h) {
-        return Err("Wayland stream requires a verified physical pixel mapping".into());
+/// The encoder and crop engine use only physical pixels. The portal retains
+/// the original logical geometry in the separately owned output binding.
+pub(crate) fn map_target(
+    mut target: RecordTarget,
+    output: &OutputGeometry,
+    selection: Option<LogicalRecordingSelection>,
+) -> Result<RecordTarget, String> {
+    if target.region.is_some() != selection.is_some() {
+        return Err("Missing or unexpected logical recording selection".into());
     }
-    if let Some(region) = target.region {
-        let mapped = output.inward_crop(region.x, region.y, region.width, region.height)?;
-        if mapped != (region.x as u32, region.y as u32, region.width, region.height) {
-            return Err("Wayland recording region does not map to physical pixels".into());
+    target.monitor_w = output.physical.0;
+    target.monitor_h = output.physical.1;
+    if let Some(selection) = selection {
+        if selection.monitor_id != target.monitor_id
+            || (selection.viewport_width, selection.viewport_height) != output.logical
+        {
+            return Err("Wayland selection viewport does not match the monitor".into());
         }
+        let (x, y, w, h) =
+            output.inward_crop(selection.x, selection.y, selection.width, selection.height)?;
+        target.region = Some(Region {
+            monitor_id: target.monitor_id,
+            x: i32::try_from(x).map_err(|_| "Wayland crop x overflow")?,
+            y: i32::try_from(y).map_err(|_| "Wayland crop y overflow")?,
+            width: w,
+            height: h,
+        });
     }
-    Ok(output.clone())
+    // The existing crop engine validates allocations and shrinks odd extents.
+    super::crop_rect(&target)?;
+    Ok(target)
 }
 
 pub(super) struct PortalSource {
@@ -114,20 +116,24 @@ pub(super) struct PortalSource {
     width: u32,
     height: u32,
     seen: bool,
-    target: RecordTarget,
     output: OutputGeometry,
     checked: Instant,
 }
 
 impl PortalSource {
-    pub(super) fn open(target: &RecordTarget) -> Result<Self, String> {
-        let output = validate_current_layout(target)?;
+    pub(super) fn open(target: &RecordTarget, output: OutputGeometry) -> Result<Self, String> {
+        verify_layout(&super::wayland_outputs::snapshot()?, &output)?;
+        if output.physical != (target.monitor_w, target.monitor_h) {
+            return Err("Wayland encoder dimensions do not match the bound output".into());
+        }
         let frame = allocate_bgra(target.monitor_w, target.monitor_h)?;
         // SAFETY: the worker owns the portal session and its video pipeline.
         let handle = NonNull::new(unsafe {
             snapvere_wayland_open(
-                target.monitor_x,
-                target.monitor_y,
+                output.origin.0,
+                output.origin.1,
+                output.logical.0,
+                output.logical.1,
                 target.monitor_w,
                 target.monitor_h,
             )
@@ -139,7 +145,6 @@ impl PortalSource {
             width: target.monitor_w,
             height: target.monitor_h,
             seen: false,
-            target: *target,
             output,
             checked: Instant::now(),
         };
@@ -153,9 +158,7 @@ impl PortalSource {
     }
 
     fn verify_output(&mut self) -> Result<(), String> {
-        if validate_current_layout(&self.target)? != self.output {
-            return Err("Wayland output identity or geometry changed during recording".into());
-        }
+        verify_layout(&super::wayland_outputs::snapshot()?, &self.output)?;
         self.checked = Instant::now();
         Ok(())
     }
@@ -215,88 +218,77 @@ impl Drop for PortalSource {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::Region;
 
-    fn monitor(id: u32, x: i32, y: i32) -> MonitorInfo {
-        MonitorInfo {
-            id,
-            name: format!("Monitor {id}"),
-            x,
-            y,
-            width: 1920,
-            height: 1080,
-            scale: 1.0,
-            is_primary: id == 1,
+    fn output() -> OutputGeometry {
+        OutputGeometry {
+            name: "DP-2".into(),
+            origin: (-1920, 0),
+            logical: (1920, 1080),
+            physical: (2400, 1350),
+            transform: 0,
         }
     }
 
     fn target() -> RecordTarget {
         RecordTarget {
             monitor_id: 2,
-            monitor_x: -1920,
+            monitor_x: -2400,
             monitor_y: 0,
             monitor_w: 1920,
             monitor_h: 1080,
             region: Some(Region {
                 monitor_id: 2,
-                x: 100,
-                y: 200,
-                width: 800,
-                height: 600,
+                x: 1,
+                y: 1,
+                width: 101,
+                height: 101,
             }),
         }
     }
 
-    #[test]
-    fn selects_negative_origin_monitor_and_exact_region() {
-        let monitors = [monitor(1, 0, 0), monitor(2, -1920, 0)];
-        let t = target();
-        assert!(validate_layout(&t, &monitors).is_ok());
-        assert_eq!(crate::record::crop_rect(&t).unwrap(), (100, 200, 800, 600));
+    fn selection() -> LogicalRecordingSelection {
+        LogicalRecordingSelection {
+            monitor_id: 2,
+            x: 1,
+            y: 1,
+            width: 101,
+            height: 101,
+            viewport_width: 1920,
+            viewport_height: 1080,
+        }
     }
 
     #[test]
-    fn rejects_mirror_hotplug_duplicate_and_non_unit_scale() {
-        let t = target();
-        assert!(validate_layout(&t, &[monitor(1, 0, 0)]).is_err());
-        assert!(validate_layout(&t, &[monitor(1, -1920, 0), monitor(2, -1920, 0)]).is_err());
-        assert!(validate_layout(&t, &[monitor(2, 0, 0), monitor(2, -1920, 0)]).is_err());
-        let mut monitors = [monitor(1, 0, 0), monitor(2, -1920, 0)];
-        for scale in [1.25, 1.5, 2.0, 0.0, f32::NAN] {
-            monitors[0].scale = scale;
-            assert!(validate_layout(&t, &monitors).is_err());
+    fn logical_selection_maps_to_the_actual_encoder_crop() {
+        let mapped = map_target(target(), &output(), Some(selection())).unwrap();
+        assert_eq!((mapped.monitor_w, mapped.monitor_h), (2400, 1350));
+        assert_eq!(super::super::crop_rect(&mapped).unwrap(), (2, 2, 124, 124));
+        // Encode only the selected physical pixels, never an expanded rectangle.
+        let mut src = vec![99; 2400 * 1350 * 4];
+        for y in 2..126 {
+            for x in 2..126 {
+                src[(y * 2400 + x) * 4..(y * 2400 + x + 1) * 4].fill(7);
+            }
         }
-        monitors[0].scale = 1.0;
-        monitors[1].width = 1280;
-        assert!(validate_layout(&t, &monitors).is_err());
+        let mut dst = vec![0; 124 * 124 * 4];
+        super::super::pixels::crop_bgra(&src, 2400, 1350, 2, 2, 124, 124, &mut dst);
+        assert!(dst.iter().all(|value| *value == 7));
     }
 
     #[test]
-    fn rejects_outside_wrong_monitor_and_overflowing_regions() {
-        let monitors = [monitor(1, 0, 0), monitor(2, -1920, 0)];
-        let mut t = target();
-        let original = t.region.unwrap();
-        for region in [
-            Region { x: -1, ..original },
-            Region {
-                monitor_id: 1,
-                ..original
-            },
-            Region {
-                width: u32::MAX,
-                ..original
-            },
-            Region {
-                y: i32::MAX,
-                ..original
-            },
-            Region {
-                width: 0,
-                ..original
-            },
-        ] {
-            t.region = Some(region);
-            assert!(validate_layout(&t, &monitors).is_err());
-        }
+    fn rejects_mismatched_viewport_and_unbound_region() {
+        let mut selection = selection();
+        selection.viewport_width = 1280;
+        assert!(map_target(target(), &output(), Some(selection)).is_err());
+        assert!(map_target(target(), &output(), None).is_err());
+    }
+
+    #[test]
+    fn rejects_mirrored_or_replaced_outputs() {
+        let expected = output();
+        let mut replacement = expected.clone();
+        replacement.name = "DP-3".into();
+        assert!(verify_layout(&[replacement.clone()], &expected).is_err());
+        assert!(verify_layout(&[expected.clone(), replacement], &expected).is_err());
     }
 }

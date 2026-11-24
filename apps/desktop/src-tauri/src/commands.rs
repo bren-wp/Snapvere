@@ -941,9 +941,32 @@ fn region_capture_blocking(app: &AppHandle, mode: CaptureMode) -> Result<(), Str
             .get_webview_window("overlay")
             .ok_or_else(|| "Overlay window unavailable".to_string())?;
         set_cloaked(&win, true);
-        win.set_position(PhysicalPosition::new(info.x, info.y))
+        #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+        let geometry = if mode == CaptureMode::Record && record::wayland::active() {
+            let output = record::wayland::output_for_monitor(&info.name)?;
+            let monitor = win
+                .available_monitors()
+                .map_err(estr)?
+                .into_iter()
+                .find(|m| m.name().map(|name| name.as_str()) == Some(output.name.as_str()))
+                .ok_or("Native overlay monitor does not match the selected output")?;
+            if (monitor.size().width, monitor.size().height) != output.physical {
+                return Err("Native overlay size does not match the selected output".into());
+            }
+            (
+                monitor.position().x,
+                monitor.position().y,
+                output.physical.0,
+                output.physical.1,
+            )
+        } else {
+            (info.x, info.y, info.width, info.height)
+        };
+        #[cfg(not(all(target_os = "linux", feature = "linux-native-media")))]
+        let geometry = (info.x, info.y, info.width, info.height);
+        win.set_position(PhysicalPosition::new(geometry.0, geometry.1))
             .map_err(estr)?;
-        win.set_size(PhysicalSize::new(info.width, info.height))
+        win.set_size(PhysicalSize::new(geometry.2, geometry.3))
             .map_err(estr)?;
         win.emit(
             "snapvere:capture",
@@ -951,10 +974,10 @@ fn region_capture_blocking(app: &AppHandle, mode: CaptureMode) -> Result<(), Str
                 token,
                 id: info.id,
                 mode: mode.as_str(),
-                x: info.x,
-                y: info.y,
-                width: info.width,
-                height: info.height,
+                x: geometry.0,
+                y: geometry.1,
+                width: geometry.2,
+                height: geometry.3,
             },
         )
         .map_err(estr)
@@ -1331,11 +1354,12 @@ pub async fn start_recording(
     region: Option<Region>,
     monitor_id: Option<u32>,
     options: Option<RecordOptions>,
+    logical_selection: Option<crate::models::LogicalRecordingSelection>,
 ) -> Result<RecordStatus, String> {
     require_window_label(window.label(), &["overlay"])?;
     tauri::async_runtime::spawn_blocking(move || {
         let opts = options.unwrap_or_else(|| record_options(&app));
-        start_recording_inner(&app, region, monitor_id, opts)
+        start_recording_inner(&app, region, monitor_id, opts, logical_selection)
     })
     .await
     .map_err(|e| format!("start_recording task: {e}"))?
@@ -1346,11 +1370,20 @@ fn start_recording_inner(
     region: Option<Region>,
     monitor_id: Option<u32>,
     opts: RecordOptions,
+    logical_selection: Option<crate::models::LogicalRecordingSelection>,
 ) -> Result<RecordStatus, String> {
     let target = resolve_target(app, region, monitor_id)?;
+    #[cfg(not(all(target_os = "linux", feature = "linux-native-media")))]
+    let _ = logical_selection;
     #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
-    if record::wayland::active() {
-        record::wayland::validate_layout(&target, &capture::list_monitors().map_err(estr)?)?;
+    let (target, portal) = if record::wayland::active() {
+        let monitor = capture::list_monitors()
+            .map_err(estr)?
+            .into_iter()
+            .find(|m| m.id == target.monitor_id)
+            .ok_or("Selected monitor disappeared")?;
+        let output = record::wayland::output_for_monitor(&monitor.name)?;
+        let mut target = record::wayland::map_target(target, &output, logical_selection)?;
         if region.is_some() {
             let overlay = app
                 .get_webview_window("overlay")
@@ -1361,29 +1394,60 @@ fn start_recording_inner(
                 .ok_or("Recording selection monitor is unavailable")?;
             let origin = overlay.inner_position().map_err(estr)?;
             let size = overlay.inner_size().map_err(estr)?;
-            if overlay.scale_factor().map_err(estr)? != 1.0
-                || monitor.scale_factor() != 1.0
-                || (origin.x, origin.y) != (target.monitor_x, target.monitor_y)
-                || (size.width, size.height) != (target.monitor_w, target.monitor_h)
-                || (monitor.position().x, monitor.position().y)
-                    != (target.monitor_x, target.monitor_y)
-                || (monitor.size().width, monitor.size().height)
-                    != (target.monitor_w, target.monitor_h)
+            if monitor.name().map(|name| name.as_str()) != Some(output.name.as_str())
+                || (origin.x, origin.y) != (monitor.position().x, monitor.position().y)
+                || (size.width, size.height) != output.physical
+                || (monitor.size().width, monitor.size().height) != output.physical
+                || overlay.scale_factor().map_err(estr)? != monitor.scale_factor()
             {
                 return Err(
                     "Wayland selection window does not match the authorized monitor".into(),
                 );
             }
+            let scale = monitor.scale_factor();
+            if !scale.is_finite()
+                || scale <= 0.0
+                || (f64::from(output.logical.0) * scale - f64::from(output.physical.0)).abs()
+                    > 1.0
+                || (f64::from(output.logical.1) * scale - f64::from(output.physical.1)).abs()
+                    > 1.0
+            {
+                return Err("Wayland selection scale does not match the physical stream".into());
+            }
+            target.monitor_x = monitor.position().x;
+            target.monitor_y = monitor.position().y;
         }
-    }
+        (target, Some(output))
+    } else {
+        (target, None)
+    };
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    let portal_capture = portal.is_some();
     let (ox, oy, ow, oh) = record::crop_rect(&target)?;
 
     // Overlay se sklanja TEK nakon uspješnog starta — ako DXGI ili enkoder padnu,
     // korisnik grešku vidi u overlayu koji je još pred njim. Overlay je ionako
     // izuzet iz capture-a (`exclude_from_capture`), pa ne može upasti u snimku.
-    let status = record::start(app, target, opts)?;
+    let status = record::start(
+        app,
+        target,
+        opts,
+        #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+        portal,
+    )?;
     hide_overlays(app);
     lock(&app.state::<AppState>().frozen).clear();
+
+    // Wayland global window placement and annotation/redaction alignment
+    // are not yet verified. Keep those surfaces closed in portal recordings.
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    if portal_capture {
+        let _ = app.emit(
+            "snapvere:toast",
+            "Recording started. Press the recording shortcut again to stop.",
+        );
+        return Ok(status);
+    }
 
     // Okvir ide prvi (najniže), pa sloj za crtanje, pa HUD — HUD mora ostati na vrhu.
     if let Err(e) = show_rec_frame(app, &target, (ox, oy, ow, oh)) {
@@ -1525,7 +1589,7 @@ pub fn dispatch_record_fullscreen(app: &AppHandle) {
                 return;
             }
             let opts = record_options(&app);
-            if let Err(e) = start_recording_inner(&app, None, None, opts) {
+            if let Err(e) = start_recording_inner(&app, None, None, opts, None) {
                 let _ = app.emit(
                     "snapvere:toast",
                     "Recording could not start. Open Diagnostics for details.",

@@ -506,7 +506,18 @@ export default function Overlay() {
       setStarting(true);
       try {
         const region = fullScreen ? null : selToRegion();
-        await ipc.startRecording(region, monId);
+        // Preserve the CSS selection independently of the legacy DPI-scaled
+        // Region. The Wayland backend validates viewport and maps inward.
+        const logical = !fullScreen && sel ? {
+          monitorId: monId,
+          x: Math.ceil(sel.x),
+          y: Math.ceil(sel.y),
+          width: Math.floor(sel.x + sel.w) - Math.ceil(sel.x),
+          height: Math.floor(sel.y + sel.h) - Math.ceil(sel.y),
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+        } : undefined;
+        await ipc.startRecording(region, monId, undefined, logical);
         // Backend sakriva overlay i diže HUD; ovdje nema više posla.
       } catch (err) {
         console.error(err);

@@ -169,3 +169,9 @@ export interface LinuxAudioSnapshot {
   microphone: string | null;
   monitor: string | null;
 }
+
+/** Output-local logical selection; physical mapping is done by native Wayland. */
+export interface LogicalRecordingSelection extends Region {
+  viewportWidth: number;
+  viewportHeight: number;
+}

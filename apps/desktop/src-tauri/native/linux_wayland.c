@@ -28,6 +28,7 @@ typedef struct {
     GstBus *video_bus;
     int fd;
     guint width, height;
+    guint logical_width, logical_height;
     gint x, y;
     gint64 last_frame;
 } PortalVideo;
@@ -270,10 +271,10 @@ static gboolean negotiate(PortalVideo *ctx, guint32 *node, guint64 *serial) {
                      g_variant_new("(osa{sv})", ctx->session, "", &options), deadline);
     g_free(id);
     if (!result) return FALSE;
-    // Portal positions and sizes are compositor-logical. This first safe
-    // integration accepts only a separately verified unit-scale layout.
+    // Portal metadata stays in compositor-logical coordinates, distinct
+    // from the physical BGRA caps validated by the video adapter.
     gboolean valid = parse_stream(result, node, serial,
-                                  ctx->x, ctx->y, ctx->width, ctx->height);
+                                  ctx->x, ctx->y, ctx->logical_width, ctx->logical_height);
     g_variant_unref(result);
     if (!valid || !session_alive(ctx)) return FALSE;
 
@@ -354,14 +355,18 @@ void snapvere_wayland_free(void *handle) {
     g_free(ctx);
 }
 
-void *snapvere_wayland_open(gint x, gint y, guint width, guint height) {
-    if (!width || !height || width > 8192 || height > 8192 ||
+void *snapvere_wayland_open(gint x, gint y, guint logical_width, guint logical_height,
+                            guint width, guint height) {
+    if (!logical_width || !logical_height || logical_width > 16384 || logical_height > 16384 ||
+        !width || !height || width > 8192 || height > 8192 ||
         (guint64)width * height > 28000000) return NULL;
     if (!gst_init_check(NULL, NULL, NULL)) return NULL;
     PortalVideo *ctx = g_new0(PortalVideo, 1);
     ctx->fd = -1;
     ctx->width = width;
     ctx->height = height;
+    ctx->logical_width = logical_width;
+    ctx->logical_height = logical_height;
     ctx->x = x;
     ctx->y = y;
     ctx->context = g_main_context_new();

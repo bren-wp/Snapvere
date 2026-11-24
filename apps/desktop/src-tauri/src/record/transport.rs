@@ -36,9 +36,7 @@ impl Source {
 
         #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
         if super::wayland::active() {
-            return super::wayland::PortalSource::open(target)
-                .map(Box::new)
-                .map(Source::Wayland);
+            return Err("Wayland recording requires a bound native output".into());
         }
 
         let monitors = xcap::Monitor::all().map_err(|e| format!("xcap monitors: {e}"))?;

@@ -247,6 +247,9 @@ pub fn start(
     app: &AppHandle,
     target: RecordTarget,
     opts: RecordOptions,
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))] portal: Option<
+        wayland::OutputGeometry,
+    >,
 ) -> Result<RecordStatus, String> {
     let _starting = RecorderStartGuard::acquire()?;
     if is_active(app) {
@@ -303,6 +306,8 @@ pub fn start(
                     fps,
                     (ox, oy, ow, oh),
                     ready_tx.clone(),
+                    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+                    portal,
                 )
             }));
             let outcome = match result {

@@ -2,6 +2,8 @@
 
 ## v0.2.32 — Release integrity (development)
 
+- Bind experimental Wayland logical overlay selection to validated per-output physical crop dimensions and portal video caps, with strict monitor/viewport identity checks.
+
 - Add independent Wayland compositor output inventory and exact inward fractional logical-to-physical region mapping; retain capture gating until real mixed-DPI overlay and stream validation.
 
 - Validate explicit portal monitor geometry and native overlay coordinates for experimental regional capture and single-monitor selection in unscaled multi-monitor layouts; reject ambiguous or scaled layouts.

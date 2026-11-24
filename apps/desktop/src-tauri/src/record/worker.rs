@@ -15,10 +15,19 @@ pub(super) fn run(
     fps: u32,
     crop: (u32, u32, u32, u32),
     ready: std::sync::mpsc::Sender<Result<(), String>>,
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))] portal: Option<
+        wayland::OutputGeometry,
+    >,
 ) -> Result<Recorded, String> {
     let (ox, oy, ow, oh) = crop;
     let t0 = Instant::now();
 
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    let mut source = match portal {
+        Some(output) => Source::Wayland(Box::new(wayland::PortalSource::open(&target, output)?)),
+        None => Source::open(&target)?,
+    };
+    #[cfg(not(all(target_os = "linux", feature = "linux-native-media")))]
     let mut source = Source::open(&target)?;
     if ctl.cancel.load(Ordering::Acquire) {
         return Err("Recording initialization was cancelled".into());

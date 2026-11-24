@@ -17,6 +17,7 @@ import type {
   RecordOptions,
   RecordStatus,
   Region,
+  LogicalRecordingSelection,
   Screenshot,
 } from "./types";
 
@@ -68,8 +69,9 @@ export const ipc = {
     region: Region | null,
     monitorId?: number,
     options?: Partial<RecordOptions>,
+    logicalSelection?: LogicalRecordingSelection,
   ) =>
-    invoke<RecordStatus>("start_recording", { region, monitorId, options }),
+    invoke<RecordStatus>("start_recording", { region, monitorId, options, logicalSelection }),
   stopRecording: () => invoke<void>("stop_recording"),
   cancelRecording: () => invoke<void>("cancel_recording"),
   pauseRecording: (paused: boolean) =>

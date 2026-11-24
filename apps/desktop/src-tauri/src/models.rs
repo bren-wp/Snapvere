@@ -87,6 +87,20 @@ pub struct Region {
     pub height: u32,
 }
 
+/// Logical CSS rectangle for the consent-scoped Wayland recorder.
+/// Kept separate from the legacy physical Region IPC contract.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LogicalRecordingSelection {
+    pub monitor_id: u32,
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+    pub viewport_width: u32,
+    pub viewport_height: u32,
+}
+
 /// Akcija koju korisnik odabere u overlay floating toolbaru.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
