@@ -502,6 +502,7 @@ pub fn resume_crop_preview(
     app: &AppHandle,
     session: &str,
     marks: Vec<preview::Mark>,
+    history_delta: i32,
 ) -> Result<RecordStatus, String> {
     {
         let state = app.state::<AppState>();
@@ -518,9 +519,9 @@ pub fn resume_crop_preview(
             .ok_or("Recording preview is unavailable")?;
         let mut preview = crate::state::lock(preview);
         preview.check_session(session)?;
-        let mapped = preview.map_marks(&marks)?;
+        let plan = preview.plan(&marks, history_delta)?;
         hide_preview(app)?;
-        preview.append(mapped);
+        preview.apply(plan);
         ctl.pause_ack.store(false, Ordering::Release);
         ctl.phase.store(PHASE_RECORDING, Ordering::Release);
     }

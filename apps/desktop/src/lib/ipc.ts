@@ -21,12 +21,19 @@ import type {
   Screenshot,
 } from "./types";
 
-export type PreviewMark = { kind: "rectangle" | "mask"; rect: PixelRect };
+export type PreviewMark = {
+  kind: "rectangle" | "mask" | "ellipse" | "line" | "arrow" | "pen" | "marker" | "text" | "step";
+  rect: PixelRect;
+  points?: { x: number; y: number }[];
+  glyph?: number[];
+};
 export type CropPreview = {
   session: string;
   width: number;
   height: number;
   remaining: number;
+  undoCount: number;
+  redoCount: number;
   image: string;
 };
 
@@ -87,8 +94,8 @@ export const ipc = {
     invoke<RecordStatus>("pause_recording", { paused }),
   recordingStatus: () => invoke<RecordStatus>("recording_status"),
   getCropPreview: () => invoke<CropPreview>("get_crop_preview"),
-  resumeCropPreview: (session: string, marks: PreviewMark[]) =>
-    invoke<RecordStatus>("resume_crop_preview", { session, marks }),
+  resumeCropPreview: (session: string, marks: PreviewMark[], historyDelta: number) =>
+    invoke<RecordStatus>("resume_crop_preview", { session, marks, historyDelta }),
   closeRecHud: () => invoke<void>("close_rec_hud"),
   /** Expand the native HUD viewport to show its palette/error, then shrink. */
   setRecHudExpanded: (expanded: boolean) =>

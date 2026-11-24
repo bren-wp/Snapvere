@@ -183,8 +183,14 @@ pub(super) fn run(
                 recording_error = Some(error);
                 break;
             }
-            if !ctl.pause_ack.swap(true, Ordering::AcqRel) && ctl.preview.is_some() {
-                offer_preview(app, ctl);
+            if !ctl.pause_ack.load(Ordering::Acquire) {
+                if let Some(preview) = &ctl.preview {
+                    crate::state::lock(preview).begin_pause();
+                }
+                ctl.pause_ack.store(true, Ordering::Release);
+                if ctl.preview.is_some() {
+                    offer_preview(app, ctl);
+                }
             }
             std::thread::sleep(Duration::from_millis(40));
             continue;

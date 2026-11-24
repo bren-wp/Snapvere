@@ -1669,9 +1669,10 @@ pub fn resume_crop_preview(
     app: AppHandle,
     session: String,
     marks: Vec<record::preview::Mark>,
+    history_delta: i32,
 ) -> Result<RecordStatus, String> {
     require_window_label(window.label(), &["recpreview"])?;
-    record::resume_crop_preview(&app, &session, marks)
+    record::resume_crop_preview(&app, &session, marks, history_delta)
 }
 
 /// Resize only the recording HUD, only to reviewed fixed dimensions.

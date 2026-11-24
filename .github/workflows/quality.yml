@@ -435,6 +435,10 @@ jobs:
           cargo test --locked --features linux-native-media record::wayland::tests
           cargo test --locked --features linux-native-media record::audio_clock::tests
           cargo test --locked --features linux-native-media record::linux_mp4::tests
+          export SNAPVERE_ANNOTATED_MP4="$RUNNER_TEMP/annotated.mp4"
+          export SNAPVERE_ANNOTATED_GIF="$RUNNER_TEMP/annotated.gif"
+          cargo test --locked --features linux-native-media annotated_gif_and_mp4_encoder_fixtures
+          python ../../../tools/native/verify_annotation_frames.py "$SNAPVERE_ANNOTATED_MP4" "$SNAPVERE_ANNOTATED_GIF"
           cargo clippy --all-targets --locked --features linux-native-media -- -D warnings
           test "$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 "$SNAPVERE_TEST_MP4_PATH")" = h264
           test "$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$SNAPVERE_TEST_MP4_PATH")" = "64,48"
