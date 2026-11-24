@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { EyeOff, Play, Square, Undo2, Redo2 } from "lucide-react";
 import { ipc, type CropPreview, type PreviewMark } from "../lib/ipc";
 import { useLanguage } from "../lib/LanguageProvider";
+import { decodePreviewPacket } from "../lib/previewPacket";
 
 type Point = { x: number; y: number };
 
@@ -41,19 +42,13 @@ export default function RecPreview() {
     try {
       const result = await ipc.getCropPreview();
       const packet = await ipc.getCropPreviewPacket(result.session, 0);
-      const header = new DataView(packet);
-      if (packet.byteLength !== 32 + result.width * result.height * 4 ||
-          header.getUint32(0, true) !== result.width ||
-          header.getUint32(4, true) !== result.height ||
-          Number(header.getBigUint64(8, true)) !== result.frameId ||
-          Number(header.getBigUint64(16, true)) !== result.timestamp100ns ||
-          Number(header.getBigUint64(24, true)) !== result.revision) throw new Error("Invalid preview frame");
+      const pixels = decodePreviewPacket(packet, result);
       const bitmap = document.createElement("canvas");
       bitmap.width = result.width;
       bitmap.height = result.height;
       const context = bitmap.getContext("2d");
       if (!context) throw new Error("Preview canvas unavailable");
-      context.putImageData(new ImageData(new Uint8ClampedArray(packet, 32), result.width, result.height), 0, 0);
+      context.putImageData(new ImageData(pixels, result.width, result.height), 0, 0);
       if (id === epoch.current) {
         setImage(bitmap.toDataURL("image/png"));
         setPreview(result);
@@ -269,7 +264,7 @@ export default function RecPreview() {
               if (mark.rect.width && mark.rect.height && marks.length < remaining) add(mark);
             }}
             onPointerCancel={() => { anchor.current = null; setDraft(null); }}>
-            <defs><marker id="preview-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0L6 3L0 6z" fill="#09BFD9" /></marker></defs>
+            <defs><marker id="preview-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0L6 3L0 6z" fill="context-stroke" /></marker></defs>
             <image href={image} width={preview.width} height={preview.height} />
             {[...marks, ...(draft ? [draft] : [])].sort((a, b) => Number(a.kind === "mask") - Number(b.kind === "mask")).map((mark, i) => (
               <g key={i} opacity={mark.kind === "mask" ? 1 : (mark.style?.opacity ?? 255) / 255} color={mark.style ? `rgb(${mark.style.rgb.join(",")})` : "#09BFD9"}>
