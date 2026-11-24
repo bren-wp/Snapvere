@@ -678,7 +678,7 @@ export default function Home() {
           )}
           {proExportReport && (
             <details className="basis-full rounded-lg border border-border px-3 py-2">
-              <summary className="cursor-pointer" role="status">
+              <summary className="cursor-pointer">
                 {proText.exported(proExportReport.items.filter(item => item.succeeded).length)}
                 {" · "}{proExportReport.items.filter(item => item.succeeded).length}/{proExportReport.items.length}
                 {proExportReport.items.some(item => !item.succeeded) && ` · ${proText.failed}`}

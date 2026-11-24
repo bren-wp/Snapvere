@@ -61,7 +61,7 @@ fn copy_bounded(
     expected: u64,
 ) -> io::Result<()> {
     // Write no more than the validated initial size even if a source grows.
-    let copied = io::copy(&mut reader.take(expected), writer)?;
+    let copied = io::copy(&mut (&mut *reader).take(expected), writer)?;
     let mut extra = [0_u8; 1];
     if copied != expected || reader.read(&mut extra)? != 0 {
         return Err(io::Error::other("Source changed during export"));
@@ -207,9 +207,8 @@ fn validate_ids(ids: &[String]) -> Result<(), String> {
     }
     let mut seen = HashSet::with_capacity(ids.len());
     for id in ids {
-        if !uuid::Uuid::parse_str(id).is_ok_and(|value| value.to_string() == *id)
-            || !seen.insert(id)
-        {
+        let canonical = uuid::Uuid::parse_str(id).is_ok_and(|value| value.to_string() == *id);
+        if !canonical || !seen.insert(id) {
             return Err("Invalid or duplicate gallery item".into());
         }
     }
@@ -359,6 +358,7 @@ mod tests {
         let id = uuid::Uuid::new_v4().to_string();
         assert!(validate_ids(std::slice::from_ref(&id)).is_ok());
         assert!(validate_ids(&[]).is_err());
+        assert!(validate_ids(&["ABCDEF12-3456-7890-ABCD-EF1234567890".into()]).is_err());
         assert!(validate_ids(&[id.clone(), id]).is_err());
         assert!(validate_ids(&["../secrets.txt".into()]).is_err());
         let too_many = (0..101)
