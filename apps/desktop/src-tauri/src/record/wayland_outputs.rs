@@ -53,8 +53,8 @@ impl OutputGeometry {
                 u32::try_from(last - first).ok()?,
             ))
         };
-        let (x, w) =
-            axis(x, w, self.logical.0, self.physical.0).ok_or("Invalid Wayland horizontal region")?;
+        let (x, w) = axis(x, w, self.logical.0, self.physical.0)
+            .ok_or("Invalid Wayland horizontal region")?;
         let (y, h) =
             axis(y, h, self.logical.1, self.physical.1).ok_or("Invalid Wayland vertical region")?;
         Ok((x, y, w, h))
@@ -409,6 +409,22 @@ mod tests {
         assert!(a.inward_crop(1, 1, u32::MAX, 100).is_err());
         a.transform = 1;
         assert!(a.inward_crop(0, 0, 100, 100).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires a dedicated headless wlroots compositor"]
+    fn native_wlroots_mixed_dpi_inventory() {
+        let outputs = snapshot().unwrap();
+        assert_eq!(outputs.len(), 2);
+        let left = select(&outputs, -1920, 0, 1920, 1080).unwrap();
+        let right = select(&outputs, 0, 0, 1920, 1080).unwrap();
+        assert_eq!(left.physical, (2400, 1350));
+        assert_eq!(right.physical, (2880, 1620));
+        assert_eq!(left.inward_crop(1, 1, 101, 101).unwrap(), (2, 2, 125, 125));
+        assert_eq!(
+            right.inward_crop(1, 1, 101, 101).unwrap(),
+            (2, 2, 151, 151)
+        );
     }
 
     #[test]

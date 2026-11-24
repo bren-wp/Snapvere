@@ -87,8 +87,8 @@ export const ipc = {
   setDrawInteractive: (interactive: boolean) =>
     invoke<void>("set_draw_interactive", { interactive }),
   /** Redact zone koje Rust pikselizira u svakom frameu snimke. */
-  setBlurRegions: (rects: PixelRect[]) =>
-    invoke<void>("set_blur_regions", { rects }),
+  setBlurRegions: (rects: PixelRect[], viewportWidth: number, viewportHeight: number) =>
+    invoke<void>("set_blur_regions", { rects, viewportWidth, viewportHeight }),
 
   // ── editor ──
   saveEditedImage: (base64Png: string, format: ImageFormat, quality: number) =>

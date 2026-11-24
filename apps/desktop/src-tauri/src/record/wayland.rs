@@ -64,14 +64,10 @@ fn verify_layout(outputs: &[OutputGeometry], output: &OutputGeometry) -> Result<
         (x, y, x + i64::from(o.logical.0), y + i64::from(o.logical.1))
     };
     let (left, top, right, bottom) = bounds(output);
-    if outputs
-        .iter()
-        .filter(|o| o.name != output.name)
-        .any(|o| {
-            let (x, y, r, b) = bounds(o);
-            left < r && x < right && top < b && y < bottom
-        })
-    {
+    if outputs.iter().filter(|o| o.name != output.name).any(|o| {
+        let (x, y, r, b) = bounds(o);
+        left < r && x < right && top < b && y < bottom
+    }) {
         return Err("Overlapping or mirrored Wayland monitors cannot be matched safely".into());
     }
     Ok(())

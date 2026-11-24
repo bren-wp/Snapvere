@@ -2,6 +2,8 @@
 
 ## v0.2.32 — Release integrity (development)
 
+- Validate output-local redaction viewport and map mask edges outward in Rust; add headless wlroots mixed-DPI compositor geometry acceptance.
+
 - Bind experimental Wayland logical overlay selection to validated per-output physical crop dimensions and portal video caps, with strict monitor/viewport identity checks.
 
 - Add independent Wayland compositor output inventory and exact inward fractional logical-to-physical region mapping; retain capture gating until real mixed-DPI overlay and stream validation.

@@ -412,14 +412,24 @@ fn bounded_blur_rects(
         .collect())
 }
 
-pub fn set_blur_regions(app: &AppHandle, rects: Vec<PixelRect>) -> Result<(), String> {
+pub fn set_blur_regions(
+    app: &AppHandle,
+    rects: Vec<PixelRect>,
+    viewport: (u32, u32),
+    surface: (u32, u32),
+    scale: f64,
+) -> Result<(), String> {
     let state = app.state::<AppState>();
     let guard = crate::state::lock(&state.recorder);
     let Some(session) = guard.as_ref() else {
         return Err("nema aktivnog snimanja".into());
     };
     let ctl = &session.ctl;
-    let bounded = bounded_blur_rects(&rects, ctl.width, ctl.height)?;
+    if surface != (ctl.width, ctl.height) {
+        return Err("Redaction window does not match the recording dimensions".into());
+    }
+    let mapped = pixels::map_redaction_rects(&rects, viewport, surface, scale)?;
+    let bounded = bounded_blur_rects(&mapped, ctl.width, ctl.height)?;
     *crate::state::lock(&ctl.blur) = bounded;
     Ok(())
 }

@@ -1407,10 +1407,8 @@ fn start_recording_inner(
             let scale = monitor.scale_factor();
             if !scale.is_finite()
                 || scale <= 0.0
-                || (f64::from(output.logical.0) * scale - f64::from(output.physical.0)).abs()
-                    > 1.0
-                || (f64::from(output.logical.1) * scale - f64::from(output.physical.1)).abs()
-                    > 1.0
+                || (f64::from(output.logical.0) * scale - f64::from(output.physical.0)).abs() > 1.0
+                || (f64::from(output.logical.1) * scale - f64::from(output.physical.1)).abs() > 1.0
             {
                 return Err("Wayland selection scale does not match the physical stream".into());
             }
@@ -1692,9 +1690,19 @@ pub fn set_blur_regions(
     window: tauri::WebviewWindow,
     app: AppHandle,
     rects: Vec<PixelRect>,
+    viewport_width: u32,
+    viewport_height: u32,
 ) -> Result<(), String> {
     require_window_label(window.label(), &["recdraw"])?;
-    record::set_blur_regions(&app, rects)
+    let size = window.inner_size().map_err(estr)?;
+    let scale = window.scale_factor().map_err(estr)?;
+    record::set_blur_regions(
+        &app,
+        rects,
+        (viewport_width, viewport_height),
+        (size.width, size.height),
+        scale,
+    )
 }
 
 /// Sakrij UI snimanja (HUD + sloj za crtanje). Zove ga frontend kad snimanje završi.
