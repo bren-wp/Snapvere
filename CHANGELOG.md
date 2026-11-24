@@ -2,6 +2,8 @@
 
 ## v0.2.32 — Release integrity (development)
 
+- Wire the experimental Rust recorder to the native AAC encoder and explicit dual-input PipeWire mixer, with bounded PCM/video-clock alignment, pause teardown, same-target resume and fail-closed audio health checks. Public capabilities remain disabled.
+
 - Add an experimental native AAC branch to the Linux MP4 adapter, plus real PipeWire PCM-to-AAC/H.264 mux, pause/resume and missing-device regression tests. Production recorder integration remains gated.
 
 - Add an isolated native PipeWire PCM transport acceptance test with virtual source and sink-monitor devices, explicit target selection and missing-target rejection. No audio capability enabled yet.

@@ -4,6 +4,7 @@ fn main() {
         && std::env::var_os("CARGO_FEATURE_LINUX_NATIVE_MEDIA").is_some()
     {
         println!("cargo:rerun-if-changed=native/linux_mp4.c");
+        println!("cargo:rerun-if-changed=native/linux_audio.c");
         let library = pkg_config::Config::new()
             .cargo_metadata(false)
             .atleast_version("1.20")
@@ -11,6 +12,7 @@ fn main() {
             .expect("GStreamer development libraries required for linux-native-media");
         cc::Build::new()
             .file("native/linux_mp4.c")
+            .file("native/linux_audio.c")
             .includes(&library.include_paths)
             .warnings_into_errors(true)
             .compile("snapvere_linux_mp4");

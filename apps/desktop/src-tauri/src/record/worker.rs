@@ -65,8 +65,10 @@ pub(super) fn run(
             }
         }
     };
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, all(target_os = "linux", feature = "linux-native-media"))))]
     let mixer: Option<()> = None;
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    let mut mixer = linux_audio::Mixer::selected(app, &opts)?;
 
     let mut encoder = open_encoder(
         path,
@@ -94,6 +96,12 @@ pub(super) fn run(
 
     let interval = Duration::from_secs_f64(1.0 / fps as f64);
     let dur_100ns = (interval.as_nanos() / 100) as i64;
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    if let Some(mixer) = &mut mixer {
+        mixer.resume()?;
+        ctl.mic.store(opts.mic, Ordering::Relaxed);
+        ctl.system_audio.store(opts.system_audio, Ordering::Relaxed);
+    }
     let started = Instant::now();
     // Audio i video dijele sat od ovog trenutka: sve što je mikrofon uhvatio prije
     // starta bi inače stajalo ispred prvog framea kao konstantan zaostatak.
@@ -152,11 +160,22 @@ pub(super) fn run(
         if ctl.phase.load(Ordering::Relaxed) == PHASE_PAUSED {
             if pause_started.is_none() {
                 pause_started = Some(Instant::now());
+                #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+                if let Some(mixer) = &mut mixer {
+                    mixer.pause();
+                }
             }
             std::thread::sleep(Duration::from_millis(40));
             continue;
         }
         if let Some(p) = pause_started.take() {
+            #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+            if let Some(mixer) = &mut mixer {
+                if let Err(error) = mixer.resume() {
+                    recording_error = Some(error);
+                    break;
+                }
+            }
             paused_total += p.elapsed();
             next_due = Instant::now();
             #[cfg(windows)]
@@ -248,6 +267,14 @@ pub(super) fn run(
             }
         }
 
+        #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+        if let Some(mixer) = &mut mixer {
+            if let Err(error) = mixer.pump(&mut encoder, time_100ns + dur_100ns) {
+                recording_error = Some(error);
+                break;
+            }
+        }
+
         let frames = ctl.frames.fetch_add(1, Ordering::Relaxed) + 1;
         ctl.elapsed_ms
             .store(media.as_millis() as u64, Ordering::Relaxed);
@@ -288,6 +315,11 @@ pub(super) fn run(
                 recording_error = Some(format!("snimanje: završni audio zapis nije uspio — {e}"));
             }
         }
+    }
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    if let Some(mixer) = &mut mixer {
+        // Stop collecting before finalization; do not capture after Stop.
+        mixer.pause();
     }
     let frames = ctl.frames.load(Ordering::Relaxed).max(1);
     log(&format!(

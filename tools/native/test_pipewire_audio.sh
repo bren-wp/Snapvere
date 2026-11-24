@@ -27,6 +27,9 @@ trap cleanup EXIT
 cc -Wall -Wextra -Werror -O2 "$root/tools/native/pipewire_capture_probe.c" \
     "$root/apps/desktop/src-tauri/native/linux_mp4.c" \
     -o "$runtime/audio-probe" $(pkg-config --cflags --libs gstreamer-app-1.0)
+cc -Wall -Wextra -Werror -O2 "$root/tools/native/mixer_probe.c" \
+    "$root/apps/desktop/src-tauri/native/linux_audio.c" \
+    -o "$runtime/mixer-probe" $(pkg-config --cflags --libs gstreamer-app-1.0)
 pipewire >"$runtime/pipewire.log" 2>&1 & pids+=("$!")
 for attempt in {1..50}; do
     [[ -S "$runtime/pipewire-0" ]] && break
@@ -105,6 +108,9 @@ print("AAC/H264 decoded, pause excluded, duration skew:", abs(ad - vd))
 '
 done
 
+# The actual recorder mixer must receive both requested sources.
+timeout 10s "$runtime/mixer-probe" "$source_serial" "$sink_serial"
+
 # Remove the selected virtual microphone during the explicit pause.
 # The session must not substitute another available node or publish a partial MP4.
 lost="$runtime/lost.mp4"
@@ -123,3 +129,9 @@ set -e
 cat "$runtime/lost.log"
 [[ "$status" == 1 && ! -e "$lost" ]]
 echo "Selected-device removal rejected without publishing incomplete MP4"
+set +e
+timeout 10s "$runtime/mixer-probe" "$source_serial" "$sink_serial"
+status=$?
+set -e
+[[ "$status" == 1 ]]
+echo "Mixer refuses a missing selected source"

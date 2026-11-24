@@ -11,6 +11,7 @@ typedef struct {
     gsize frame_bytes;
     guint64 audio_frames;
     guint64 video_end;
+    guint64 last_video_pts;
     gboolean failed;
 } SnapvereMp4;
 
@@ -114,7 +115,8 @@ void *snapvere_mp4_open(int fd, guint w, guint h, guint fps, guint bitrate) {
 
 static int push_bytes(SnapvereMp4 *ctx, GstAppSrc *source, const guint8 *data,
                       gsize len, guint64 pts_ns, guint64 duration_ns, guint64 limit) {
-    if (!ctx || ctx->failed || !source || !data || !len || !duration_ns) return 1;
+    if (!ctx || ctx->failed || !source || !data || !len || len > limit || !duration_ns)
+        return 1;
     // Only one producer owns the encoder. Check prospective queue size before
     // enqueueing; never block indefinitely or silently discard captured data.
     gint64 deadline = g_get_monotonic_time() + 2 * G_USEC_PER_SEC;
@@ -140,14 +142,17 @@ int snapvere_mp4_push(void *handle, const guint8 *data, gsize len,
     SnapvereMp4 *ctx = handle;
     if (!ctx) return 1;
     if (len != ctx->frame_bytes || pts_ns > G_MAXUINT64 - duration_ns ||
-        (ctx->video_end && pts_ns < ctx->video_end && ctx->audio)) {
+        (ctx->video_end && pts_ns <= ctx->last_video_pts)) {
         ctx->failed = TRUE;
         return 1;
     }
     int status = push_bytes(ctx, ctx->source, data, len, pts_ns, duration_ns,
                             (guint64)ctx->frame_bytes * 2);
     if (status) ctx->failed = TRUE;
-    else ctx->video_end = pts_ns + duration_ns;
+    else {
+        ctx->last_video_pts = pts_ns;
+        ctx->video_end = pts_ns + duration_ns;
+    }
     return status;
 }
 

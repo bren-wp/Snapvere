@@ -9,7 +9,15 @@ use std::path::Path;
 use std::ptr::NonNull;
 
 unsafe extern "C" {
-    fn snapvere_mp4_open(fd: c_int, w: u32, h: u32, fps: u32, bitrate: u32) -> *mut c_void;
+    fn snapvere_mp4_open_av(
+        fd: c_int,
+        w: u32,
+        h: u32,
+        fps: u32,
+        bitrate: u32,
+        with_audio: c_int,
+    ) -> *mut c_void;
+    fn snapvere_mp4_push_pcm(encoder: *mut c_void, data: *const u8, len: usize) -> c_int;
     fn snapvere_mp4_push(
         encoder: *mut c_void,
         data: *const u8,
@@ -33,7 +41,14 @@ pub(super) struct LinuxMp4 {
 }
 
 impl LinuxMp4 {
-    pub(super) fn new(path: &Path, w: u32, h: u32, fps: u32, quality: u8) -> Result<Self, String> {
+    pub(super) fn new(
+        path: &Path,
+        w: u32,
+        h: u32,
+        fps: u32,
+        quality: u8,
+        with_audio: bool,
+    ) -> Result<Self, String> {
         if !(16..=3840).contains(&w)
             || !(16..=2160).contains(&h)
             || !w.is_multiple_of(2)
@@ -68,9 +83,10 @@ impl LinuxMp4 {
                 / 1000)
                 .clamp(256_000, 30_000_000) as u32;
         // SAFETY: file remains open until the native pipeline has stopped.
-        let encoder =
-            NonNull::new(unsafe { snapvere_mp4_open(file.as_raw_fd(), w, h, fps, bitrate) })
-                .ok_or("Linux H.264 encoder unavailable; check local GStreamer plugins")?;
+        let encoder = NonNull::new(unsafe {
+            snapvere_mp4_open_av(file.as_raw_fd(), w, h, fps, bitrate, c_int::from(with_audio))
+        })
+        .ok_or("Linux H.264/AAC encoder unavailable; check local GStreamer plugins")?;
         Ok(Self {
             encoder,
             file,
@@ -116,6 +132,18 @@ impl LinuxMp4 {
             return Err(format!("Linux H.264 frame rejected (status {status})"));
         }
         self.last_pts = Some(timestamp);
+        Ok(())
+    }
+
+    pub(super) fn write_pcm(&mut self, pcm: &[u8]) -> Result<(), String> {
+        if self.failed || self.published {
+            return Err("Linux MP4 encoder is not writable".into());
+        }
+        // SAFETY: the native adapter validates the length and copies the bytes.
+        if unsafe { snapvere_mp4_push_pcm(self.encoder.as_ptr(), pcm.as_ptr(), pcm.len()) } != 0 {
+            self.failed = true;
+            return Err("Linux AAC rejected PCM audio".into());
+        }
         Ok(())
     }
 
@@ -167,7 +195,7 @@ mod tests {
     fn encodes_h264_mp4_and_keeps_output_unpublished_until_finish() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("capture.mp4");
-        let mut encoder = LinuxMp4::new(&path, 64, 48, 10, 80).unwrap();
+        let mut encoder = LinuxMp4::new(&path, 64, 48, 10, 80, false).unwrap();
         let mut frame = vec![0_u8; 64 * 48 * 4];
         for tick in 0..12 {
             for pixel in frame.as_chunks_mut::<4>().0 {
@@ -191,7 +219,7 @@ mod tests {
     fn rejects_malformed_frames_and_drops_unpublished_output() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("capture.mp4");
-        let mut encoder = LinuxMp4::new(&path, 64, 48, 10, 80).unwrap();
+        let mut encoder = LinuxMp4::new(&path, 64, 48, 10, 80, false).unwrap();
         assert!(encoder.write(&[0; 8], 0, 1_000_000).is_err());
         assert!(encoder.finish().is_err());
         drop(encoder);
@@ -203,7 +231,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("capture.mp4");
         std::fs::write(&path, b"original").unwrap();
-        let mut encoder = LinuxMp4::new(&path, 64, 48, 10, 80).unwrap();
+        let mut encoder = LinuxMp4::new(&path, 64, 48, 10, 80, false).unwrap();
         encoder.write(&[0; 64 * 48 * 4], 0, 1_000_000).unwrap();
         assert!(encoder.finish().is_err());
         drop(encoder);

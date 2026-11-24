@@ -20,6 +20,8 @@ mod mp4;
 mod gifenc;
 #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
 mod linux_mp4;
+#[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+mod linux_audio;
 mod pixels;
 mod transport;
 mod worker;
@@ -246,10 +248,8 @@ pub fn start(
     }
     validate_audio_options(&opts)?;
     #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
-    if opts.format == RecordFormat::Mp4 && (opts.mic || opts.system_audio || opts.capture_cursor) {
-        return Err(
-            "Experimental Linux MP4 requires audio and cursor capture to be disabled".into(),
-        );
+    if opts.format == RecordFormat::Mp4 && opts.capture_cursor {
+        return Err("Experimental Linux MP4 requires cursor capture to be disabled".into());
     }
 
     let fps = opts.fps.clamp(5, 60);
@@ -539,7 +539,7 @@ fn open_encoder(
     quality: u8,
     with_audio: bool,
 ) -> Result<Encoder, String> {
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, all(target_os = "linux", feature = "linux-native-media"))))]
     let _ = with_audio;
     match format {
         #[cfg(windows)]
@@ -556,7 +556,7 @@ fn open_encoder(
         )?))),
         #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
         RecordFormat::Mp4 => Ok(Encoder::LinuxMp4(Box::new(linux_mp4::LinuxMp4::new(
-            path, w, h, fps, quality,
+            path, w, h, fps, quality, with_audio,
         )?))),
         #[cfg(not(any(windows, all(target_os = "linux", feature = "linux-native-media"))))]
         RecordFormat::Mp4 => Err("MP4 recording is not available in this build".into()),

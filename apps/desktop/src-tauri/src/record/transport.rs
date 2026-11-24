@@ -144,6 +144,14 @@ impl Encoder {
         }
     }
 
+    #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
+    pub(super) fn write_pcm(&mut self, pcm: &[u8]) -> Result<(), String> {
+        match self {
+            Encoder::LinuxMp4(encoder) => encoder.write_pcm(pcm),
+            Encoder::Gif(_) => Err("GIF does not support PCM audio".into()),
+        }
+    }
+
     pub(super) fn finish(&mut self) -> Result<(), String> {
         match self {
             #[cfg(windows)]
