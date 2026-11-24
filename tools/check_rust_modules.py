@@ -24,7 +24,12 @@ while pending:
         raise AssertionError(f"Referenced Rust source does not exist: {source}")
     checked.add(source)
     code = source.read_text(encoding="utf-8")
-    if re.search(r"#\s*\[\s*(?:allow|expect)\s*\(\s*dead_code\b", code):
+    # Cover grouped attributes, including #[allow(unused, dead_code)] and
+    # inner attributes. The old pattern only checked the first lint.
+    if re.search(
+        r"#\s*!?\s*\[\s*(?:allow|expect)\s*\([^\]]*?\bdead_code\b",
+        code,
+    ):
         raise AssertionError(f"Dead-code suppression requires removal or justification: {source}")
     folder = source.parent if source.name in {"lib.rs", "main.rs", "mod.rs"} else source.with_suffix("")
     for module in module_pattern.findall(code):

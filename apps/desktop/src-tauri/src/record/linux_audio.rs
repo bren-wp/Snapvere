@@ -13,7 +13,7 @@ const MAX_PENDING: usize = 96_000;
 const MAX_BLOCK: usize = 19_200;
 
 unsafe extern "C" {
-    fn snapvere_audio_open(mic: u64, monitor: u64) -> *mut c_void;
+    fn snapvere_audio_open(mic: u64, monitor: u64, cookie: u32) -> *mut c_void;
     fn snapvere_audio_pull(handle: *mut c_void, data: *mut u8, capacity: usize) -> c_int;
     fn snapvere_audio_free(handle: *mut c_void);
 }
@@ -30,6 +30,7 @@ impl Drop for Capture {
 pub(super) struct Mixer {
     mic: u64,
     monitor: u64,
+    cookie: u32,
     capture: Option<Capture>,
     pending: VecDeque<u8>,
     written: u64,
@@ -60,9 +61,16 @@ impl Mixer {
         if mic != 0 && mic == monitor {
             return Err("Microphone and monitor must be distinct PipeWire nodes".into());
         }
+        let cookie = store
+            .get("linuxPipeWireCookie")
+            .and_then(|value| value.as_u64())
+            .and_then(|value| u32::try_from(value).ok())
+            .filter(|value| *value != 0)
+            .ok_or("Select audio targets in the current PipeWire session")?;
         Ok(Some(Self {
             mic,
             monitor,
+            cookie,
             capture: None,
             pending: VecDeque::new(),
             written: 0,
@@ -74,7 +82,7 @@ impl Mixer {
             return Err("PipeWire capture already active".into());
         }
         // SAFETY: numeric serials only; the native graph has no external URLs.
-        let handle = NonNull::new(unsafe { snapvere_audio_open(self.mic, self.monitor) })
+        let handle = NonNull::new(unsafe { snapvere_audio_open(self.mic, self.monitor, self.cookie) })
             .ok_or("Requested PipeWire input unavailable")?;
         self.capture = Some(Capture(handle));
         Ok(())

@@ -29,7 +29,8 @@ cc -Wall -Wextra -Werror -O2 "$root/tools/native/pipewire_capture_probe.c" \
     -o "$runtime/audio-probe" $(pkg-config --cflags --libs gstreamer-app-1.0)
 cc -Wall -Wextra -Werror -O2 "$root/tools/native/mixer_probe.c" \
     "$root/apps/desktop/src-tauri/native/linux_audio.c" \
-    -o "$runtime/mixer-probe" $(pkg-config --cflags --libs gstreamer-app-1.0)
+    "$root/apps/desktop/src-tauri/native/linux_audio_identity.c" \
+    -o "$runtime/mixer-probe" $(pkg-config --cflags --libs gstreamer-app-1.0 libpipewire-0.3)
 pipewire >"$runtime/pipewire.log" 2>&1 & pids+=("$!")
 for attempt in {1..50}; do
     [[ -S "$runtime/pipewire-0" ]] && break

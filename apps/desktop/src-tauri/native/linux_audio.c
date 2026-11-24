@@ -4,6 +4,9 @@
 #include <gst/app/gstappsink.h>
 #include <string.h>
 
+int snapvere_audio_validate(guint64 mic, guint64 monitor, guint32 expected_cookie,
+                            guint32 *actual_cookie);
+
 typedef struct {
     GMutex lock;
     gint64 seen;
@@ -92,8 +95,9 @@ static gboolean configure_input(SnapvereAudio *ctx, guint index, guint64 serial)
     return ok;
 }
 
-void *snapvere_audio_open(guint64 mic, guint64 monitor) {
-    if ((!mic && !monitor) || (mic && mic == monitor)) return NULL;
+void *snapvere_audio_open(guint64 mic, guint64 monitor, guint32 cookie) {
+    if (!cookie || snapvere_audio_validate(mic, monitor, cookie, NULL) != 0)
+        return NULL;
     GError *error = NULL;
     if (!gst_init_check(NULL, NULL, &error)) {
         g_clear_error(&error);
@@ -136,7 +140,12 @@ void *snapvere_audio_open(guint64 mic, guint64 monitor) {
     while (g_get_monotonic_time() < deadline) {
         GstSample *sample = gst_app_sink_try_pull_sample(ctx->sink, 20 * GST_MSECOND);
         if (sample) gst_sample_unref(sample);
-        if (healthy(ctx)) return ctx;
+        if (healthy(ctx)) {
+            // Detect a server restart or device removal during graph startup.
+            if (snapvere_audio_validate(mic, monitor, cookie, NULL) == 0)
+                return ctx;
+            break;
+        }
         if (ctx->terminal_error) break;
     }
 fail:

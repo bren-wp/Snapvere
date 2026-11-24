@@ -3,7 +3,9 @@
 #include <gst/gst.h>
 #include <stdlib.h>
 
-void *snapvere_audio_open(guint64 mic, guint64 monitor);
+void *snapvere_audio_open(guint64 mic, guint64 monitor, guint32 cookie);
+int snapvere_audio_validate(guint64 mic, guint64 monitor, guint32 expected_cookie,
+                            guint32 *actual_cookie);
 int snapvere_audio_pull(void *handle, guint8 *data, gsize capacity);
 void snapvere_audio_free(void *handle);
 
@@ -12,7 +14,13 @@ int main(int argc, char **argv) {
     guint64 mic = g_ascii_strtoull(argv[1], NULL, 10);
     guint64 monitor = g_ascii_strtoull(argv[2], NULL, 10);
     if (!mic || !monitor || mic == monitor) return 2;
-    void *capture = snapvere_audio_open(mic, monitor);
+    guint32 cookie = 0;
+    if (snapvere_audio_validate(mic, monitor, 0, &cookie) || !cookie) return 1;
+    // Reject reversed roles and an identity from a different server instance.
+    if (!snapvere_audio_validate(monitor, mic, cookie, NULL)) return 3;
+    guint32 wrong_cookie = cookie == 1 ? 2 : cookie - 1;
+    if (!snapvere_audio_validate(mic, monitor, wrong_cookie, NULL)) return 3;
+    void *capture = snapvere_audio_open(mic, monitor, cookie);
     if (!capture) return 1;
     guint8 pcm[19200];
     guint64 frames = 0, audible = 0;

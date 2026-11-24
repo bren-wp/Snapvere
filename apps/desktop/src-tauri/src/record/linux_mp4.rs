@@ -84,7 +84,14 @@ impl LinuxMp4 {
                 .clamp(256_000, 30_000_000) as u32;
         // SAFETY: file remains open until the native pipeline has stopped.
         let encoder = NonNull::new(unsafe {
-            snapvere_mp4_open_av(file.as_raw_fd(), w, h, fps, bitrate, c_int::from(with_audio))
+            snapvere_mp4_open_av(
+                file.as_raw_fd(),
+                w,
+                h,
+                fps,
+                bitrate,
+                c_int::from(with_audio),
+            )
         })
         .ok_or("Linux H.264/AAC encoder unavailable; check local GStreamer plugins")?;
         Ok(Self {

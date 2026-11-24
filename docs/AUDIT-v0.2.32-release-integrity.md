@@ -56,3 +56,8 @@ Frontend screenshots are not native WebView2 or WebKitGTK verification. Existing
 - The isolated PipeWire job now builds and exercises the same native mixer with both virtual inputs and rejects a missing requested input. This is not evidence of independent physical signals or complete desktop A/V acceptance. CI pending.
 
 - Latch native bus errors permanently during mixer startup; add a Rust FFI AAC/video test requiring both MP4 sample entries and no early publication. This synthetic input test complements the real PipeWire transport test.
+
+### Live audio identity gate
+
+- Validate selected object.serial against the live native PipeWire registry and require Audio/Source for microphone and Audio/Sink for monitoring. Require the explicit current server cookie (linuxPipeWireCookie) in the experimental settings; reject stale session identities, duplicate or missing targets, and reversed roles. Recheck after graph startup and on resume. Snapshot validation is not a proof of actual link routing during a concurrent graph change; live link monitoring and the graphical picker remain mandatory before enabling this feature publicly.
+- Add isolated native tests for swapped roles and mismatched server cookie. Extend dead-code lint suppression detection to grouped attributes. Fix the exact Windows rustfmt diagnostic from the prior run. No dependency versions updated; no physical QA or visual parity claim.
