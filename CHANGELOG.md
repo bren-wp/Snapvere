@@ -2,6 +2,8 @@
 
 ## v0.2.33 — Preview release verification (development)
 
+- Detach bounded Wayland source buffers outside the internal PipeWire dequeue lock; retain exact geometry, packed system-memory caps and corrupted-frame rejection. Add parent-buffer lifetime regression coverage and isolated source diagnostics.
+
 - Pin isolated Wayland CI to upstream portal v0.9.0, including the documented fix for the exact `session already has a frame object` protocol error and initial-frame scheduling. Keep all real video acceptance assertions mandatory.
 
 - Exercise actual repaint damage on the authorized Wayland output, independently verify both fixture phases and require both through the real portal before moving the marker. Retain three consecutive marker samples and all production timeouts.

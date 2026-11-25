@@ -173,10 +173,10 @@ done
 cc -Wall -Wextra -Werror -O2 -I"$root/apps/desktop/src-tauri/native" \
     "$root/tools/native/wayland_portal_probe.c" "$root/apps/desktop/src-tauri/native/linux_wayland.c" \
     -o "$runtime/portal-probe" $(pkg-config --cflags --libs gio-unix-2.0 gstreamer-app-1.0 gstreamer-video-1.0)
-G_MESSAGES_DEBUG=all timeout 105 "$runtime/portal-probe" >"$runtime/probe.log" 2>&1 & probe=$!; pids+=("$probe")
+GST_DEBUG=pipewiresrc:6 G_MESSAGES_DEBUG=all timeout 105 "$runtime/portal-probe" >"$runtime/probe.log" 2>&1 & probe=$!; pids+=("$probe")
 for _ in {1..900}; do
   grep -q '^SEPARATE_OUTPUT_MARKER_ABSENT$' "$runtime/probe.log" && break
-  kill -0 "$probe" 2>/dev/null || { cat "$runtime/probe.log"; exit 1; }
+  kill -0 "$probe" 2>/dev/null || { tail -120 "$runtime/probe.log"; exit 1; }
   sleep .1
 done
 grep -q '^SEPARATE_OUTPUT_MARKER_ABSENT$' "$runtime/probe.log"
@@ -205,7 +205,7 @@ done
 [[ "$visible" == 1 ]] || { echo "Moved marker not visible on captured output"; exit 1; }
 echo "Native marker verified visible on captured output"
 wait "$probe"
-cat "$runtime/probe.log"
+grep -E "^(BASELINE_REPAINT_PHASES|SEPARATE_OUTPUT_MARKER_ABSENT|SAME_OUTPUT_MARKER_PRESENT|SUSTAINED_MARKER_SAMPLES)" "$runtime/probe.log"
 python3 - "$started" "$runtime/probe.log" <<'PY'
 import sys
 lines=open(sys.argv[2], encoding="utf-8").read().splitlines()

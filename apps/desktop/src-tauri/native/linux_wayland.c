@@ -331,6 +331,43 @@ static gboolean copy_frame(GstSample *sample, guint w, guint h, guint8 *data, gs
     return valid;
 }
 
+// Detach the producer's memory on the GStreamer streaming thread, after
+// pipewiresrc has returned from its internal PipeWire loop lock. The old
+// always-copy path can recycle under the loop lock (upstream 30ff8da).
+// Preserve video stride/offset and timestamps, but never retain pool parents.
+static GstBuffer *detach_video_buffer(GstBuffer *source) {
+    if (!source || GST_BUFFER_FLAG_IS_SET(source, GST_BUFFER_FLAG_CORRUPTED))
+        return NULL;
+    gsize size = gst_buffer_get_size(source);
+    if (!size || size > 128u * 1024u * 1024u) return NULL;
+    GstBuffer *copy = gst_buffer_copy_deep(source);
+    if (!copy) return NULL;
+    GstParentBufferMeta *parent;
+    while ((parent = gst_buffer_get_parent_buffer_meta(copy)) != NULL) {
+        if (!gst_buffer_remove_meta(copy, &parent->parent)) {
+            gst_buffer_unref(copy);
+            return NULL;
+        }
+    }
+    if (gst_buffer_get_size(copy) != size) {
+        gst_buffer_unref(copy);
+        return NULL;
+    }
+    return copy;
+}
+
+static GstPadProbeReturn detach_video_probe(GstPad *pad, GstPadProbeInfo *info,
+                                            gpointer user_data) {
+    (void)pad;
+    (void)user_data;
+    GstBuffer *source = GST_PAD_PROBE_INFO_BUFFER(info);
+    GstBuffer *copy = detach_video_buffer(source);
+    if (!copy) return GST_PAD_PROBE_DROP;
+    GST_PAD_PROBE_INFO_DATA(info) = copy;
+    gst_buffer_unref(source);
+    return GST_PAD_PROBE_OK;
+}
+
 void snapvere_wayland_free(void *handle) {
     PortalVideo *ctx = handle;
     if (!ctx) return;
@@ -378,10 +415,11 @@ void *snapvere_wayland_open(gint x, gint y, guint logical_width, guint logical_h
     g_main_context_pop_thread_default(ctx->context);
     if (!ok) goto fail;
     GError *error = NULL;
-    // Return producer buffers promptly: the recorder already copies BGRA
-    // into its own bounded memory. Do not pin the portal's last pool buffer.
+    // Restrict input negotiation before conversion, then detach buffers at
+    // the source pad outside the PipeWire loop; never queue producer memory.
     ctx->pipeline = gst_parse_launch(
-        "pipewiresrc name=video always-copy=true min-buffers=4 ! videoconvert ! video/x-raw,format=BGRA "
+        "pipewiresrc name=video always-copy=false min-buffers=4 max-buffers=8 "
+        "! capsfilter name=source_caps ! videoconvert ! video/x-raw,format=BGRA "
         "! appsink name=frames sync=false max-buffers=2 drop=true "
         "enable-last-sample=false wait-on-eos=false", &error);
     if (error || !ctx->pipeline) {
@@ -393,6 +431,23 @@ void *snapvere_wayland_open(gint x, gint y, guint logical_width, guint logical_h
     ctx->video_bus = gst_element_get_bus(ctx->pipeline);
     if (!input || !ctx->sink || !ctx->video_bus) {
         if (input) gst_object_unref(input);
+        goto fail;
+    }
+    GstElement *source_filter = gst_bin_get_by_name(GST_BIN(ctx->pipeline), "source_caps");
+    gchar *source_spec = g_strdup_printf(
+        "video/x-raw,format=(string){BGRx,BGRA,RGBx,RGBA,xBGR,ABGR,xRGB,ARGB},width=(int)%u,height=(int)%u",
+        width, height);
+    GstCaps *source_caps = gst_caps_from_string(source_spec);
+    g_free(source_spec);
+    GstPad *source_pad = gst_element_get_static_pad(input, "src");
+    gboolean configured = source_filter && source_caps && source_pad &&
+        gst_pad_add_probe(source_pad, GST_PAD_PROBE_TYPE_BUFFER, detach_video_probe, NULL, NULL);
+    if (configured) g_object_set(source_filter, "caps", source_caps, NULL);
+    if (source_pad) gst_object_unref(source_pad);
+    if (source_caps) gst_caps_unref(source_caps);
+    if (source_filter) gst_object_unref(source_filter);
+    if (!configured) {
+        gst_object_unref(input);
         goto fail;
     }
     GstCaps *expected = gst_caps_new_simple("video/x-raw",
@@ -516,7 +571,21 @@ int snapvere_wayland_test_frame(void) {
         !copy_frame(sample, 2, 2, output, sizeof(output) - 1) &&
         !copy_frame(sample, 1, 4, output, sizeof(output));
     gst_sample_unref(sample);
+    // The detached copy must preserve the padded frame and release its parent.
+    GstBuffer *parent = gst_buffer_new_allocate(NULL, 4, NULL);
+    gst_buffer_add_parent_buffer_meta(buffer, parent);
+    GstBuffer *detached = detach_video_buffer(buffer);
+    valid = valid && detached && !gst_buffer_get_parent_buffer_meta(detached);
+    if (detached) {
+        GstSample *detached_sample = gst_sample_new(detached, caps, NULL, NULL);
+        valid = valid && copy_frame(detached_sample, 2, 2, output, sizeof(output)) &&
+            !memcmp(output, expected, sizeof(output));
+        gst_sample_unref(detached_sample);
+        gst_buffer_unref(detached);
+    }
+    gst_buffer_unref(parent);
     GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_CORRUPTED);
+    valid = valid && !detach_video_buffer(buffer);
     sample = gst_sample_new(buffer, caps, NULL, NULL);
     memset(output, 0xA5, sizeof(output));
     valid = valid && !copy_frame(sample, 2, 2, output, sizeof(output));
