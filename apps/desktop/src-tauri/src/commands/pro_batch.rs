@@ -284,39 +284,98 @@ fn still_format(value: &str) -> Result<image::ImageFormat, String> {
     }
 }
 
+#[derive(Default)]
+struct BatchImageScratch {
+    bytes: Vec<u8>,
+}
+
+impl BatchImageScratch {
+    fn clear(&mut self) {
+        self.bytes.fill(0);
+        self.bytes.clear();
+    }
+
+    fn decode(
+        &mut self,
+        source: &Path,
+        format: image::ImageFormat,
+    ) -> Result<image::DynamicImage, String> {
+        self.clear();
+        let result = self.decode_inner(source, format);
+        self.clear();
+        result
+    }
+
+    fn decode_inner(
+        &mut self,
+        source: &Path,
+        format: image::ImageFormat,
+    ) -> Result<image::DynamicImage, String> {
+        let (mut reader, expected) = open_bounded_source(source, MAX_IMAGE_BYTES)?;
+        let size = usize::try_from(expected).map_err(estr)?;
+        self.bytes
+            .try_reserve_exact(size)
+            .map_err(|_| "Not enough memory for Pro image export".to_string())?;
+        self.bytes.resize(size, 0);
+        reader.read_exact(&mut self.bytes).map_err(estr)?;
+        let mut extra = [0_u8; 1];
+        if reader.read(&mut extra).map_err(estr)? != 0 {
+            return Err("Source changed during image export".into());
+        }
+        let (width, height) =
+            image::ImageReader::with_format(Cursor::new(self.bytes.as_slice()), format)
+                .into_dimensions()
+                .map_err(estr)?;
+        if width == 0 || height == 0 || u64::from(width) * u64::from(height) > MAX_IMAGE_PIXELS {
+            return Err("Image exceeds the safe Pro processing dimensions".into());
+        }
+        let mut reader =
+            image::ImageReader::with_format(Cursor::new(self.bytes.as_slice()), format);
+        let mut limits = image::Limits::default();
+        limits.max_alloc = Some(256 * 1024 * 1024);
+        reader.limits(limits);
+        reader.decode().map_err(estr)
+    }
+}
+
+impl Drop for BatchImageScratch {
+    fn drop(&mut self) {
+        self.clear();
+    }
+}
+
+#[cfg(test)]
 fn read_bounded_image(
     source: &Path,
     format: image::ImageFormat,
 ) -> Result<image::DynamicImage, String> {
-    let (reader, expected) = open_bounded_source(source, MAX_IMAGE_BYTES)?;
-    let mut bytes = Vec::new();
-    reader
-        .take(expected + 1)
-        .read_to_end(&mut bytes)
-        .map_err(estr)?;
-    if bytes.len() as u64 != expected {
-        return Err("Source changed during image export".into());
-    }
-    let (width, height) = image::ImageReader::with_format(Cursor::new(&bytes), format)
-        .into_dimensions()
-        .map_err(estr)?;
-    if width == 0 || height == 0 || u64::from(width) * u64::from(height) > MAX_IMAGE_PIXELS {
-        return Err("Image exceeds the safe Pro processing dimensions".into());
-    }
-    let mut reader = image::ImageReader::with_format(Cursor::new(bytes), format);
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(256 * 1024 * 1024);
-    reader.limits(limits);
-    reader.decode().map_err(estr)
+    BatchImageScratch::default().decode(source, format)
 }
 
+#[cfg(test)]
 fn transform_exclusively(
     source: &Path,
     destination: &Path,
     source_format: image::ImageFormat,
     preset: BatchPreset,
 ) -> Result<(), String> {
-    let mut decoded = read_bounded_image(source, source_format)?;
+    transform_with_scratch(
+        source,
+        destination,
+        source_format,
+        preset,
+        &mut BatchImageScratch::default(),
+    )
+}
+
+fn transform_with_scratch(
+    source: &Path,
+    destination: &Path,
+    source_format: image::ImageFormat,
+    preset: BatchPreset,
+    scratch: &mut BatchImageScratch,
+) -> Result<(), String> {
+    let mut decoded = scratch.decode(source, source_format)?;
     if let Some(edge) = preset
         .max_edge()
         .filter(|edge| decoded.width() > *edge || decoded.height() > *edge)
@@ -413,6 +472,7 @@ pub(super) async fn export(
         let destination = folder.into_path().map_err(estr)?;
         // Native picker decides the directory; don't accept a renderer path.
         let destination = PinnedDirectory::open(&destination)?;
+        let mut scratch = BatchImageScratch::default();
         let items = export_results(items, |shot| {
             let shot = shot.ok_or_else(|| "Gallery item no longer exists".to_string())?;
             if preset != BatchPreset::Original && shot.source == "recording" {
@@ -428,7 +488,7 @@ pub(super) async fn export(
             if preset == BatchPreset::Original {
                 copy_exclusively(&src, &file)
             } else {
-                transform_exclusively(&src, &file, still_format(&shot.format)?, preset)
+                transform_with_scratch(&src, &file, still_format(&shot.format)?, preset, &mut scratch)
             }
         });
         Ok(crate::models::BatchExportReport {
@@ -561,6 +621,27 @@ mod tests {
             );
         }
         assert_eq!(fs::read(&source).unwrap(), before);
+    }
+
+    #[test]
+    fn batch_scratch_reuses_allocation_and_clears_after_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("image.png");
+        let broken = dir.path().join("broken.png");
+        image::RgbaImage::from_pixel(32, 32, image::Rgba([12, 34, 56, 128]))
+            .save(&source)
+            .unwrap();
+        fs::write(&broken, b"not a png").unwrap();
+        let mut scratch = BatchImageScratch::default();
+        assert!(scratch.decode(&source, image::ImageFormat::Png).is_ok());
+        assert!(scratch.bytes.is_empty());
+        let capacity = scratch.bytes.capacity();
+        let address = scratch.bytes.as_ptr();
+        assert!(scratch.decode(&broken, image::ImageFormat::Png).is_err());
+        assert!(scratch.bytes.is_empty());
+        assert!(scratch.decode(&source, image::ImageFormat::Png).is_ok());
+        assert_eq!(scratch.bytes.capacity(), capacity);
+        assert_eq!(scratch.bytes.as_ptr(), address);
     }
 
     #[test]
