@@ -27,6 +27,7 @@ use windows::Win32::Graphics::Dxgi::{
 };
 
 use crate::logging::log;
+use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 
 /// Duplikacija jednog monitora. Sve metode se MORAJU zvati s iste dretve —
 /// D3D uređaj je vezan uz dretvu koja ga je stvorila.
@@ -106,12 +107,12 @@ impl DxgiGrabber {
                     let width = (r.right - r.left).max(0) as u32;
                     let height = (r.bottom - r.top).max(0) as u32;
 
-                    let mut grabber = Self {
+                    let grabber = Self {
                         device,
                         ctx,
                         dupl,
                         staging: None,
-                        buf: vec![0u8; (width as usize) * (height as usize) * 4],
+                        buf: super::pixels::allocate_bgra(width, height)?,
                         have_frame: false,
                         width,
                         height,
@@ -119,11 +120,6 @@ impl DxgiGrabber {
                         origin_y: y,
                     };
 
-                    // Kratko primanje: prvi AcquireNextFrame nakon DuplicateOutput obično
-                    // odmah vrati cijeli desktop. Ne čekamo dulje — start mora biti instant;
-                    // ako je ekran statičan, petlja snimanja preskače frameove dok prvi ne stigne
-                    // (skrivanje overlaya odmah nakon starta ionako izazove promjenu).
-                    let _ = grabber.grab(40);
                     log(&format!("DXGI duplikacija: {width}x{height} @ ({x},{y})"));
 
                     return Ok(grabber);
@@ -160,16 +156,16 @@ impl DxgiGrabber {
                             .and_then(|r| r.cast::<ID3D11Texture2D>().ok())
                         {
                             Some(tex) => self.copy_texture(&tex),
-                            // Anomalija, ali ne vrijedi prekinuti snimanje — zadrži zadnji frame.
-                            None => Ok(()),
+                            None => Err("DXGI frame has no readable texture".into()),
                         }
                     } else {
                         Ok(())
                     };
 
                     // ReleaseFrame MORA proći i kad kopija padne, inače nema sljedećeg framea.
-                    let _ = self.dupl.ReleaseFrame();
+                    let released = self.dupl.ReleaseFrame();
                     copied?;
+                    released.map_err(|e| format!("ReleaseFrame: {e}"))?;
                     if has_pixels {
                         self.have_frame = true;
                     }
@@ -178,13 +174,13 @@ impl DxgiGrabber {
                     // Statična slika — nije greška.
                 }
                 Err(e) if e.code() == DXGI_ERROR_ACCESS_LOST => {
-                    // Promjena rezolucije, UAC prompt, fullscreen prijelaz… → ponovo spoji.
-                    log("DXGI: access lost, ponovno spajam duplikaciju");
-                    let _ = self.dupl.ReleaseFrame();
-                    self.reconnect()?;
+                    // The old output identity is no longer valid. Do not reconnect by
+                    // screen coordinates alone or reuse pixels from a revoked duplication.
+                    self.have_frame = false;
+                    self.buf.fill(0);
+                    return Err("DXGI access lost; restart capture with a new selection".into());
                 }
                 Err(e) => {
-                    let _ = self.dupl.ReleaseFrame();
                     return Err(format!("AcquireNextFrame: {e}"));
                 }
             }
@@ -198,6 +194,13 @@ impl DxgiGrabber {
     unsafe fn copy_texture(&mut self, src: &ID3D11Texture2D) -> Result<(), String> {
         let mut desc = D3D11_TEXTURE2D_DESC::default();
         src.GetDesc(&mut desc);
+        if desc.Width != self.width
+            || desc.Height != self.height
+            || desc.Format != DXGI_FORMAT_B8G8R8A8_UNORM
+            || desc.SampleDesc.Count != 1
+        {
+            return Err("DXGI frame geometry or pixel format changed".into());
+        }
 
         let stale =
             !matches!(&self.staging, Some((_, w, h)) if *w == desc.Width && *h == desc.Height);
@@ -230,12 +233,18 @@ impl DxgiGrabber {
             .Map(Some(&dst), 0, D3D11_MAP_READ, 0, Some(&mut mapped))
             .map_err(|e| format!("Map(staging): {e}"))?;
 
-        let w = desc.Width.min(self.width) as usize;
-        let h = desc.Height.min(self.height) as usize;
-        let row_bytes = w * 4;
+        let h = self.height as usize;
+        let row_bytes = self.width as usize * 4;
         let pitch = mapped.RowPitch as usize;
-        let dst_pitch = self.width as usize * 4;
+        let dst_pitch = row_bytes;
         let base = mapped.pData as *const u8;
+        if base.is_null()
+            || pitch < row_bytes
+            || pitch.checked_mul(h).is_none_or(|bytes| bytes > isize::MAX as usize)
+        {
+            self.ctx.Unmap(Some(&dst), 0);
+            return Err("Invalid DXGI mapped frame layout".into());
+        }
 
         for y in 0..h {
             let src_row = std::slice::from_raw_parts(base.add(y * pitch), row_bytes);
@@ -243,23 +252,6 @@ impl DxgiGrabber {
         }
 
         self.ctx.Unmap(Some(&dst), 0);
-        Ok(())
-    }
-
-    fn reconnect(&mut self) -> Result<(), String> {
-        let fresh = Self::new(self.origin_x, self.origin_y)?;
-        if fresh.width != self.width || fresh.height != self.height {
-            // Izlazni video mora zadržati konstantnu veličinu (MP4 stream je fiksan),
-            // pa novi frameovi idu u postojeći buffer, obrezani na početne dimenzije.
-            log(&format!(
-                "DXGI: rezolucija {}x{} → {}x{}, snimka ostaje na početnoj",
-                self.width, self.height, fresh.width, fresh.height
-            ));
-        }
-        self.device = fresh.device;
-        self.ctx = fresh.ctx;
-        self.dupl = fresh.dupl;
-        self.staging = None;
         Ok(())
     }
 }

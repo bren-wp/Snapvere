@@ -13,6 +13,10 @@ test("Pro gallery selection/exports have complete translations", () => {
     for (const key of ["select","done","selectLoaded","clear","export","exporting","selected","failed","limit","imagesOnly","videosOnly","invert","studioTitle","studioSubtitle","profiles","batchTools","recent","tagged","insightsTitle","insightsImages","insightsVideos","insightsTagged","insightsSize","advancedSelection","lastWeek","largeFiles","untagged","hiddenSelection","keepLoaded","loadedSelectionSize","exportPreset","originalPreset","pngPreset","png1280Preset","webp1920Preset","imagePresetHelp","incompatibleImages","removeIncompatible"]) {
       assert.ok(copy[key].trim(), code + " missing " + key);
     }
+    assert.match(copy.png1920Preset, /^PNG · .*1920/);
+    assert.match(copy.png3840Preset, /^PNG · .*3840/);
+    assert.match(copy.webpPreset, /^WebP · /);
+    assert.match(copy.webp1280Preset, /^WebP · .*1280/);
     assert.match(copy.count(3), /3 \/ 100/);
     assert.match(copy.exported(2), /2/);
   }
@@ -140,4 +144,14 @@ test("Pro remembers only valid local export presets and tolerates storage failur
   assert.equal(readProExportPreset({getItem:()=> "invalid"}),"original");
   assert.equal(readProExportPreset({getItem:()=> { throw Error("unavailable"); }}),"original");
   assert.doesNotThrow(()=>writeProExportPreset("png",{setItem:()=>{throw Error("unavailable");}}));
+});
+
+test("Expanded Pro presets are valid and persist independently", () => {
+  for (const preset of ["png1920", "png3840", "webp", "webp1280"]) {
+    assert.equal(isProExportPreset(preset), true);
+    const data = new Map();
+    const store = {getItem: key => data.get(key) ?? null, setItem: (key,value) => data.set(key,value)};
+    writeProExportPreset(preset, store);
+    assert.equal(readProExportPreset(store), preset);
+  }
 });

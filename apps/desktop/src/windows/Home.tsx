@@ -660,6 +660,10 @@ export default function Home() {
               <option value="original">{proText.originalPreset}</option>
               <option value="png">{proText.pngPreset}</option>
               <option value="png1280">{proText.png1280Preset}</option>
+              <option value="png1920">{proText.png1920Preset}</option>
+              <option value="png3840">{proText.png3840Preset}</option>
+              <option value="webp">{proText.webpPreset}</option>
+              <option value="webp1280">{proText.webp1280Preset}</option>
               <option value="webp1920">{proText.webp1920Preset}</option>
             </select>
           </label>

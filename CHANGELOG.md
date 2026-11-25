@@ -2,6 +2,9 @@
 
 ## v0.2.34 — Desktop-only distribution (development)
 
+- Expand Pro batch export to eight presets with PNG 1920/3840 and original-size/1280 WebP; preserve native limits, no enlargement, atomic no-clobber writes and all 12 locale labels.
+- Harden shared Windows capture: bounded initial allocation, reject missing textures and mismatched geometry/format/row pitch, propagate frame-release failures and terminate capture on duplication access loss instead of reusing stale pixels or reconnecting by coordinates alone.
+
 - Retire all seven browser add-ons, shared source, generated packages and dedicated CI. Desktop clipboard image import remains supported independently.
 - Require exactly 13 desktop release assets: six Windows packages, four Linux packages, SBOM, version-only update manifest and SHA256SUMS. Preserve exact-commit CI and unsigned prerelease verification.
 - Prior releases remain immutable historical records; no browser add-on packages will ship with new desktop releases.

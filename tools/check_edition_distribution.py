@@ -76,7 +76,7 @@ for feature in ("summarizeProSelection", "retainLoadedProSelection", "proExportL
     assert feature in pro_home, f"Missing Pro batch workspace safeguard: {feature}"
 for required in ("BatchPreset", "MAX_IMAGE_PIXELS", "MAX_IMAGE_BYTES", "transform_exclusively", "SaveAsGuard::acquire", "still_format"):
     assert required in native, f"Missing Pro image export safeguard: {required}"
-for preset in ("original", "png", "png1280", "webp1920"):
+for preset in ("original", "png", "png1280", "png1920", "png3840", "webp", "webp1280", "webp1920"):
     assert f'"{preset}"' in native and f'value="{preset}"' in pro_home, f"Missing export preset: {preset}"
 frontend = read("apps/desktop/src/lib/edition.ts")
 assert 'VITE_SNAPVERE_EDITION === "pro"' in frontend

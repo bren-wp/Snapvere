@@ -235,6 +235,10 @@ enum BatchPreset {
     Original,
     Png,
     Png1280,
+    Png1920,
+    Png3840,
+    Webp,
+    Webp1280,
     Webp1920,
 }
 
@@ -244,6 +248,10 @@ impl BatchPreset {
             "original" => Ok(Self::Original),
             "png" => Ok(Self::Png),
             "png1280" => Ok(Self::Png1280),
+            "png1920" => Ok(Self::Png1920),
+            "png3840" => Ok(Self::Png3840),
+            "webp" => Ok(Self::Webp),
+            "webp1280" => Ok(Self::Webp1280),
             "webp1920" => Ok(Self::Webp1920),
             _ => Err("Unsupported Pro export preset".into()),
         }
@@ -252,15 +260,16 @@ impl BatchPreset {
     fn extension(self, source_format: &str) -> Result<&'static str, String> {
         match self {
             Self::Original => accepted_extension(source_format),
-            Self::Png | Self::Png1280 => Ok("png"),
-            Self::Webp1920 => Ok("webp"),
+            Self::Png | Self::Png1280 | Self::Png1920 | Self::Png3840 => Ok("png"),
+            Self::Webp | Self::Webp1280 | Self::Webp1920 => Ok("webp"),
         }
     }
 
     fn max_edge(self) -> Option<u32> {
         match self {
-            Self::Png1280 => Some(1280),
-            Self::Webp1920 => Some(1920),
+            Self::Png1280 | Self::Webp1280 => Some(1280),
+            Self::Png1920 | Self::Webp1920 => Some(1920),
+            Self::Png3840 => Some(3840),
             _ => None,
         }
     }
@@ -315,8 +324,12 @@ fn transform_exclusively(
         decoded = decoded.resize(edge, edge, image::imageops::FilterType::Lanczos3);
     }
     let format = match preset {
-        BatchPreset::Png | BatchPreset::Png1280 => image::ImageFormat::Png,
-        BatchPreset::Webp1920 => image::ImageFormat::WebP,
+        BatchPreset::Png | BatchPreset::Png1280 | BatchPreset::Png1920 | BatchPreset::Png3840 => {
+            image::ImageFormat::Png
+        }
+        BatchPreset::Webp | BatchPreset::Webp1280 | BatchPreset::Webp1920 => {
+            image::ImageFormat::WebP
+        }
         BatchPreset::Original => return Err("Original preset requires byte-for-byte copy".into()),
     };
     // WebP accepts RGB/RGBA8, not grayscale or 16-bit source buffers.
@@ -518,6 +531,36 @@ mod tests {
         assert!(BatchPreset::parse("arbitrary-path").is_err());
         assert!(still_format("gif").is_err());
         fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn expanded_presets_preserve_originals_and_do_not_enlarge() {
+        let dir = tempfile::tempdir().expect("fixture directory");
+        let source = dir.path().join("source.png");
+        image::RgbaImage::from_pixel(2000, 20, image::Rgba([12, 34, 56, 128]))
+            .save(&source)
+            .unwrap();
+        let before = fs::read(&source).unwrap();
+        for (name, extension, dimensions) in [
+            ("png1920", "png", (1920, 19)),
+            ("png3840", "png", (2000, 20)),
+            ("webp", "webp", (2000, 20)),
+            ("webp1280", "webp", (1280, 13)),
+        ] {
+            let preset = BatchPreset::parse(name).unwrap();
+            assert_eq!(preset.extension("png").unwrap(), extension);
+            let output = dir.path().join(format!("{name}.{extension}"));
+            transform_exclusively(&source, &output, image::ImageFormat::Png, preset).unwrap();
+            assert_eq!(image::image_dimensions(&output).unwrap(), dimensions);
+            assert_eq!(
+                image::open(&output).unwrap().to_rgba8().get_pixel(0, 0).0[3],
+                128
+            );
+            assert!(
+                transform_exclusively(&source, &output, image::ImageFormat::Png, preset).is_err()
+            );
+        }
+        assert_eq!(fs::read(&source).unwrap(), before);
     }
 
     #[test]

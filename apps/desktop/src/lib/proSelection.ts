@@ -6,7 +6,7 @@ export const PRO_BATCH_LIMIT = 100;
 export const PRO_LARGE_FILE_BYTES = 10 * 1024 * 1024;
 export const PRO_MAX_IMAGE_BYTES = 64 * 1024 * 1024;
 export const PRO_MAX_IMAGE_PIXELS = 24_000_000;
-export const PRO_EXPORT_PRESETS = ["original", "png", "png1280", "webp1920"] as const;
+export const PRO_EXPORT_PRESETS = ["original", "png", "png1280", "png1920", "png3840", "webp", "webp1280", "webp1920"] as const;
 export type ProExportPreset = (typeof PRO_EXPORT_PRESETS)[number];
 const PRO_EXPORT_PRESET_KEY = "snapvere-pro-export-preset-v1";
 
