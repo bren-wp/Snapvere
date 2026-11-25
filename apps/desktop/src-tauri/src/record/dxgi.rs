@@ -283,7 +283,9 @@ impl DxgiGrabber {
         let base = mapped.pData as *const u8;
         if base.is_null()
             || pitch < row_bytes
-            || pitch.checked_mul(h).is_none_or(|bytes| bytes > isize::MAX as usize)
+            || pitch
+                .checked_mul(h)
+                .is_none_or(|bytes| bytes > isize::MAX as usize)
         {
             return Err("Invalid DXGI mapped frame layout".into());
         }

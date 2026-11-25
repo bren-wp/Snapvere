@@ -122,7 +122,9 @@ impl Mixer {
     #[cfg(feature = "pro")]
     pub(super) fn with_saved_gains(mut self, app: &tauri::AppHandle) -> Result<Self, String> {
         use tauri_plugin_store::StoreExt;
-        let store = app.store("settings.json").map_err(|error| error.to_string())?;
+        let store = app
+            .store("settings.json")
+            .map_err(|error| error.to_string())?;
         self.gains = [
             gain_from_percent(store.get("proMicGain").and_then(|v| v.as_u64())),
             gain_from_percent(store.get("proSystemGain").and_then(|v| v.as_u64())),
