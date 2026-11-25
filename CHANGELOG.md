@@ -1,5 +1,11 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.35 — Update notification hardening (preview)
+
+- Strictly validate JSON media type, declared byte length and version strings in the opt-in update notification feed. Bound streaming storage to a fixed 8 KiB allocation and abort the request on completion or rejection.
+- Add regression tests for malformed headers, fragmented responses at the byte limit and invalid version strings.
+- Correct prerelease download links and distinguish experimental Linux native media from distributed preview capabilities. No automated installer or new network permissions.
+
 ## v0.2.34 — Desktop-only distribution (development)
 
 - Extend the experimental Linux native audio adapter with independently validated microphone and monitor gains on the selected GStreamer mixer pads. Preserve unity gain for Free, session identity checks and pause/resume behavior. Add a native zero-gain PCM probe; public Linux MP4/audio capability remains disabled pending acceptance.

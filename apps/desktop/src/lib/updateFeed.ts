@@ -19,8 +19,9 @@ type Version = readonly [number, number, number];
 export type AvailableUpdate = Readonly<{ version: string; notes: string }>;
 
 export function parseVersion(value: string): Version | null {
+  if (value.length > 20) return null;
   const match = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.exec(value);
-  if (!match) return null;
+  if (!match || match[0] !== value) return null;
   const parts = match.slice(1).map(Number);
   if (parts.some((n) => !Number.isSafeInteger(n) || n > 999999)) return null;
   return parts as unknown as Version;
@@ -65,29 +66,23 @@ export function parseUpdateManifest(raw: unknown, currentVersion: string): Avail
 async function readManifestBounded(response: Response): Promise<string> {
   if (!response.body) throw new Error("Empty update response");
   const reader = response.body.getReader();
-  const parts: Uint8Array[] = [];
+  const bytes = new Uint8Array(MAX_MANIFEST_BYTES);
   let size = 0;
   try {
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
-      size += value.byteLength;
-      if (size > MAX_MANIFEST_BYTES) {
+      if (value.byteLength > MAX_MANIFEST_BYTES - size) {
         void reader.cancel().catch(() => {});
         throw new Error("Update manifest is too large");
       }
-      parts.push(value);
+      bytes.set(value, size);
+      size += value.byteLength;
     }
   } finally {
     reader.releaseLock();
   }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const part of parts) {
-    bytes.set(part, offset);
-    offset += part.byteLength;
-  }
-  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  return new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, size));
 }
 
 export async function checkForUpdates(
@@ -108,14 +103,20 @@ export async function checkForUpdates(
     });
     if (!response.ok) throw new Error("Update check unavailable");
     const bytes = response.headers.get("content-length");
-    if (bytes && (Number(bytes) > MAX_MANIFEST_BYTES || !Number.isFinite(Number(bytes)))) {
+    if (bytes !== null && (!/^\d+$/.test(bytes) || !Number.isSafeInteger(Number(bytes)))) {
+      throw new Error("Invalid update content length");
+    }
+    if (bytes !== null && Number(bytes) > MAX_MANIFEST_BYTES) {
       throw new Error("Update manifest is too large");
     }
     const contentType = response.headers.get("content-type") ?? "";
-    if (!/^application\/json\b/i.test(contentType)) throw new Error("Unexpected update response");
+    if (contentType.split(";", 1)[0].trim().toLowerCase() !== "application/json") {
+      throw new Error("Unexpected update response");
+    }
     const text = await readManifestBounded(response);
     return parseUpdateManifest(JSON.parse(text) as unknown, currentVersion);
   } finally {
+    controller.abort();
     clearTimeout(timeout);
     cancelSignal?.removeEventListener("abort", abort);
   }

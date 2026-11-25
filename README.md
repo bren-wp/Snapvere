@@ -9,12 +9,12 @@
 
 A product by **[Brendigo](https://brendigo.com)**.
 
-[![Windows 10 & 11](https://img.shields.io/badge/Windows-10%20%2F%2011-17223b?style=flat-square)](https://github.com/bren-wp/Snapvere/releases/latest)
+[![Windows 10 & 11](https://img.shields.io/badge/Windows-10%20%2F%2011-17223b?style=flat-square)](https://github.com/bren-wp/Snapvere/releases)
 [![Local-first](https://img.shields.io/badge/Storage-Local--first-7255ea?style=flat-square)](https://snapvere.com/privacy/)
 [![12 languages](https://img.shields.io/badge/Languages-12-17223b?style=flat-square)](#made-for-your-workflow)
 [![License: MIT](https://img.shields.io/badge/Source-MIT-7255ea?style=flat-square)](LICENSE)
 
-[**Website**](https://snapvere.com/) · [**Windows releases**](https://github.com/bren-wp/Snapvere/releases/latest) · [**Privacy**](https://snapvere.com/privacy/) · [**License**](legal/SNAPVERE-COMMERCIAL-EULA.txt)
+[**Website**](https://snapvere.com/) · [**Windows releases**](https://github.com/bren-wp/Snapvere/releases) · [**Privacy**](https://snapvere.com/privacy/) · [**License**](legal/SNAPVERE-COMMERCIAL-EULA.txt)
 
 <img src="site/og.png" alt="Original Snapvere brand artwork" width="860" />
 </div>
@@ -117,8 +117,8 @@ The Windows notification-area menu follows the selected language.
 
 ## Available native packages and privacy
 
-Snapvere v0.2.26 already has a versioned Windows x86_64 Portable/Setup/MSI
-and Linux x86_64 DEB/AppImage release. Experimental Fedora/RPM packaging is
+Versioned unsigned Free and Pro preview releases include Windows x86_64
+Portable/Setup/MSI and Linux x86_64 DEB/AppImage packages. Experimental Fedora/RPM packaging is
 under QA in the development branch and is not a supported download yet.
 The app's default mode keeps captures local, without automatic cloud uploads.
 See [platform and transfer security](docs/DISTRIBUTION-PRIVACY-AND-TRANSFERS.md)
@@ -133,16 +133,18 @@ automated Ubuntu 24.04 builds producing `Snapvere-Linux-amd64.deb` and
 `Snapvere-Linux-x86_64.AppImage`. Linux previews appear with Windows
 artifacts in the same versioned GitHub **prerelease only after CI succeeds**.
 
-Current native limitations: Linux supports the shared screenshot/editor/gallery
-and a silent GIF recording path in source; **MP4, system/microphone audio
-recording and cursor compositing in recordings are not implemented**.
-Wayland portal behavior and live-device UI 1:1 comparisons are not verified.
+Current public Linux previews support the shared screenshot/editor/gallery
+and silent GIF recording path. Experimental native MP4 and audio code exists,
+but **MP4 and system/microphone audio remain disabled in distributed Linux previews**.
+Cursor compositing is not advertised as supported on Linux. Isolated Wayland and
+PipeWire tests have passed; physical compositor and device acceptance and native
+UI 1:1 comparisons remain outstanding.
 See [Linux acceptance checklist](docs/LINUX-PREVIEW-QA-2026-11-22.md).
 
 ## Download for Windows
 
 Get the **Tauri/Rust Windows edition** from
-[**GitHub Releases**](https://github.com/bren-wp/Snapvere/releases/latest).
+[**GitHub Releases**](https://github.com/bren-wp/Snapvere/releases).
 The release assets contain:
 
 | Package | Purpose |
@@ -196,6 +198,6 @@ For setup tips and product information:
 
 *Capture what matters. Keep it yours.*
 
-[Website](https://snapvere.com/) · [Releases](https://github.com/bren-wp/Snapvere/releases/latest) · [Privacy](https://snapvere.com/privacy/)
+[Website](https://snapvere.com/) · [Releases](https://github.com/bren-wp/Snapvere/releases) · [Privacy](https://snapvere.com/privacy/)
 
 </div>
