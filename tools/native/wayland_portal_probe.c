@@ -27,6 +27,7 @@ int main(void) {
     guint8 *frame = g_malloc(BYTES);
     int status = 1;
     gboolean baseline = FALSE;
+    guint baseline_phases = 0;
     guint samples = 0;
     guint marker_samples = 0;
     gint64 first_marker_at = 0;
@@ -66,7 +67,15 @@ int main(void) {
                 fputs("Selected output background does not match fixture\n", stderr);
                 break;
             }
+            // A static wallpaper cannot satisfy both measured repaint phases.
+            if (ABS((int)frame[center + 1] - 52) <= 2 &&
+                ABS((int)frame[center + 2] - 18) <= 2) {
+                if (ABS((int)frame[center] - 80) <= 2) baseline_phases |= 1u;
+                if (ABS((int)frame[center] - 92) <= 2) baseline_phases |= 2u;
+            }
+            if (baseline_phases != 3u) continue;
             baseline = TRUE;
+            puts("BASELINE_REPAINT_PHASES 2");
             puts("SEPARATE_OUTPUT_MARKER_ABSENT");
             fflush(stdout);
         } else if (present) {
