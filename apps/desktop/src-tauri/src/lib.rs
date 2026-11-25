@@ -46,7 +46,7 @@ pub fn run() {
         // Keep login startup silent even if an instance is already running.
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if !startup::is_background_start(args) {
-                let _ = commands::show_home(app.clone());
+                let _ = commands::show_home_native(app.clone());
             }
         }))
         // ── ostali plugini ───────────────────────────────────────
@@ -112,7 +112,7 @@ pub fn run() {
             // at login it remains in the tray; its registered global
             // PrintScreen shortcut opens the native capture overlay on demand.
             if !startup::is_background_start(std::env::args().skip(1)) {
-                if let Err(error) = commands::show_home(app.handle().clone()) {
+                if let Err(error) = commands::show_home_native(app.handle().clone()) {
                     log(&format!("cannot show Snapvere on launch: {error}"));
                     return Err(error.into());
                 }

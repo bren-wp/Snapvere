@@ -34,6 +34,10 @@ pub struct FrozenFrames {
 }
 
 impl FrozenFrames {
+    pub fn frame(&self, monitor_id: u32) -> Option<&RgbaImage> {
+        self.frames.get(&monitor_id)
+    }
+
     pub fn clear(&mut self) {
         self.frames.clear();
     }
@@ -61,5 +65,20 @@ impl AppState {
             recorder: Mutex::new(None),
             rec_frame: Mutex::new(None),
         }
+    }
+}
+
+#[cfg(test)]
+mod frozen_frame_tests {
+    use super::*;
+
+    #[test]
+    fn monitor_mismatch_never_returns_another_screen() {
+        let mut frozen = FrozenFrames::default();
+        frozen.frames.insert(7, RgbaImage::new(1, 1));
+        assert!(frozen.frame(7).is_some());
+        assert!(frozen.frame(8).is_none());
+        frozen.clear();
+        assert!(frozen.frame(7).is_none());
     }
 }

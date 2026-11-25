@@ -1,6 +1,10 @@
 # Snapvere by Brendigo — Release history
 
-## v0.2.35 — Update notification hardening (preview)
+## v0.2.35 — Update notification and IPC hardening (preview)
+
+- Restrict global shortcut changes to Settings and require explicit caller identity for all registered native IPC commands. Audit all 50 handlers, including specialized export validation.
+- Reject mismatched frozen monitor IDs rather than substituting another screen.
+- Validate recovery intent paths and tokens, reject redirected ancestors and use OS no-replace rename for gallery staging and restoration. Directory-handle pinning and native acceptance remain outstanding.
 
 - Strictly validate JSON media type, declared byte length and version strings in the opt-in update notification feed. Bound streaming storage to a fixed 8 KiB allocation and abort the request on completion or rejection.
 - Add regression tests for malformed headers, fragmented responses at the byte limit and invalid version strings.

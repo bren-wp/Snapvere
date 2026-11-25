@@ -214,7 +214,7 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
             }
         }
         "open_gallery" => {
-            if let Err(error) = commands::show_home(app.clone()) {
+            if let Err(error) = commands::show_home_native(app.clone()) {
                 log(&format!("tray gallery: {error}"));
             }
         }
@@ -238,7 +238,7 @@ fn on_tray_event(tray: &TrayIcon, event: TrayIconEvent) {
         ..
     } = event
     {
-        let _ = commands::show_home(tray.app_handle().clone());
+        let _ = commands::show_home_native(tray.app_handle().clone());
     }
 }
 

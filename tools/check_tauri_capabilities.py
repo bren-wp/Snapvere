@@ -59,8 +59,29 @@ print("Tauri capability boundary OK: unprivileged capture, Settings-only store w
 
 # Plugin grants do not restrict application-defined commands. Those need
 # explicit Rust-side caller checks, especially for frozen screens and gallery.
-commands = (root.parent / "src" / "commands.rs").read_text(encoding="utf-8")
+native_root = root.parent / "src"
+commands = "\n".join((native_root / name).read_text(encoding="utf-8") for name in ("commands.rs", "shortcuts.rs"))
+registry = (native_root / "lib.rs").read_text(encoding="utf-8")
+handler_block = re.search(r"tauri::generate_handler!\[([\s\S]*?)\]", registry)
+assert handler_block, "Missing native IPC registry"
+registered = set(re.findall(r"(?:commands|shortcuts)::([a-z][a-z0-9_]*)", handler_block.group(1)))
 protected_ipc = {
+    "get_app_language": ["home", "settings", "overlay", "editor", "recbar", "recdraw", "recframe", "recpreview"],
+    "get_platform_capabilities": ["home", "settings", "overlay"],
+    "list_linux_audio_devices": ["settings"],
+    "select_linux_audio_devices": ["settings"],
+    "set_app_language": ["settings"],
+    "get_capture_preferences": ["home", "overlay", "editor"],
+    "get_overlay_recording_preferences": ["overlay"],
+    "set_overlay_audio_preference": ["overlay"],
+    "list_monitors": ["home", "settings", "overlay"],
+    "save_image_as": ["editor", "overlay"],
+    "copy_base64_to_clipboard": ["overlay", "editor"],
+    "pro_export_batch": ["home"],
+    "show_home": ["home", "settings"],
+    "update_hotkey": ["settings"],
+    "update_record_hotkey": ["settings"],
+    "active_hotkeys": ["settings"],
     "reveal_overlay": ["overlay"],
     "get_frozen_frame": ["overlay"],
     "get_frozen_rgba": ["overlay"],
@@ -96,6 +117,10 @@ protected_ipc = {
     "open_capture_folder": ["home", "settings"],
     "open_data_folder": ["settings"],
 }
+assert registered == set(protected_ipc), (
+    f"IPC authorization matrix drift: missing={registered - set(protected_ipc)}, "
+    f"stale={set(protected_ipc) - registered}"
+)
 for name, allowed in protected_ipc.items():
     match = re.search(
         rf"#\[tauri::command\]\s+pub\s+(?:async\s+)?fn\s+{name}\s*\(",
@@ -106,8 +131,14 @@ for name, allowed in protected_ipc.items():
     signature = commands[match.end():body]
     assert "window: tauri::WebviewWindow" in signature, f"Missing caller identity in {name}"
     first_statements = commands[body + 1:body + 300]
+    if name == "save_image_as":
+        assert first_statements.lstrip().startswith("image_export::validate_export_origin(window.label())?;")
+        export_source = (native_root / "commands" / "image_export.rs").read_text(encoding="utf-8")
+        assert 'matches!(label, "editor" | "overlay")' in export_source
+        assert allowed == ["editor", "overlay"]
+        continue
     guard = re.search(
-        r'require_window_label\(window\.label\(\),\s*&\[([^\]]+)\]\)\?;',
+        r'require_window_label\(\s*window\.label\(\),\s*&\[([^\]]+)\],?\s*\)\?;',
         first_statements,
     )
     assert guard is not None, f"Unprotected IPC function: {name}"

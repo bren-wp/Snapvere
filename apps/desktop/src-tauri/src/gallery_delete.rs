@@ -47,6 +47,84 @@ fn intent(shot: &Screenshot) -> Result<PendingDeletion> {
     })
 }
 
+// Validate journal paths before touching either file. The staging name must
+// be an exact generated sibling, never an arbitrary cleanup destination.
+fn validate_stage_pair(source: &str, staged: &str, kind: &str) -> Result<Uuid> {
+    let source = Path::new(source);
+    let staged = Path::new(staged);
+    ensure!(
+        source.is_absolute()
+            && source.file_name().is_some()
+            && !source.components().any(|part| matches!(part, std::path::Component::ParentDir))
+            && staged.is_absolute()
+            && source.parent() == staged.parent()
+            && source != staged,
+        "Invalid gallery deletion paths"
+    );
+    let name = staged
+        .file_name()
+        .and_then(|name| name.to_str())
+        .context("Invalid staging filename")?;
+    let suffix = format!("-{kind}.pending");
+    let token = name
+        .strip_prefix(".snapvere-delete-")
+        .and_then(|name| name.strip_suffix(&suffix))
+        .context("Invalid staging filename")?;
+    let uuid = Uuid::parse_str(token).context("Invalid deletion token")?;
+    ensure!(uuid.simple().to_string() == token, "Invalid deletion token");
+    Ok(uuid)
+}
+
+fn validate_job(job: &PendingDeletion) -> Result<()> {
+    let token = validate_stage_pair(&job.file_path, &job.staged_file_path, "media")?;
+    match (&job.thumb_path, &job.staged_thumb_path) {
+        (Some(source), Some(staged)) => {
+            ensure!(
+                validate_stage_pair(source, staged, "thumb")? == token
+                    && source != &job.file_path
+                    && source != &job.staged_file_path
+                    && staged != &job.file_path,
+                "Invalid thumbnail deletion intent"
+            );
+        }
+        (None, None) => {}
+        _ => bail!("Incomplete thumbnail deletion intent"),
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn rename_noreplace(source: &Path, destination: &Path) -> Result<()> {
+    use rustix::fs::{renameat_with, RenameFlags, CWD};
+    renameat_with(CWD, source, CWD, destination, RenameFlags::NOREPLACE)?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn rename_noreplace(source: &Path, destination: &Path) -> Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::core::PCWSTR;
+    use windows::Win32::Storage::FileSystem::MoveFileW;
+
+    let wide = |path: &Path| -> Result<Vec<u16>> {
+        let mut value: Vec<u16> = path.as_os_str().encode_wide().collect();
+        ensure!(!value.contains(&0), "Invalid deletion path");
+        value.push(0);
+        Ok(value)
+    };
+    let source = wide(source)?;
+    let destination = wide(destination)?;
+    // SAFETY: both buffers are live, NUL-terminated UTF-16 strings.
+    // MoveFileW fails if the target exists.
+    unsafe { MoveFileW(PCWSTR(source.as_ptr()), PCWSTR(destination.as_ptr())) }?;
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
+fn rename_noreplace(_source: &Path, _destination: &Path) -> Result<()> {
+    bail!("Safe gallery rename is unsupported on this platform")
+}
+
 fn exists(path: &Path) -> Result<bool> {
     match fs::symlink_metadata(path) {
         Ok(_) => Ok(true),
@@ -61,6 +139,22 @@ fn ensure_parent_accessible(path: &Path) -> Result<()> {
     let parent = path
         .parent()
         .context("Media path has no containing folder")?;
+    // Preflight rejects redirected ancestors; handle pinning is a separate task.
+    for ancestor in parent.ancestors().filter(|path| path.is_absolute()) {
+        let metadata = fs::symlink_metadata(ancestor)?;
+        ensure!(
+            metadata.is_dir() && !metadata.file_type().is_symlink(),
+            "Redirected gallery directory"
+        );
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            ensure!(
+                metadata.file_attributes() & 0x400 == 0,
+                "Redirected gallery directory"
+            );
+        }
+    }
     fs::read_dir(parent)
         .with_context(|| format!("Media folder is unavailable: {}", parent.display()))?;
     Ok(())
@@ -69,8 +163,8 @@ fn ensure_parent_accessible(path: &Path) -> Result<()> {
 fn stage_one(source: &str, staged: &str) -> Result<()> {
     let source = Path::new(source);
     let staged = Path::new(staged);
+    ensure_parent_accessible(source)?;
     if !exists(source)? {
-        ensure_parent_accessible(source)?;
         return Ok(());
     }
     // Never delete directories or follow symlinks supplied by a damaged DB.
@@ -82,12 +176,13 @@ fn stage_one(source: &str, staged: &str) -> Result<()> {
         !exists(staged)?,
         "Gallery deletion staging target already exists"
     );
-    fs::rename(source, staged).context("Could not stage media for deletion")
+    rename_noreplace(source, staged).context("Could not stage media for deletion")
 }
 
 fn restore_one(source: &str, staged: &str) -> Result<()> {
     let source = Path::new(source);
     let staged = Path::new(staged);
+    ensure_parent_accessible(source)?;
     if exists(staged)? {
         // An unexpected directory or symlink may have replaced a staged file
         // while the process was not running. Never restore it as gallery media.
@@ -99,7 +194,7 @@ fn restore_one(source: &str, staged: &str) -> Result<()> {
             !exists(source)?,
             "Original gallery path already exists; refusing overwrite"
         );
-        fs::rename(staged, source).context("Could not restore staged gallery media")?;
+        rename_noreplace(staged, source).context("Could not restore staged gallery media")?;
     } else if !exists(source)? {
         // The staged file may merely be hidden by a disconnected volume.
         // Keep the journal until both containing folders are accessible.
@@ -110,10 +205,18 @@ fn restore_one(source: &str, staged: &str) -> Result<()> {
 }
 
 fn delete_one(staged: &str) -> Result<()> {
+    let staged = Path::new(staged);
+    ensure_parent_accessible(staged)?;
+    if exists(staged)? {
+        ensure!(
+            fs::symlink_metadata(staged)?.file_type().is_file(),
+            "Gallery cleanup requires a regular staged media file"
+        );
+    }
     match fs::remove_file(staged) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == ErrorKind::NotFound => {
-            ensure_parent_accessible(Path::new(staged))?;
+            ensure_parent_accessible(staged)?;
             Ok(())
         }
         Err(error) => Err(error).context("Could not clear committed deletion staging file"),
@@ -121,6 +224,7 @@ fn delete_one(staged: &str) -> Result<()> {
 }
 
 fn stage_files(job: &PendingDeletion) -> Result<()> {
+    validate_job(job)?;
     stage_one(&job.file_path, &job.staged_file_path)?;
     if let (Some(source), Some(staged)) = (&job.thumb_path, &job.staged_thumb_path) {
         stage_one(source, staged)?;
@@ -129,6 +233,7 @@ fn stage_files(job: &PendingDeletion) -> Result<()> {
 }
 
 fn restore_files(job: &PendingDeletion) -> Result<()> {
+    validate_job(job)?;
     // Try both paths even if the first restore failed; never overwrite a destination.
     let main = restore_one(&job.file_path, &job.staged_file_path);
     let thumb = match (&job.thumb_path, &job.staged_thumb_path) {
@@ -140,6 +245,7 @@ fn restore_files(job: &PendingDeletion) -> Result<()> {
 }
 
 fn cleanup_files(job: &PendingDeletion) -> Result<()> {
+    validate_job(job)?;
     // Attempt both cleanups; a failure keeps the durable journal entry.
     let main = delete_one(&job.staged_file_path);
     let thumb = match &job.staged_thumb_path {
@@ -155,6 +261,7 @@ pub fn delete(db: &mut Db, id: &str) -> Result<()> {
         .get(id)?
         .context("This capture is no longer in the gallery")?;
     let job = intent(&shot)?;
+    validate_job(&job)?;
     db.prepare_delete(&job)?;
 
     if let Err(error) = stage_files(&job) {
@@ -251,6 +358,36 @@ mod tests {
         fs::write(shot.thumb_path.as_deref().unwrap(), b"thumbnail")?;
         db.insert(&shot)?;
         Ok((folder, db, shot))
+    }
+
+    #[test]
+    fn rename_never_replaces_an_existing_destination() -> Result<()> {
+        let folder = tempfile::tempdir()?;
+        let source = folder.path().join("source.png");
+        let target = folder.path().join("target.png");
+        fs::write(&source, b"source")?;
+        fs::write(&target, b"target")?;
+        assert!(rename_noreplace(&source, &target).is_err());
+        assert_eq!(fs::read(source)?, b"source");
+        assert_eq!(fs::read(target)?, b"target");
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_staging_journal_cannot_delete_unrelated_file() -> Result<()> {
+        let (folder, db, shot) = fixture()?;
+        let victim = folder.join("unrelated.png");
+        fs::write(&victim, b"keep")?;
+        let mut job = intent(&shot)?;
+        job.staged_file_path = victim.to_string_lossy().into_owned();
+        assert!(stage_files(&job).is_err());
+        assert!(restore_files(&job).is_err());
+        assert!(cleanup_files(&job).is_err());
+        assert_eq!(fs::read(&victim)?, b"keep");
+        assert_eq!(fs::read(&shot.file_path)?, b"original");
+        drop(db);
+        fs::remove_dir_all(folder)?;
+        Ok(())
     }
 
     #[test]
