@@ -2,6 +2,8 @@
 
 ## v0.2.33 — Preview release verification (development)
 
+- Pin isolated Wayland CI to upstream portal v0.9.0, including the documented fix for the exact `session already has a frame object` protocol error and initial-frame scheduling. Keep all real video acceptance assertions mandatory.
+
 - Exercise actual repaint damage on the authorized Wayland output, independently verify both fixture phases and require both through the real portal before moving the marker. Retain three consecutive marker samples and all production timeouts.
 
 - Discard explicitly corrupted Wayland video buffers without resetting the valid-frame deadline; require a larger negotiated producer pool and preserve strict geometry/consent checks. Establish the synthetic baseline within a bounded startup interval before moving the marker.

@@ -362,7 +362,8 @@ jobs:
     name: Native Wayland portal window inclusion (isolated wlroots)
     # Noble's xdpw 0.7.1 requires DMA-BUF with screencopy v3 even on
     # Pixman headless outputs. Resolute's packaged 0.8.1 also stalled after
-    # one frame; exercise the pinned upstream 0.8.4 starvation fix.
+    # one frame. Use upstream 0.9.0: fixes buffer starvation, frame lifetime
+    # across PAUSED/STREAMING, and first-frame scheduling on still outputs.
     runs-on: ubuntu-26.04
     timeout-minutes: 12
     permissions:
@@ -387,11 +388,11 @@ jobs:
             meson ninja-build libpipewire-0.3-dev libwayland-dev wayland-protocols \
             libinih-dev libgbm-dev libdrm-dev libsystemd-dev
           dpkg-query -W sway xdg-desktop-portal xdg-desktop-portal-wlr pipewire gstreamer1.0-pipewire
-      - name: Build pinned upstream portal backend with buffer starvation fix
+      - name: Build pinned upstream portal backend with frame lifecycle fixes
         shell: bash
         run: |
           set -euo pipefail
-          revision=34153094662acd713241ca6cbbb20003ef67da5f
+          revision=8388b8a6214470462146840e92909aff5983eeac
           source="$RUNNER_TEMP/snapvere-xdpw-source"
           git init "$source"
           git -C "$source" fetch --depth=1 https://github.com/emersion/xdg-desktop-portal-wlr.git "$revision"
