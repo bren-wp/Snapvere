@@ -53,7 +53,7 @@ fn estr<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
 }
 
-fn require_window_label(label: &str, allowed: &[&str]) -> Result<(), String> {
+pub(crate) fn require_window_label(label: &str, allowed: &[&str]) -> Result<(), String> {
     if allowed.contains(&label) {
         Ok(())
     } else {
@@ -163,7 +163,20 @@ fn supported_language(code: &str) -> bool {
 
 /// Expose only the saved UI language; no generic settings read permission.
 #[tauri::command]
-pub fn get_app_language(app: AppHandle) -> Result<String, String> {
+pub fn get_app_language(window: tauri::WebviewWindow, app: AppHandle) -> Result<String, String> {
+    require_window_label(
+        window.label(),
+        &[
+            "home",
+            "settings",
+            "overlay",
+            "editor",
+            "recbar",
+            "recdraw",
+            "recframe",
+            "recpreview",
+        ],
+    )?;
     let store = app.store("settings.json").map_err(estr)?;
     let saved = store
         .get("language")
@@ -815,7 +828,8 @@ fn open_editor_window(app: &AppHandle, file_path: &str) -> Result<(), String> {
 // ──────────────────────────────── komande ────────────────────────────────
 
 #[tauri::command]
-pub fn list_monitors() -> Result<Vec<MonitorInfo>, String> {
+pub fn list_monitors(window: tauri::WebviewWindow) -> Result<Vec<MonitorInfo>, String> {
+    require_window_label(window.label(), &["home", "settings", "overlay"])?;
     logging::guard("list_monitors", || capture::list_monitors().map_err(estr))
 }
 
@@ -891,7 +905,7 @@ pub fn dispatch_region_capture(app: &AppHandle, mode: CaptureMode) {
             if let Err(e) = result {
                 // An OS capture failure should not leave the product silently
                 // hidden in the tray, especially during the first PrintScreen.
-                if let Err(restore_error) = show_home(app.clone()) {
+                if let Err(restore_error) = show_home_native(app.clone()) {
                     log(&format!(
                         "could not restore gallery after failed capture: {restore_error}"
                     ));
@@ -1017,10 +1031,8 @@ pub fn get_frozen_frame(
     require_window_label(window.label(), &["overlay"])?;
     let frozen = lock(&state.frozen);
     let frame = frozen
-        .frames
-        .get(&monitor_id)
-        .or_else(|| frozen.frames.values().next())
-        .ok_or_else(|| format!("no frozen frame for monitor {monitor_id}"))?;
+        .frame(monitor_id)
+        .ok_or_else(|| format!("No frozen frame for monitor {monitor_id}"))?;
     capture::to_png_data_url(frame).map_err(estr)
 }
 
@@ -1034,12 +1046,8 @@ pub fn get_frozen_rgba(
 ) -> Result<Response, String> {
     require_window_label(window.label(), &["overlay"])?;
     let frozen = lock(&state.frozen);
-    // Jedan frame u igri — uzmi po id-u, ili prvi dostupni (robusno na nepodudaranje id-a).
-    let Some(frame) = frozen
-        .frames
-        .get(&monitor_id)
-        .or_else(|| frozen.frames.values().next())
-    else {
+    // Never expose pixels from a different monitor on an identity mismatch.
+    let Some(frame) = frozen.frame(monitor_id) else {
         return Ok(Response::new(Vec::new()));
     };
     Ok(Response::new(frame_to_rgba_packet(frame)))
@@ -1072,11 +1080,7 @@ pub fn finish_region_capture(
     // selections or when the capture frame has already disappeared.
     let cropped = {
         let frozen = lock(&state.frozen);
-        match frozen
-            .frames
-            .get(&region.monitor_id)
-            .or_else(|| frozen.frames.values().next())
-        {
+        match frozen.frame(region.monitor_id) {
             Some(frame) => capture::crop(frame, &region).map_err(estr),
             None => Err("frozen frame missing".to_string()),
         }
@@ -1896,15 +1900,63 @@ pub async fn copy_media_image(
 }
 
 #[tauri::command]
-pub fn delete_screenshot(
+pub async fn delete_screenshot(
     window: tauri::WebviewWindow,
-    state: State<AppState>,
+    app: AppHandle,
     id: String,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     require_window_label(window.label(), &["home"])?;
-    // Hold the DB mutex during staging and the atomic SQLite commit.
-    // An on-disk intent restores media after interrupted deletion.
-    crate::gallery_delete::delete(&mut lock(&state.db), &id).map_err(estr)
+    tauri::async_runtime::spawn_blocking(move || {
+        use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+
+        // Serialize with Save As and native batch export, without holding a
+        // database lock while the user decides.
+        let _guard = image_export::SaveAsGuard::acquire()?;
+        let state = app.state::<AppState>();
+        let shot = lock(&state.db)
+            .get(&id)
+            .map_err(estr)?
+            .ok_or("This capture is no longer in the gallery")?;
+        let language = get_app_language(window.clone(), app.clone())?;
+        let labels = crate::tray_locale::deletion_labels(&language);
+        let title = if shot.source == "recording" || shot.format == "mp4" {
+            labels[0]
+        } else {
+            labels[1]
+        };
+        let name: String = shot
+            .name
+            .chars()
+            .filter(|ch| !ch.is_control())
+            .take(200)
+            .collect();
+        let confirmed = app
+            .dialog()
+            .message(format!("\"{name}\" — {}", labels[2]))
+            .title(title)
+            .kind(MessageDialogKind::Warning)
+            .buttons(MessageDialogButtons::OkCancelCustom(
+                labels[3].to_owned(),
+                labels[4].to_owned(),
+            ))
+            .parent(&window)
+            .blocking_show();
+        if !confirmed {
+            return Ok(false);
+        }
+        let mut db = lock(&state.db);
+        let current = db
+            .get(&id)
+            .map_err(estr)?
+            .ok_or("This capture is no longer in the gallery")?;
+        if current.file_path != shot.file_path || current.thumb_path != shot.thumb_path {
+            return Err("Gallery item changed during confirmation".into());
+        }
+        crate::gallery_delete::delete(&mut db, &id).map_err(estr)?;
+        Ok(true)
+    })
+    .await
+    .map_err(estr)?
 }
 
 #[tauri::command]
@@ -1945,7 +1997,13 @@ pub async fn pro_export_batch(
 /// nestao (npr. stari build koji ga je uništavao na X), ponovo ga kreiramo —
 /// galerija se tako UVIJEK može otvoriti.
 #[tauri::command]
-pub fn show_home(app: AppHandle) -> Result<(), String> {
+pub fn show_home(window: tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
+    require_window_label(window.label(), &["home", "settings"])?;
+    show_home_native(app)
+}
+
+/// Native startup, tray and capture recovery do not originate from a WebView.
+pub(crate) fn show_home_native(app: AppHandle) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("home") {
         let _ = win.unminimize();
         let _ = win.show();

@@ -1,12 +1,11 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "home-privileged",
-  "description": "The gallery/home window alone may create the Settings WebView and display the destructive-delete confirmation dialog.",
+  "description": "The gallery/home window alone may create the Settings WebView. Destructive confirmation is owned by native Rust IPC.",
   "windows": [
     "home"
   ],
   "permissions": [
-    "core:webview:allow-create-webview-window",
-    "dialog:allow-ask"
+    "core:webview:allow-create-webview-window"
   ]
 }

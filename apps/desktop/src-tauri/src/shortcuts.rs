@@ -194,7 +194,12 @@ fn current() -> (Option<String>, Option<String>) {
 
 /// Update screenshot hotkey without racing a recording hotkey update.
 #[tauri::command]
-pub fn update_hotkey(app: AppHandle, accelerator: String) -> Result<(), String> {
+pub fn update_hotkey(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    accelerator: String,
+) -> Result<(), String> {
+    commands::require_window_label(window.label(), &["settings"])?;
     if accelerator.trim().is_empty() {
         return Err("Capture hotkey cannot be empty".into());
     }
@@ -207,7 +212,12 @@ pub fn update_hotkey(app: AppHandle, accelerator: String) -> Result<(), String> 
 
 /// Update recording hotkey without racing a screenshot hotkey update.
 #[tauri::command]
-pub fn update_record_hotkey(app: AppHandle, accelerator: String) -> Result<(), String> {
+pub fn update_record_hotkey(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    accelerator: String,
+) -> Result<(), String> {
+    commands::require_window_label(window.label(), &["settings"])?;
     if accelerator.trim().is_empty() {
         return Err("Recording hotkey cannot be empty".into());
     }
@@ -253,6 +263,9 @@ mod shortcut_validation_tests {
 
 /// Frontend command: trenutno aktivni hotkeyi (Settings ih prikazuje kao stvarno stanje).
 #[tauri::command]
-pub fn active_hotkeys() -> (Option<String>, Option<String>) {
-    current()
+pub fn active_hotkeys(
+    window: tauri::WebviewWindow,
+) -> Result<(Option<String>, Option<String>), String> {
+    commands::require_window_label(window.label(), &["settings"])?;
+    Ok(current())
 }

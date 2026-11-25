@@ -95,3 +95,57 @@ test('native update channel rejects Linux and unknown OS before any Windows feed
     assert.equal(canCheckWindowsUpdates(platform), false, String(platform));
   }
 });
+
+test('rejects misleading media types and malformed content lengths', async () => {
+  const prior = globalThis.fetch;
+  try {
+    const body = JSON.stringify({product:UPDATE_PRODUCT, version:'0.2.35'});
+    for (const type of ['application/json-patch+json', 'application/json+xml', 'application/json, text/html']) {
+      globalThis.fetch = async () => new Response(body, {headers:{'content-type':type}});
+      await assert.rejects(checkForUpdates('0.2.34'), /Unexpected update response/);
+    }
+    for (const length of ['-1', '1e2', '0x20', '1.5', '']) {
+      globalThis.fetch = async () => new Response(body, {
+        headers:{'content-type':'application/json', 'content-length':length}
+      });
+      await assert.rejects(checkForUpdates('0.2.34'), /Invalid update content length/);
+    }
+    globalThis.fetch = async () => new Response(body, {
+      headers:{'content-type':'Application/JSON; charset=utf-8'}
+    });
+    assert.deepEqual(await checkForUpdates('0.2.34'), {version:'0.2.35', notes:''});
+  } finally {
+    globalThis.fetch = prior;
+  }
+});
+
+test('accepts bounded fragmented JSON at the byte limit and rejects overflow', async () => {
+  const prior = globalThis.fetch;
+  try {
+    const json = JSON.stringify({product:UPDATE_PRODUCT, version:'0.2.35'});
+    const payload = new TextEncoder().encode(json.padEnd(8192, ' '));
+    for (const overflow of [false, true]) {
+      globalThis.fetch = async () => new Response(new ReadableStream({
+        start(controller) {
+          for (let offset = 0; offset < payload.length; offset += 17) {
+            controller.enqueue(new Uint8Array(0));
+            controller.enqueue(payload.subarray(offset, offset + 17));
+          }
+          if (overflow) controller.enqueue(new Uint8Array([32]));
+          controller.close();
+        },
+      }), {headers:{'content-type':'application/json'}});
+      if (overflow) await assert.rejects(checkForUpdates('0.2.34'), /too large/);
+      else assert.deepEqual(await checkForUpdates('0.2.34'), {version:'0.2.35', notes:''});
+    }
+  } finally {
+    globalThis.fetch = prior;
+  }
+});
+
+test('version validation rejects extra characters and bounds the input', () => {
+  for (const value of ['1.2.3\n', '1.2.3\r', '1.2.3 ', '1.'.repeat(1000)]) {
+    assert.equal(parseVersion(value), null);
+  }
+  assert.deepEqual(parseVersion('999999.999999.999999'), [999999, 999999, 999999]);
+});

@@ -2,6 +2,7 @@
 //! Native Pro-only, explicit local folder batch export.
 //! Never accept filesystem paths from the renderer or connect to cloud services.
 use super::*;
+use crate::pinned_directory::PinnedDirectory;
 use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufWriter, Cursor, Read};
@@ -11,84 +12,6 @@ const MAX_BATCH: usize = 100;
 const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 const MAX_IMAGE_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_IMAGE_PIXELS: u64 = 24_000_000;
-
-// Hold each Linux directory by descriptor; do not follow any path-component
-// symlink. On Windows, hold ancestor directory handles without delete sharing
-// and reject reparse points. The picker and initial open are still separate.
-struct PinnedDirectory {
-    path: PathBuf,
-    #[cfg(target_os = "linux")]
-    _directory: File,
-    #[cfg(windows)]
-    _ancestors: Vec<File>,
-}
-
-impl PinnedDirectory {
-    fn open(path: &Path) -> Result<Self, String> {
-        if !path.is_absolute() {
-            return Err("Export requires an absolute directory".into());
-        }
-        #[cfg(target_os = "linux")]
-        {
-            use rustix::fs::{open, openat, Mode, OFlags};
-            use std::os::fd::AsRawFd;
-            use std::path::Component;
-
-            let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
-            let mut directory = open("/", flags, Mode::empty()).map_err(estr)?;
-            for component in path.components() {
-                match component {
-                    Component::RootDir => {}
-                    Component::Normal(name) => {
-                        directory = openat(&directory, name, flags, Mode::empty()).map_err(estr)?;
-                    }
-                    _ => return Err("Invalid directory component".into()),
-                }
-            }
-            let directory = File::from(directory);
-            let path = PathBuf::from(format!("/proc/self/fd/{}", directory.as_raw_fd()));
-            Ok(Self {
-                path,
-                _directory: directory,
-            })
-        }
-        #[cfg(windows)]
-        {
-            use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
-            let mut ancestors = Vec::new();
-            for ancestor in path.ancestors().collect::<Vec<_>>().into_iter().rev() {
-                if !ancestor.is_absolute() {
-                    continue;
-                }
-                let directory = OpenOptions::new()
-                    .read(true)
-                    .share_mode(3) // FILE_SHARE_READ | FILE_SHARE_WRITE, no delete sharing
-                    .custom_flags(0x02200000) // BACKUP_SEMANTICS | OPEN_REPARSE_POINT
-                    .open(ancestor)
-                    .map_err(estr)?;
-                let metadata = directory.metadata().map_err(estr)?;
-                if !metadata.is_dir() || metadata.file_attributes() & 0x400 != 0 {
-                    return Err("Redirected directory is not supported for export".into());
-                }
-                ancestors.push(directory);
-            }
-            Ok(Self {
-                path: path.to_path_buf(),
-                _ancestors: ancestors,
-            })
-        }
-        #[cfg(not(any(target_os = "linux", windows)))]
-        {
-            let metadata = fs::symlink_metadata(path).map_err(estr)?;
-            if !metadata.is_dir() || metadata.file_type().is_symlink() {
-                return Err("Invalid export directory".into());
-            }
-            Ok(Self {
-                path: path.to_path_buf(),
-            })
-        }
-    }
-}
 
 fn open_bounded_source(source: &Path, max: u64) -> Result<(File, u64), String> {
     let parent = PinnedDirectory::open(source.parent().ok_or("Missing source directory")?)?;

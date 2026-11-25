@@ -205,7 +205,8 @@ int snapvere_audio_pull(void *handle, guint8 *data, gsize capacity) {
     if (!sample) return gst_app_sink_is_eos(ctx->sink) ? -1 : 0;
     GstBuffer *buffer = gst_sample_get_buffer(sample);
     GstCaps *caps = gst_sample_get_caps(sample);
-    const GstStructure *format = caps ? gst_caps_get_structure(caps, 0) : NULL;
+    const GstStructure *format = caps && gst_caps_get_size(caps) > 0
+        ? gst_caps_get_structure(caps, 0) : NULL;
     gint rate = 0, channels = 0;
     GstMapInfo map;
     int result = -1;
@@ -216,7 +217,7 @@ int snapvere_audio_pull(void *handle, guint8 *data, gsize capacity) {
         !GST_BUFFER_PTS_IS_VALID(buffer) || !gst_buffer_map(buffer, &map, GST_MAP_READ))
         goto done;
     GstClockTime pts = GST_BUFFER_PTS(buffer);
-    if (map.size && map.size % 4 == 0 && map.size <= capacity &&
+    if (map.data && map.size && map.size % 4 == 0 && map.size <= capacity &&
         map.size <= 19200 &&
         (!GST_CLOCK_TIME_IS_VALID(ctx->last_end) ||
          (pts >= ctx->last_end && pts - ctx->last_end <= 100 * GST_MSECOND))) {

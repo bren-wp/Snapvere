@@ -137,7 +137,7 @@ export const ipc = {
   searchScreenshots: (query: string, limit?: number, offset?: number, kind?: "all" | "images" | "videos") =>
     invoke<Screenshot[]>("search_screenshots", { query, limit, offset, kind }),
   deleteScreenshot: (id: string) =>
-    invoke<void>("delete_screenshot", { id }),
+    invoke<boolean>("delete_screenshot", { id }),
   addTag: (id: string, tag: string) => invoke<void>("add_tag", { id, tag }),
 
   // ── preglednik (po id-u zapisa, ne po putanji) ──

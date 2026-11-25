@@ -1,5 +1,21 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.35 — Update notification and IPC hardening (preview)
+
+- Reject multiply linked Windows gallery media using native file-handle metadata and add a cross-platform hard-link regression. Remove the unused Home import detected by strict TypeScript CI.
+
+- Move localized destructive confirmation into the native backend. Cancel returns without touching gallery data; confirm rechecks the selected row before deletion.
+- Reuse the pinned-directory implementation for gallery deletion and recovery; require journal/gallery path agreement and reject inconsistent recovery state. The same-user leaf-entry race and cross-restart directory identity require further verification.
+- Validate native PipeWire caps and mapped PCM pointers before reading.
+
+- Restrict global shortcut changes to Settings and require explicit caller identity for all registered native IPC commands. Audit all 50 handlers, including specialized export validation.
+- Reject mismatched frozen monitor IDs rather than substituting another screen.
+- Validate recovery intent paths and tokens, reject redirected ancestors and use OS no-replace rename for gallery staging and restoration. Directory-handle pinning and native acceptance remain outstanding.
+
+- Strictly validate JSON media type, declared byte length and version strings in the opt-in update notification feed. Bound streaming storage to a fixed 8 KiB allocation and abort the request on completion or rejection.
+- Add regression tests for malformed headers, fragmented responses at the byte limit and invalid version strings.
+- Correct prerelease download links and distinguish experimental Linux native media from distributed preview capabilities. No automated installer or new network permissions.
+
 ## v0.2.34 — Desktop-only distribution (development)
 
 - Extend the experimental Linux native audio adapter with independently validated microphone and monitor gains on the selected GStreamer mixer pads. Preserve unity gain for Free, session identity checks and pause/resume behavior. Add a native zero-gain PCM probe; public Linux MP4/audio capability remains disabled pending acceptance.
