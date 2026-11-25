@@ -2,6 +2,8 @@
 
 ## v0.2.35 — Update notification and IPC hardening (preview)
 
+- Reject multiply linked Windows gallery media using native file-handle metadata and add a cross-platform hard-link regression. Remove the unused Home import detected by strict TypeScript CI.
+
 - Move localized destructive confirmation into the native backend. Cancel returns without touching gallery data; confirm rechecks the selected row before deletion.
 - Reuse the pinned-directory implementation for gallery deletion and recovery; require journal/gallery path agreement and reject inconsistent recovery state. The same-user leaf-entry race and cross-restart directory identity require further verification.
 - Validate native PipeWire caps and mapped PCM pointers before reading.

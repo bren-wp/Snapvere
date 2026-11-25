@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { ipc } from "../lib/ipc";
 import { useLanguage } from "../lib/LanguageProvider";
-import { isVideo } from "../lib/types";
 import {
   createGallerySelectionStore,
   mergeUniqueById,

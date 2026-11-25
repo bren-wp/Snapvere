@@ -163,10 +163,32 @@ fn ensure_regular(path: &Path) -> Result<()> {
     }
     #[cfg(windows)]
     {
-        use std::os::windows::fs::MetadataExt;
+        use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+        use std::os::windows::io::AsRawHandle;
+        use windows::Win32::Foundation::HANDLE;
+        use windows::Win32::Storage::FileSystem::{
+            GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+        };
+
         ensure!(
             metadata.file_attributes() & 0x400 == 0,
             "Redirected gallery file"
+        );
+        // Inspect the actual file handle, not just the path. This handle is
+        // released before rename; a same-user leaf replacement remains possible.
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(1)
+            .custom_flags(0x00200000)
+            .open(path)?;
+        let opened = file.metadata()?;
+        let mut info = BY_HANDLE_FILE_INFORMATION::default();
+        // SAFETY: file owns the live handle and info is writable for this call.
+        unsafe { GetFileInformationByHandle(HANDLE(file.as_raw_handle()), &mut info) }?;
+        ensure!(
+            opened.is_file() && opened.file_attributes() & 0x400 == 0
+                && info.nNumberOfLinks == 1,
+            "Redirected or multiply linked gallery file"
         );
     }
     Ok(())
@@ -359,6 +381,21 @@ mod tests {
         fs::write(shot.thumb_path.as_deref().unwrap(), b"thumbnail")?;
         db.insert(&shot)?;
         Ok((folder, db, shot))
+    }
+
+    #[test]
+    fn multiply_linked_gallery_media_is_not_deleted() -> Result<()> {
+        let (folder, mut db, shot) = fixture()?;
+        let alias = folder.join("alias.png");
+        fs::hard_link(&shot.file_path, &alias)?;
+        assert!(delete(&mut db, &shot.id).is_err());
+        assert!(db.get(&shot.id)?.is_some());
+        assert_eq!(fs::read(&shot.file_path)?, b"original");
+        assert_eq!(fs::read(&alias)?, b"original");
+        assert!(db.pending_deletions()?.is_empty());
+        drop(db);
+        fs::remove_dir_all(folder)?;
+        Ok(())
     }
 
     #[test]
