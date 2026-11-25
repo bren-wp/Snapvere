@@ -2,6 +2,8 @@
 
 ## v0.2.33 — Preview release verification (development)
 
+- Address post-merge recurrence of upstream portal duplicate-frame failure with a tracked CI-only FPS capture-timer cancellation patch, checked against pinned v0.9.0; require three independent successful native portal sessions.
+
 - Disable redundant clock scheduling in the capture-only Wayland video pipeline: debug logs showed absolute producer PTS at 115.514 s while the pipeline was only 0.194 s old. Use a fixed NULL pipeline clock and disable source clock/sync where supported; preserve recorder monotonic pacing and all real-video safety checks.
 
 - Detach bounded Wayland source buffers outside the internal PipeWire dequeue lock; retain exact geometry, packed system-memory caps and corrupted-frame rejection. Add parent-buffer lifetime regression coverage and isolated source diagnostics.
