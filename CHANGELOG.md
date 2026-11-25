@@ -2,6 +2,8 @@
 
 ## v0.2.34 — Desktop-only distribution (development)
 
+- Add separate Windows Pro microphone and system audio gain controls (0–200%, validated locally and applied before mixing on the next recording). Free retains unity gain. Linux independent gain and live meters are not implemented.
+
 - Add Pro MP4 segment review with A/B bounds, repeat playback, localized controls and explicit preview-only behavior. No video files are rewritten or exported by these controls.
 - Stop unclaimed WASAPI endpoints after initialization timeout, check stop inside packet draining and isolate nonfinite samples from other mixed sources.
 

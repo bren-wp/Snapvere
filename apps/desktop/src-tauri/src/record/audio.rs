@@ -61,6 +61,7 @@ pub struct Mixer {
     threads: Vec<std::thread::JoinHandle<()>>,
     failure: Arc<Mutex<Option<String>>>,
     pub kinds: Vec<Kind>,
+    gains: [f32; 2],
 }
 
 impl Mixer {
@@ -112,7 +113,21 @@ impl Mixer {
             threads,
             failure,
             kinds: opened,
+            gains: [1.0; 2],
         }
+    }
+
+    /// Snapshot Pro-only preferences at recording start, never during mixing.
+    /// These values do not select or authorize any additional audio source.
+    #[cfg(feature = "pro")]
+    pub(super) fn with_saved_gains(mut self, app: &tauri::AppHandle) -> Result<Self, String> {
+        use tauri_plugin_store::StoreExt;
+        let store = app.store("settings.json").map_err(|error| error.to_string())?;
+        self.gains = [
+            gain_from_percent(store.get("proMicGain").and_then(|v| v.as_u64())),
+            gain_from_percent(store.get("proSystemGain").and_then(|v| v.as_u64())),
+        ];
+        Ok(self)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -141,11 +156,16 @@ impl Mixer {
     pub fn pull(&self, frames: usize) -> Vec<i16> {
         let n = frames * CHANNELS;
         let mut mix = vec![0f32; n];
-        for q in &self.queues {
+        for (index, q) in self.queues.iter().enumerate() {
+            let gain = match self.kinds.get(index) {
+                Some(Kind::Microphone) => self.gains[0],
+                Some(Kind::SystemLoopback) => self.gains[1],
+                None => 1.0,
+            };
             let mut samples = crate::state::lock(&q.samples);
             for slot in mix.iter_mut().take(n) {
                 match samples.pop_front() {
-                    Some(s) if s.is_finite() => *slot += s.clamp(-1.0, 1.0),
+                    Some(s) if s.is_finite() => *slot += s.clamp(-1.0, 1.0) * gain,
                     Some(_) => {}
                     None => break,
                 }
@@ -154,6 +174,14 @@ impl Mixer {
         mix.iter()
             .map(|s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
             .collect()
+    }
+}
+
+#[cfg(any(feature = "pro", test))]
+fn gain_from_percent(value: Option<u64>) -> f32 {
+    match value {
+        Some(percent @ 0..=200) => percent as f32 / 100.0,
+        _ => 1.0,
     }
 }
 
@@ -501,6 +529,7 @@ mod tests {
             threads: vec![],
             failure: Arc::new(Mutex::new(None)),
             kinds: vec![],
+            gains: [1.0; 2],
         };
         let out = m.pull(10);
         assert_eq!(out.len(), 20);
@@ -516,6 +545,7 @@ mod tests {
             threads: vec![],
             failure: Arc::clone(&failure),
             kinds: vec![],
+            gains: [1.0; 2],
         };
         assert!(mixer.check_health().is_ok());
         *crate::state::lock(&failure) =
@@ -619,6 +649,27 @@ mod tests {
     }
 
     #[test]
+    fn independent_gains_are_applied_before_mix_and_clipping() {
+        let mic = Arc::new(Queue {
+            samples: Mutex::new(VecDeque::from(vec![0.25, 0.25, 1.0, -1.0])),
+        });
+        let system = Arc::new(Queue {
+            samples: Mutex::new(VecDeque::from(vec![0.5, -0.5, 0.75, -0.75])),
+        });
+        let mixer = Mixer {
+            queues: vec![system, mic],
+            stop: Arc::new(AtomicBool::new(false)),
+            threads: vec![],
+            failure: Arc::new(Mutex::new(None)),
+            kinds: vec![Kind::SystemLoopback, Kind::Microphone],
+            gains: [gain_from_percent(Some(200)), gain_from_percent(Some(0))],
+        };
+        assert_eq!(mixer.pull(2), vec![16383, 16383, i16::MAX, -i16::MAX]);
+        assert_eq!(gain_from_percent(Some(201)), 1.0);
+        assert_eq!(gain_from_percent(None), 1.0);
+    }
+
+    #[test]
     fn mixer_rejects_nonfinite_samples_without_poisoning_other_sources() {
         let q1 = Arc::new(Queue {
             samples: Mutex::new(VecDeque::from(vec![f32::NAN, f32::INFINITY])),
@@ -632,6 +683,7 @@ mod tests {
             threads: vec![],
             failure: Arc::new(Mutex::new(None)),
             kinds: vec![],
+            gains: [1.0; 2],
         };
         assert_eq!(mixer.pull(1), vec![16383, -16383]);
     }
@@ -650,6 +702,7 @@ mod tests {
             threads: vec![],
             failure: Arc::new(Mutex::new(None)),
             kinds: vec![],
+            gains: [1.0; 2],
         };
         let out = m.pull(2);
         // prva dva uzorka: 0.5+0.75 = 1.25 → klip na 1.0; druga dva: samo 0.5 (q2 prazan)

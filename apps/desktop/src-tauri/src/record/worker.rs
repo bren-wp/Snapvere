@@ -62,6 +62,8 @@ pub(super) fn run(
             None
         } else {
             let m = audio::Mixer::start(&kinds);
+            #[cfg(feature = "pro")]
+            let m = m.with_saved_gains(app)?;
             // Never start a video-only/single-source recording when the user
             // explicitly selected more audio inputs than WASAPI could open.
             ensure_audio_sources(&kinds, &m.kinds)?;
