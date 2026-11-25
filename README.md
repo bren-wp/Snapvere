@@ -37,6 +37,18 @@ Snapvere gives you a simple sequence: **capture → annotate → save or copy**.
 | 🖥️ | **Ready when you are** | Launch quietly at Windows sign-in; capture from the icon beside the clock |
 | 🔒 | **Privacy by design** | No automatic capture upload; locally stored captures and gallery data |
 
+## Snapvere Free & Pro
+
+Free provides the core private screenshot, annotation, recording and local library workflow. Pro extends the workflow with recording presets, six locally saved recording profiles, a dedicated studio and native batch export of up to 100 captures.
+
+| Pro image export | Maximum long edge |
+|---|---|
+| Original files | Unchanged |
+| PNG | Original, 1280, 1920 or 3840 px |
+| Lossless WebP | Original, 1280 or 1920 px |
+
+Image exports never enlarge the source, and original captures remain in the local library. The repository's Pro builds are previews, not paid-license-enforced distributions.
+
 ## See Snapvere in English
 
 Explore the capture workspace, annotation editor and settings in the primary

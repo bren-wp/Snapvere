@@ -15,6 +15,20 @@ pub(super) fn checked_bgra_len(width: u32, height: u32) -> Result<usize, String>
     usize::try_from(bytes).map_err(|_| "Recording frame buffer size overflow".into())
 }
 
+/// Validate native source geometry against the authorized selection before
+/// initializing the encoder. A geometry mismatch must not silently pad or crop
+/// pixels from a different output.
+pub(super) fn validate_source_geometry(
+    source: (u32, u32),
+    target: &RecordTarget,
+    crop: (u32, u32, u32, u32),
+) -> Result<usize, String> {
+    if source != (target.monitor_w, target.monitor_h) || crop != crop_rect(target)? {
+        return Err("Capture source geometry changed; select the recording area again".into());
+    }
+    checked_bgra_len(source.0, source.1)
+}
+
 /// Reserve before allocating; invalid monitor metadata must not abort the process.
 pub(super) fn allocate_bgra(width: u32, height: u32) -> Result<Vec<u8>, String> {
     let bytes = checked_bgra_len(width, height)?;
@@ -311,6 +325,25 @@ mod regression_tests {
             height: 20,
         });
         assert!(crop_rect(&t).is_err());
+    }
+
+    #[test]
+    fn source_geometry_must_match_authorized_monitor_and_crop() {
+        let target = RecordTarget {
+            monitor_id: 1,
+            monitor_x: 0,
+            monitor_y: 0,
+            monitor_w: 640,
+            monitor_h: 480,
+            region: None,
+        };
+        let crop = (0, 0, 640, 480);
+        assert_eq!(
+            validate_source_geometry((640, 480), &target, crop).unwrap(),
+            640 * 480 * 4
+        );
+        assert!(validate_source_geometry((480, 640), &target, crop).is_err());
+        assert!(validate_source_geometry((640, 480), &target, (1, 0, 639, 480)).is_err());
     }
 
     #[test]

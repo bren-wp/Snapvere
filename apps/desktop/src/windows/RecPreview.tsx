@@ -5,6 +5,7 @@ import { EyeOff, Play, Square, Undo2, Redo2 } from "lucide-react";
 import { ipc, type CropPreview, type PreviewMark } from "../lib/ipc";
 import { useLanguage } from "../lib/LanguageProvider";
 import { decodePreviewPacket } from "../lib/previewPacket";
+import { LatestPreviewRequest } from "../lib/latestPreviewRequest";
 
 type Point = { x: number; y: number };
 
@@ -28,30 +29,47 @@ export default function RecPreview() {
   const anchor = useRef<Point | null>(null);
   const canvas = useRef<SVGSVGElement>(null);
   const epoch = useRef(0);
+  const requests = useRef(new LatestPreviewRequest());
   const remaining = preview ? Math.max(0, preview.remaining - historyDelta) : 0;
 
-  const load = useCallback(async () => {
-    const id = ++epoch.current;
-    setPreview(null);
+  const clearPixels = useCallback(() => {
+    pixelsRef.current?.fill(0);
     pixelsRef.current = null;
+    const bitmap = bitmapRef.current;
+    if (bitmap) bitmap.getContext("2d")?.clearRect(0, 0, bitmap.width, bitmap.height);
+  }, []);
+
+  const invalidate = useCallback(() => {
+    ++epoch.current;
+    requests.current.invalidate();
+    clearPixels();
+  }, [clearPixels]);
+
+  const load = useCallback(() => {
+    const id = ++epoch.current;
+    clearPixels();
+    setPreview(null);
     setMarks([]);
     setRedo([]);
     setHistoryDelta(0);
     setDraft(null);
     anchor.current = null;
     setError(false);
-    try {
+    requests.current.request(async current => {
       const result = await ipc.getCropPreview();
+      if (!current() || id !== epoch.current) return;
       const packet = await ipc.getCropPreviewPacket(result.session, 0);
-      const pixels = decodePreviewPacket(packet, result);
-      if (id === epoch.current) {
-        pixelsRef.current = pixels;
-        setPreview(result);
+      if (!current() || id !== epoch.current) {
+        new Uint8Array(packet).fill(0);
+        return;
       }
-    } catch {
+      const pixels = decodePreviewPacket(packet, result);
+      pixelsRef.current = pixels;
+      setPreview(result);
+    }, () => {
       if (id === epoch.current) setError(true);
-    }
-  }, []);
+    });
+  }, [clearPixels]);
 
   // Draw raw RGBA once into the actual canvas. Avoid PNG compression,
   // base64 encoding and a second browser image decode for every sample.
@@ -83,32 +101,31 @@ export default function RecPreview() {
   }, [preview]);
 
   useEffect(() => {
-    void load();
+    let active = true;
+    const reset = () => {
+      if (!active) return;
+      invalidate();
+      setPreview(null);
+      setMarks([]);
+      setRedo([]);
+      setHistoryDelta(0);
+      setDraft(null);
+      anchor.current = null;
+    };
     const subs = [
-      listen("snapvere:preview-refresh", () => void load()),
+      listen("snapvere:preview-refresh", () => { if (active) load(); }),
       listen("snapvere:rec-state", (event) => {
-        if ((event.payload as { phase?: string })?.phase !== "paused") {
-          ++epoch.current;
-          setPreview(null);
-          pixelsRef.current = null;
-          setMarks([]);
-          setDraft(null);
-          anchor.current = null;
-        }
+        if ((event.payload as { phase?: string })?.phase !== "paused") reset();
       }),
-      listen("snapvere:rec-done", () => {
-        ++epoch.current;
-        setPreview(null);
-        pixelsRef.current = null;
-        setMarks([]);
-        setDraft(null);
-      }),
+      listen("snapvere:rec-done", reset),
     ];
+    load();
     return () => {
-      ++epoch.current;
+      active = false;
+      invalidate();
       subs.forEach((sub) => void sub.then((unlisten) => unlisten()));
     };
-  }, [load]);
+  }, [load, invalidate]);
 
   function point(event: React.PointerEvent<SVGSVGElement>): Point | null {
     if (!preview || !canvas.current) return null;
@@ -182,12 +199,16 @@ export default function RecPreview() {
     if (!preview || busy || anchor.current) return;
     setBusy(true);
     setError(false);
+    const id = epoch.current;
     try {
       await ipc.resumeCropPreview(preview.session, marks, historyDelta);
-      setPreview(null);
-      setMarks([]);
+      if (id === epoch.current) {
+        invalidate();
+        setPreview(null);
+        setMarks([]);
+      }
     } catch {
-      setError(true);
+      if (id === epoch.current) setError(true);
     } finally {
       setBusy(false);
     }

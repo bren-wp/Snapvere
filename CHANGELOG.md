@@ -2,6 +2,9 @@
 
 ## v0.2.34 — Desktop-only distribution (development)
 
+- Coalesce preview refresh bursts into one active IPC request and one latest pending request; discard revoked responses, clear renderer pixel buffers, and reject late callbacks after teardown. Keep pause-only native preview authorization.
+- Reject mismatched source/crop geometry before encoder initialization and incorrect frame byte lengths before processing in both editions.
+
 - Expand Pro batch export to eight presets with PNG 1920/3840 and original-size/1280 WebP; preserve native limits, no enlargement, atomic no-clobber writes and all 12 locale labels.
 - Harden shared Windows capture: bounded initial allocation, reject missing textures and mismatched geometry/format/row pitch, propagate frame-release failures and terminate capture on duplication access loss instead of reusing stale pixels or reconnecting by coordinates alone.
 

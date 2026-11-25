@@ -1,7 +1,9 @@
 // Snapvere by Brendigo
 //! Recorder worker loop. The worker owns frame capture and encoder finalization.
 
-use super::pixels::{allocate_bgra, bgra_to_rgba_image, crop_bgra, pixelate_bgra};
+use super::pixels::{
+    allocate_bgra, bgra_to_rgba_image, crop_bgra, pixelate_bgra, validate_source_geometry,
+};
 use super::transport::Source;
 use super::*;
 
@@ -33,6 +35,7 @@ pub(super) fn run(
         return Err("Recording initialization was cancelled".into());
     }
     let (src_w, src_h) = source.size();
+    let source_bytes = validate_source_geometry((src_w, src_h), &target, crop)?;
     let t_source = t0.elapsed();
 
     // MF sesija mora živjeti dulje od enkodera (Drop redoslijed je obrnut od deklaracije).
@@ -258,6 +261,10 @@ pub(super) fn run(
                 break;
             }
         };
+        if full.len() != source_bytes {
+            recording_error = Some("Invalid capture frame byte length".into());
+            break;
+        }
         crop_bgra(full, src_w, src_h, ox, oy, ow, oh, &mut frame_buf);
         if !source.has_frame() {
             // Statičan ekran odmah nakon starta: bolje kasniji prvi frame nego crni.
