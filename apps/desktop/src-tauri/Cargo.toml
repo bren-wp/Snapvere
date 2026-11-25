@@ -1,7 +1,7 @@
 # Snapvere by Brendigo
 [package]
 name = "snapvere"
-version = "0.2.33"
+version = "0.2.34"
 description = "Snapvere — brzi, privatni screenshot i screen-recording alat"
 authors = ["Brendigo <https://brendigo.com>"]
 edition = "2021"

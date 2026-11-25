@@ -35,6 +35,8 @@ import { APP_NAME, IS_PRO } from "../lib/edition";
 import { proGalleryCopy } from "../lib/proGalleryCopy";
 import { PRO_BATCH_LIMIT, incompatibleProImageIds, isProExportPreset, readProExportPreset, writeProExportPreset, removeIncompatibleProImages, retainLoadedProSelection, selectProBatch, summarizeProSelection, type ProExportPreset } from "../lib/proSelection";
 import { summarizeProGallery } from "../lib/proInsights";
+import ProSavedWorkspace from "../components/ProSavedWorkspace";
+import { readCollections, readExportProfiles, saveCollection, saveExportProfile, deleteCollection, deleteExportProfile, type SavedCollection } from "../lib/proSavedWorkspaces";
 import { formatMediaSize } from "../lib/mediaFormatting";
 import Viewer from "../components/Viewer";
 import CaptureCard from "../components/home/CaptureCard";
@@ -56,6 +58,8 @@ export default function Home() {
   const [proExportReport, setProExportReport] = useState<BatchExportReport | null>(null);
   const [proExportPreset, setProExportPreset] = useState<ProExportPreset>(() => IS_PRO ? readProExportPreset() : "original");
   const proExportLock = useRef(false);
+  const [collections, setCollections] = useState(() => IS_PRO ? readCollections() : []);
+  const [exportProfiles, setExportProfiles] = useState(() => IS_PRO ? readExportProfiles() : []);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -82,6 +86,24 @@ export default function Home() {
     pagingBusy.current = false;
     setLoadingMore(false);
   }, []);
+
+  const applyCollection = (collection: SavedCollection) => {
+    if (proExportLock.current) return;
+    const current = activeSelection.snapshot();
+    if (current.query === collection.query && current.filter === collection.filter) return;
+    galleryRequest.current += 1;
+    invalidatePaging();
+    loadedItems.current = [];
+    activeSelection.setQuery(collection.query);
+    activeSelection.setFilter(collection.filter);
+    setQuery(collection.query);
+    setFilter(collection.filter);
+    setGalleryError(false);
+    setItems([]);
+    setLoading(true);
+    setHasMore(false);
+    pageOffset.current = 0;
+  };
 
   const load = useCallback(async () => {
     // Always read the latest selection: captures, clipboard imports and native
@@ -588,6 +610,14 @@ export default function Home() {
         </div>
       </section>
 
+      {IS_PRO && !proBatchMode && (
+        <div className="mx-5 mb-3">
+          <ProSavedWorkspace language={language} kind="collection" entries={collections} disabled={loading || proExportBusy}
+            onSave={name => setCollections(saveCollection(name, activeSelection.snapshot()))}
+            onApply={applyCollection}
+            onDelete={name => setCollections(deleteCollection(name))} />
+        </div>
+      )}
       {IS_PRO && proInsights && !proBatchMode && (
         <section className="snapvere-pro-insights mx-5 mb-3" aria-label={proText.insightsTitle}>
           <span className="snapvere-pro-insights-title">{proText.insightsTitle}</span>
@@ -660,9 +690,17 @@ export default function Home() {
               <option value="original">{proText.originalPreset}</option>
               <option value="png">{proText.pngPreset}</option>
               <option value="png1280">{proText.png1280Preset}</option>
+              <option value="png1920">{proText.png1920Preset}</option>
+              <option value="png3840">{proText.png3840Preset}</option>
+              <option value="webp">{proText.webpPreset}</option>
+              <option value="webp1280">{proText.webp1280Preset}</option>
               <option value="webp1920">{proText.webp1920Preset}</option>
             </select>
           </label>
+          <ProSavedWorkspace language={language} kind="export" entries={exportProfiles} disabled={proExportBusy}
+            onSave={name => setExportProfiles(saveExportProfile(name, proExportPreset))}
+            onApply={entry => { if (!proExportLock.current) { setProExportPreset(entry.preset); writeProExportPreset(entry.preset); } }}
+            onDelete={name => setExportProfiles(deleteExportProfile(name))} />
           {proExportPreset !== "original" && (
             <p className="basis-full text-xs text-muted">{proText.imagePresetHelp}</p>
           )}

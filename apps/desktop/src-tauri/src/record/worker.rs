@@ -1,7 +1,9 @@
 // Snapvere by Brendigo
 //! Recorder worker loop. The worker owns frame capture and encoder finalization.
 
-use super::pixels::{allocate_bgra, bgra_to_rgba_image, crop_bgra, pixelate_bgra};
+use super::pixels::{
+    allocate_bgra, bgra_to_rgba_image, crop_bgra, pixelate_bgra, validate_source_geometry,
+};
 use super::transport::Source;
 use super::*;
 
@@ -33,6 +35,7 @@ pub(super) fn run(
         return Err("Recording initialization was cancelled".into());
     }
     let (src_w, src_h) = source.size();
+    let source_bytes = validate_source_geometry((src_w, src_h), &target, crop)?;
     let t_source = t0.elapsed();
 
     // MF sesija mora živjeti dulje od enkodera (Drop redoslijed je obrnut od deklaracije).
@@ -59,6 +62,8 @@ pub(super) fn run(
             None
         } else {
             let m = audio::Mixer::start(&kinds);
+            #[cfg(feature = "pro")]
+            let m = m.with_saved_gains(app)?;
             // Never start a video-only/single-source recording when the user
             // explicitly selected more audio inputs than WASAPI could open.
             ensure_audio_sources(&kinds, &m.kinds)?;
@@ -80,7 +85,7 @@ pub(super) fn run(
     #[cfg(not(any(windows, all(target_os = "linux", feature = "linux-native-media"))))]
     let mixer: Option<()> = None;
     #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
-    let mut mixer = linux_audio::Mixer::selected(&opts)?;
+    let mut mixer = linux_audio::Mixer::selected(&opts, app)?;
 
     let mut encoder = open_encoder(
         path,
@@ -258,6 +263,10 @@ pub(super) fn run(
                 break;
             }
         };
+        if full.len() != source_bytes {
+            recording_error = Some("Invalid capture frame byte length".into());
+            break;
+        }
         crop_bgra(full, src_w, src_h, ox, oy, ow, oh, &mut frame_buf);
         if !source.has_frame() {
             // Statičan ekran odmah nakon starta: bolje kasniji prvi frame nego crni.

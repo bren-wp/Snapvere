@@ -94,7 +94,39 @@ static gboolean configure_input(SnapvereAudio *ctx, guint index, guint64 serial)
     return ok;
 }
 
+// The queue's peer is the actual audiomixer request pad for this source.
+// Set its gain before PLAYING; do not change source identity or graph consent.
+static gboolean configure_gain(SnapvereAudio *ctx, const gchar *queue_name, guint gain) {
+    GstElement *queue = gst_bin_get_by_name(GST_BIN(ctx->pipeline), queue_name);
+    if (!queue) return FALSE;
+    GstPad *src = gst_element_get_static_pad(queue, "src");
+    GstPad *sink = src ? gst_pad_get_peer(src) : NULL;
+    gboolean ok = FALSE;
+    if (sink) {
+        GParamSpec *property = g_object_class_find_property(G_OBJECT_GET_CLASS(sink), "volume");
+        if (property && G_IS_PARAM_SPEC_DOUBLE(property) &&
+            (property->flags & G_PARAM_WRITABLE)) {
+            gdouble value = (gdouble)gain / 100.0;
+            GParamSpecDouble *bounds = G_PARAM_SPEC_DOUBLE(property);
+            if (value >= bounds->minimum && value <= bounds->maximum) {
+                g_object_set(sink, "volume", value, NULL);
+                ok = TRUE;
+            }
+        }
+        gst_object_unref(sink);
+    }
+    if (src) gst_object_unref(src);
+    gst_object_unref(queue);
+    return ok;
+}
+
 void *snapvere_audio_open(guint64 mic, guint64 monitor, guint32 cookie) {
+    return snapvere_audio_open_with_gains(mic, monitor, cookie, 100, 100);
+}
+
+void *snapvere_audio_open_with_gains(guint64 mic, guint64 monitor, guint32 cookie,
+                                    guint mic_gain, guint monitor_gain) {
+    if (mic_gain > 200 || monitor_gain > 200) return NULL;
     if (!cookie || snapvere_audio_validate(mic, monitor, cookie, NULL) != 0) {
         g_debug("Audio mixer rejected selected input identity");
         return NULL;
@@ -116,11 +148,11 @@ void *snapvere_audio_open(guint64 mic, guint64 monitor, guint32 cookie) {
     const gchar *mic_branch =
         "pipewiresrc name=mic ! audioconvert ! audioresample ! "
         "audio/x-raw,format=S16LE,rate=48000,channels=2,layout=interleaved "
-        "! queue max-size-buffers=8 max-size-bytes=192000 max-size-time=200000000 ! mix. ";
+        "! queue name=mic_queue max-size-buffers=8 max-size-bytes=192000 max-size-time=200000000 ! mix. ";
     const gchar *monitor_branch =
         "pipewiresrc name=monitor ! audioconvert ! audioresample ! "
         "audio/x-raw,format=S16LE,rate=48000,channels=2,layout=interleaved "
-        "! queue max-size-buffers=8 max-size-bytes=192000 max-size-time=200000000 ! mix. ";
+        "! queue name=monitor_queue max-size-buffers=8 max-size-bytes=192000 max-size-time=200000000 ! mix. ";
     gchar *description = g_strconcat(base, mic ? mic_branch : "",
                                     monitor ? monitor_branch : "", NULL);
     ctx->pipeline = gst_parse_launch(description, &error);
@@ -134,6 +166,8 @@ void *snapvere_audio_open(guint64 mic, guint64 monitor, guint32 cookie) {
     ctx->bus = gst_element_get_bus(ctx->pipeline);
     if (!ctx->sink || !ctx->bus ||
         !configure_input(ctx, 0, mic) || !configure_input(ctx, 1, monitor) ||
+        (mic && mic_gain != 100 && !configure_gain(ctx, "mic_queue", mic_gain)) ||
+        (monitor && monitor_gain != 100 && !configure_gain(ctx, "monitor_queue", monitor_gain)) ||
         gst_element_set_state(ctx->pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
         goto fail;
     // Wait only for actual buffers from every selected source, not an

@@ -16,6 +16,7 @@ import type { ImageFormat, RecordFormat, PlatformCapabilities, LinuxAudioSnapsho
 import WindowFrame from "../components/WindowFrame";
 import ProRecordingProfiles from "../components/ProRecordingProfiles";
 import { APP_NAME, IS_PRO } from "../lib/edition";
+import { proAudioCopy } from "../lib/proAudioCopy";
 import { PROFILE_KEYS, type Profile } from "../lib/proProfiles";
 import { DEFAULTS, normalizeSettings, type AppSettings } from "./settings/preferences";
 import { Section, Row, Toggle, Segmented, HotkeyInput } from "./settings/SettingsControls";
@@ -506,6 +507,28 @@ export default function Settings() {
                 onChange={(v) => set("recordSystemAudio", v)}
               />
             </Row>
+            {IS_PRO && platform?.os === "windows" && s.recordFormat === "mp4" && (
+              <>
+                <Row label={proAudioCopy(language)[0]} hint={proAudioCopy(language)[2]}>
+                  <div className="flex items-center gap-2">
+                    <input type="range" min={0} max={200} step={5} value={s.proMicGain}
+                      aria-label={proAudioCopy(language)[0]} disabled={!store || !s.recordMic}
+                      onChange={event => set("proMicGain", Number(event.target.value))}
+                      className="w-28 accent-accent" />
+                    <output className="w-12 text-right text-xs tabular-nums">{s.proMicGain}%</output>
+                  </div>
+                </Row>
+                <Row label={proAudioCopy(language)[1]} hint={proAudioCopy(language)[2]}>
+                  <div className="flex items-center gap-2">
+                    <input type="range" min={0} max={200} step={5} value={s.proSystemGain}
+                      aria-label={proAudioCopy(language)[1]} disabled={!store || !s.recordSystemAudio}
+                      onChange={event => set("proSystemGain", Number(event.target.value))}
+                      className="w-28 accent-accent" />
+                    <output className="w-12 text-right text-xs tabular-nums">{s.proSystemGain}%</output>
+                  </div>
+                </Row>
+              </>
+            )}
             {platform?.linuxAudioPicker && audioDevices && (
               <>
                 <Row label={t("Record microphone")}>

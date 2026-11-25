@@ -37,6 +37,24 @@ Snapvere gives you a simple sequence: **capture → annotate → save or copy**.
 | 🖥️ | **Ready when you are** | Launch quietly at Windows sign-in; capture from the icon beside the clock |
 | 🔒 | **Privacy by design** | No automatic capture upload; locally stored captures and gallery data |
 
+## Snapvere Free & Pro
+
+Free provides the core private screenshot, annotation, recording and local library workflow. Pro extends the workflow with recording presets, six locally saved recording profiles, a dedicated studio and native batch export of up to 100 captures.
+
+| Pro image export | Maximum long edge |
+|---|---|
+| Original files | Unchanged |
+| PNG | Original, 1280, 1920 or 3840 px |
+| Lossless WebP | Original, 1280 or 1920 px |
+
+Save up to twelve named smart collections with gallery search and category filters, and twelve named export profiles with the native export presets. Both are stored locally.
+
+On Windows, Pro provides independent microphone and system audio gain from 0% to 200%, applied at the start of the next recording. Source selection remains explicit. The experimental Linux backend includes independent gain processing, but public Linux MP4/audio recording remains disabled pending acceptance.
+
+Review MP4 segments with Pro A/B playback boundaries and repeat a selected range without changing the recording. This is a review tool, not a video trimming or rendering engine.
+
+Image exports never enlarge the source, and original captures remain in the local library. The repository's Pro builds are previews, not paid-license-enforced distributions.
+
 ## See Snapvere in English
 
 Explore the capture workspace, annotation editor and settings in the primary
@@ -148,16 +166,6 @@ Get-FileHash .\Snapvere-Portable.exe -Algorithm SHA256
 Compare that SHA-256 with the manifest from the **same release**.
 The available installer packages are not presented as publisher-code-signed;
 a matching checksum does not independently establish publisher identity.
-
-## Browser screenshot extensions
-
-The repository also contains extension builds for **Chrome, Edge, Firefox,
-Brave, Opera, Vivaldi and Safari**. They capture a selected browser tab locally
-and can save or copy the result. Extension availability in this repository
-does not imply publication in browser stores; Safari distribution depends
-on Apple's packaging and signing requirements.
-
-[Browser extension guide](extensions/README.md)
 
 ## Privacy, licenses and documentation
 

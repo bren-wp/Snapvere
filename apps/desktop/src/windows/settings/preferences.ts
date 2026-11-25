@@ -13,6 +13,8 @@ export interface AppSettings {
   recordCursor: boolean;
   recordMic: boolean;
   recordSystemAudio: boolean;
+  proMicGain: number;
+  proSystemGain: number;
   recordMaxSeconds: number;
   saveFolder: string;
 }
@@ -29,6 +31,8 @@ export const DEFAULTS: AppSettings = {
   recordCursor: true,
   recordMic: false,
   recordSystemAudio: false,
+  proMicGain: 100,
+  proSystemGain: 100,
   recordMaxSeconds: 1800,
   saveFolder: "Pictures/Snapvere",
 };
@@ -51,6 +55,10 @@ export function normalizeSettings(input: unknown): AppSettings {
   if ([0, 300, 1800, 7200].includes(value.recordMaxSeconds as number)) next.recordMaxSeconds = value.recordMaxSeconds as number;
   for (const key of ["recordCursor", "recordMic", "recordSystemAudio"] as const) {
     if (typeof value[key] === "boolean") next[key] = value[key];
+  }
+  for (const key of ["proMicGain", "proSystemGain"] as const) {
+    const gain = value[key];
+    if (typeof gain === "number" && Number.isInteger(gain) && gain >= 0 && gain <= 200) next[key] = gain;
   }
   if (typeof value.saveFolder === "string" && value.saveFolder.length > 0
     && value.saveFolder.length <= 1024 && !value.saveFolder.includes("\u0000")) {

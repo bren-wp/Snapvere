@@ -539,6 +539,10 @@ export function proGalleryCopy(language: Language) {
   const copy = translations[language] ?? translations.en;
   return {
     ...copy,
+    png1920Preset: copy.png1280Preset.replace("1280", "1920"),
+    png3840Preset: copy.png1280Preset.replace("1280", "3840"),
+    webpPreset: copy.pngPreset.replace("PNG", "WebP"),
+    webp1280Preset: copy.webp1920Preset.replace("1920", "1280"),
     count: (count: number) => `${copy.selected}: ${count} / 100`,
     exported: (count: number) => `${count} ${copy.exportedSuffix}`,
   };

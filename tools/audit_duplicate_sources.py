@@ -2,7 +2,7 @@
 # Snapvere by Brendigo
 """Fail on exact duplicate maintained source files, report repeated code blocks.
 
-Generated extension variants and dependency trees are intentionally excluded.
+Dependency trees are intentionally excluded.
 Repeated blocks are review candidates, not automatic evidence of dead code.
 """
 from collections import defaultdict

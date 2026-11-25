@@ -4,7 +4,9 @@
 #include <stdlib.h>
 
 int main(int argc, char **argv) {
-    if (argc != 3) return 2;
+    if (argc != 3 && argc != 4) return 2;
+    gboolean muted = argc == 4 && g_strcmp0(argv[3], "muted") == 0;
+    if (argc == 4 && !muted) return 2;
     guint64 mic = g_ascii_strtoull(argv[1], NULL, 10);
     guint64 monitor = g_ascii_strtoull(argv[2], NULL, 10);
     if (!mic || !monitor || mic == monitor) return 2;
@@ -32,13 +34,17 @@ int main(int argc, char **argv) {
     if (!snapvere_audio_validate(monitor, mic, cookie, NULL)) return 3;
     guint32 wrong_cookie = cookie == 1 ? 2 : cookie - 1;
     if (!snapvere_audio_validate(mic, monitor, wrong_cookie, NULL)) return 3;
-    void *capture = snapvere_audio_open(mic, monitor, cookie);
+    // Reject out-of-range gain before opening any audio endpoint.
+    if (snapvere_audio_open_with_gains(mic, monitor, cookie, 201, 100)) return 3;
+    void *capture = muted
+        ? snapvere_audio_open_with_gains(mic, monitor, cookie, 0, 0)
+        : snapvere_audio_open(mic, monitor, cookie);
     if (!capture) {
         g_printerr("Mixer could not open selected inputs\n");
         return 1;
     }
     guint8 pcm[19200];
-    guint64 frames = 0, audible = 0;
+    guint64 frames = 0, audible = 0, nonzero = 0;
     gint64 deadline = g_get_monotonic_time() + 4 * G_TIME_SPAN_SECOND;
     int result = 1;
     while (g_get_monotonic_time() < deadline) {
@@ -55,9 +61,15 @@ int main(int argc, char **argv) {
         for (int i = 0; i < bytes; i += 2) {
             gint16 value = (gint16)GST_READ_UINT16_LE(pcm + i);
             if (value > 512 || value < -512) audible++;
+            if (value != 0) nonzero++;
         }
-        if (frames >= 24000 && audible >= 4800) {
-            g_print("Mixed selected PipeWire inputs: %" G_GUINT64_FORMAT " frames\n", frames);
+        if (muted && nonzero) {
+            g_printerr("Muted mixer produced nonzero samples\n");
+            break;
+        }
+        if (frames >= 24000 && (muted || audible >= 4800)) {
+            g_print("%s selected PipeWire inputs: %" G_GUINT64_FORMAT " frames\n",
+                    muted ? "Muted" : "Mixed", frames);
             result = 0;
             break;
         }

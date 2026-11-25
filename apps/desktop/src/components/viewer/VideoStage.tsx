@@ -6,6 +6,9 @@ import { Pause, Play, RotateCcw, Volume2, VolumeX } from "lucide-react";
 import type { Screenshot } from "../../lib/types";
 import { PLAYBACK_SPEEDS, readVolume } from "../../lib/playerPreferences";
 import StageError from "./StageError";
+import { IS_PRO } from "../../lib/edition";
+import { MIN_REVIEW_SECONDS, reviewLoopTarget, setReviewBoundary, validReviewRange, type ReviewRange } from "../../lib/proTimeline";
+import { proTimelineCopy } from "../../lib/proTimelineCopy";
 
 // ───────────────────────────────── video ─────────────────────────────────
 
@@ -22,7 +25,7 @@ export default function VideoStage({
   onToggleFullscreen: () => void;
   onOpenExternal: () => void;
 }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const ref = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [ended, setEnded] = useState(false);
@@ -30,6 +33,10 @@ export default function VideoStage({
   const [duration, setDuration] = useState(0);
   const [failed, setFailed] = useState<string | null>(null);
   const [speed, setSpeed] = useState(1);
+  const [review, setReview] = useState<ReviewRange | null>(null);
+  const [loop, setLoop] = useState(false);
+  const reviewCopy = proTimelineCopy(language);
+  const reviewReady = IS_PRO && validReviewRange(review, duration);
   const [{ volume, muted }, setSound] = useState(readVolume);
 
   useEffect(() => onPlayingChange(playing), [playing, onPlayingChange]);
@@ -51,6 +58,13 @@ export default function VideoStage({
     if (ref.current) ref.current.playbackRate = speed;
   }, [speed]);
 
+  const syncTime = useCallback((v: HTMLVideoElement) => {
+    const target = IS_PRO && !v.paused && !v.seeking
+      ? reviewLoopTarget(review, loop, v.currentTime, v.duration) : null;
+    if (target !== null) v.currentTime = target;
+    setTime(v.currentTime);
+  }, [review, loop]);
+
   // timeupdate dolazi ~4× u sekundi — za glatku traku čitamo vrijeme svaki frame.
   useEffect(() => {
     if (!playing) return;
@@ -59,14 +73,14 @@ export default function VideoStage({
     const tick = (timestamp: number) => {
       // 10Hz is smooth enough for playback progress and saves React renders/CPU.
       if (timestamp - lastUpdate >= 100 && ref.current) {
-        setTime(ref.current.currentTime);
+        syncTime(ref.current);
         lastUpdate = timestamp;
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [playing]);
+  }, [playing, syncTime]);
 
   const toggle = useCallback(() => {
     const v = ref.current;
@@ -77,14 +91,16 @@ export default function VideoStage({
 
   const seekTo = useCallback((t: number) => {
     const v = ref.current;
-    if (!v || !Number.isFinite(v.duration)) return;
+    if (!v || !Number.isFinite(v.duration) || !Number.isFinite(t)) return;
     v.currentTime = Math.max(0, Math.min(v.duration, t));
     setTime(v.currentTime);
   }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.target instanceof HTMLElement &&
+          e.target.closest('button, input, textarea, select, [role="slider"], [contenteditable="true"]')) return;
       const v = ref.current;
       if (!v) return;
       const k = e.key.toLowerCase();
@@ -105,7 +121,7 @@ export default function VideoStage({
   const silent = muted || volume === 0;
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center px-12 pb-24 pt-16">
+    <div className={`absolute inset-0 flex items-center justify-center px-12 pt-16 ${IS_PRO ? "pb-40" : "pb-24"}`}>
       <video
         ref={ref}
         src={convertFileSrc(shot.filePath)}
@@ -121,11 +137,17 @@ export default function VideoStage({
           setEnded(false);
         }}
         onPause={() => setPlaying(false)}
-        onEnded={() => {
+        onEnded={(e) => {
+          const v = e.currentTarget;
+          if (IS_PRO && loop && validReviewRange(review, v.duration)) {
+            v.currentTime = review.start;
+            void v.play().catch(() => { setPlaying(false); setEnded(true); });
+            return;
+          }
           setPlaying(false);
           setEnded(true);
         }}
-        onTimeUpdate={(e) => setTime(e.currentTarget.currentTime)}
+        onTimeUpdate={(e) => syncTime(e.currentTarget)}
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
         onDurationChange={(e) => setDuration(e.currentTarget.duration)}
         onError={(e) => {
@@ -153,6 +175,31 @@ export default function VideoStage({
           chromeHidden ? "pointer-events-none opacity-0" : "opacity-100"
         }`}
       >
+        {IS_PRO && (
+          <section aria-label={reviewCopy[0]} className="mb-2 rounded-xl border border-white/15 bg-black/80 p-2 text-xs text-white">
+            <div className="flex flex-wrap items-center gap-2">
+              <strong>{reviewCopy[0]}</strong>
+              <span className="font-mono tabular-nums">{reviewReady && review ? `${fmtReviewTime(review.start)} – ${fmtReviewTime(review.end)}` : "—"}</span>
+              <button type="button" className="rounded-lg border border-white/20 px-2 py-1 disabled:opacity-40"
+                disabled={!Number.isFinite(duration) || duration < MIN_REVIEW_SECONDS || time > duration - MIN_REVIEW_SECONDS || (reviewReady && review !== null && time > review.end - MIN_REVIEW_SECONDS)}
+                onClick={() => { setLoop(false); setReview(current => setReviewBoundary(current, "start", ref.current?.currentTime ?? time, duration)); }}>{reviewCopy[1]}</button>
+              <button type="button" className="rounded-lg border border-white/20 px-2 py-1 disabled:opacity-40"
+                disabled={!Number.isFinite(duration) || duration < MIN_REVIEW_SECONDS || time < MIN_REVIEW_SECONDS || (reviewReady && review !== null && time < review.start + MIN_REVIEW_SECONDS)}
+                onClick={() => { setLoop(false); setReview(current => setReviewBoundary(current, "end", ref.current?.currentTime ?? time, duration)); }}>{reviewCopy[2]}</button>
+              <button type="button" className="rounded-lg border border-white/20 px-2 py-1 aria-pressed:border-accent disabled:opacity-40"
+                disabled={!reviewReady} aria-pressed={loop && reviewReady}
+                onClick={() => { if (!reviewReady || !review) return; if (!loop) seekTo(review.start); setLoop(!loop); }}>{reviewCopy[3]}</button>
+              <button type="button" className="rounded-lg border border-white/20 px-2 py-1 disabled:opacity-40"
+                disabled={!review} onClick={() => { setLoop(false); setReview(null); }}>{reviewCopy[4]}</button>
+            </div>
+            {reviewReady && review && (
+              <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-white/15" aria-hidden="true">
+                <div className="absolute inset-y-0 bg-accent" style={{ left: `${review.start / duration * 100}%`, width: `${(review.end - review.start) / duration * 100}%` }} />
+              </div>
+            )}
+            <p className="mt-1 text-white/65">{reviewCopy[5]}</p>
+          </section>
+        )}
         <div className="lg flex items-center gap-2 !rounded-full px-2 py-1.5">
           <button className="lg-btn shrink-0" title={`${t(playing ? "Pause" : "Play")} (Space)`} aria-label={t(playing ? "Pause" : "Play")} onClick={toggle}>
             {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5" />}
@@ -270,6 +317,10 @@ function Scrubber({ time, duration, onSeek }: { time: number; duration: number; 
       )}
     </div>
   );
+}
+
+function fmtReviewTime(seconds: number) {
+  return `${fmtTime(seconds)}.${Math.floor((seconds % 1) * 10)}`;
 }
 
 function fmtTime(s: number) {

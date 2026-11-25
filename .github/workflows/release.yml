@@ -329,40 +329,13 @@ jobs:
         run: python tools/check_tauri_capabilities.py
       - name: Enforce read-only dependency update policy
         run: python tools/check_dependency_policy.py
-      - name: Audit all seven extensions and their static/dead-file graph
+      - name: Verify UI translation coverage and desktop-only distribution
         shell: pwsh
         run: |
-          # This release previously failed because Git for Windows checked out
-          # JSON with CRLF while the canonical manifests were generated with LF.
-          python tools/test_browser_extension_line_endings.py
-          if ($LASTEXITCODE -ne 0) { throw "LF/CRLF source regression failed" }
-          python tools/build_browser_extensions.py --check
-          if ($LASTEXITCODE -ne 0) { throw "Browser packages differ from audited canonical source" }
-          python tools/check_browser_extensions.py
-          if ($LASTEXITCODE -ne 0) { throw "Extension security policy failed" }
-          python tools/audit_browser_extension_graph.py
-          if ($LASTEXITCODE -ne 0) { throw "Unreachable or stale browser asset found" }
-          python tools/check_extension_privacy.py
-          if ($LASTEXITCODE -ne 0) { throw "Extension privacy audit failed" }
           node tools/check_translation_coverage.mjs
           if ($LASTEXITCODE -ne 0) { throw "UI translation coverage audit failed" }
-          python tools/check_extension_design_tokens.py
-          if ($LASTEXITCODE -ne 0) { throw "Browser UI and Windows design palette diverged" }
-          foreach ($browser in @('chrome','firefox','edge','brave','opera','vivaldi','safari')) {
-            foreach ($asset in @('capture.js','workspace.js','background.js','popup.js','editor.js')) {
-              node --check "$browser/$asset"
-              if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax error: $browser/$asset" }
-            }
-          }
-          Push-Location extensions
-          try {
-            # PowerShell does not perform Bash-style wildcard expansion for
-            # native executables; Node's test discovery is cross-platform.
-            node --test
-            if ($LASTEXITCODE -ne 0) { throw "Extension behavior regression failed" }
-          } finally {
-            Pop-Location
-          }
+          python tools/check_desktop_only.py
+          if ($LASTEXITCODE -ne 0) { throw "Desktop-only distribution audit failed" }
       - name: Build Free Windows NSIS EXE and MSI
         working-directory: apps/desktop
         run: npm run tauri -- build --bundles nsis,msi
@@ -451,21 +424,8 @@ jobs:
           }
           python tools/generate_sbom.py --output "dist-installers/Snapvere-SBOM.cdx.json"
           if ($LASTEXITCODE -ne 0) { throw "Could not generate supply-chain SBOM" }
-          # Reproducible, per-browser extension source ZIPs are shipped in the
-          # SAME release and covered by the SAME release checksums.
-          python tools/build_browser_extensions.py --build --zip-dir dist-installers
-          if ($LASTEXITCODE -ne 0) { throw "Could not create seven browser ZIP packages" }
-          python tools/check_extension_zip_contents.py --dir dist-installers
-          if ($LASTEXITCODE -ne 0) { throw "Release ZIP audit failed" }
           python tools/generate_update_manifest.py --version "${{ steps.version.outputs.value }}" --out "dist-installers/Snapvere-update-stable.json"
           if ($LASTEXITCODE -ne 0) { throw "Could not generate the version-only update manifest" }
-          $browserArchives = @('chrome','firefox','edge','brave','opera','vivaldi','safari') |
-            ForEach-Object { "Snapvere-$_-extension-0.2.2.zip" }
-          foreach ($name in $browserArchives) {
-            $file = Join-Path $dist $name
-            if (-not (Test-Path $file)) { throw "Browser extension package missing: $name" }
-            if ((Get-Item $file).Length -lt 2000) { throw "Unexpectedly small browser extension: $name" }
-          }
           $feed = Get-Content (Join-Path $dist 'Snapvere-update-stable.json') -Raw | ConvertFrom-Json
           if ($feed.product -ne 'snapvere-tauri-windows' -or
               $feed.version -ne "${{ steps.version.outputs.value }}" -or
@@ -479,13 +439,19 @@ jobs:
             if ((Get-Item $f).Length -lt 1000000) { throw "Unexpectedly small artifact: $name" }
           }
           # Also authenticate the published SBOM against the release manifest.
-          $checksumTargets = @($expected) + @('Snapvere-SBOM.cdx.json', 'Snapvere-update-stable.json') + $browserArchives
+          $checksumTargets = @($expected) + @('Snapvere-SBOM.cdx.json', 'Snapvere-update-stable.json')
           $hashes = foreach ($name in $checksumTargets) {
             $file = Join-Path $dist $name
             $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $name"
           }
           $hashes | Set-Content (Join-Path $dist "SHA256SUMS.txt") -Encoding ascii
+          $expectedFiles = @($checksumTargets) + @('SHA256SUMS.txt')
+          $actualFiles = @(Get-ChildItem -LiteralPath $dist -File | ForEach-Object { $_.Name })
+          if ($actualFiles.Count -ne 13 -or $expectedFiles.Count -ne 13 -or
+              @(Compare-Object -ReferenceObject $expectedFiles -DifferenceObject $actualFiles -CaseSensitive).Count -ne 0) {
+            throw 'Unexpected desktop release staging inventory; refusing upload'
+          }
           Get-ChildItem $dist | Format-Table Name,Length
       - name: Upload verified installers as workflow artifact
         uses: actions/upload-artifact@v4
@@ -541,25 +507,19 @@ jobs:
             - **Snapvere-Linux-x86_64.AppImage** — Linux x86_64 preview AppImage (requires compatible system libraries)
             - **Snapvere-Pro-Portable.exe / Snapvere-Pro-Setup.exe / Snapvere-Pro-Setup.msi** — separate Pro Windows x64 build and installers
             - **Snapvere-Pro-Linux-amd64.deb / Snapvere-Pro-Linux-x86_64.AppImage** — separate Pro Linux x64 preview packages
-            - **Snapvere Pro features** — eight recording presets, six locally saved profiles, a distinct Pro Studio workspace, type-filtered gallery selection and native-only batch export of up to 100 captures
+            - **Snapvere Pro features** — eight recording presets, six locally saved profiles, a distinct Pro Studio workspace, type-filtered gallery selection and native-only batch export of up to 100 captures with eight original, PNG and lossless WebP presets
             - **Pro preview** — not a paid, entitlement-enforced release. No activation or account backend is implemented.
             - **SHA256SUMS.txt** — integrity checksums for all packages and the dependency inventory
             - **Snapvere-SBOM.cdx.json** — reproducible CycloneDX 1.6 dependency inventory from npm and Cargo lockfiles
-            - **Seven browser extension ZIP packages v0.2.2** — Chrome, Firefox, Edge, Brave, Opera, Vivaldi and Safari independently bundled source packages (Safari requires Apple packaging/signing)
             - **Snapvere-update-stable.json** — legacy-named, unsigned version-notice sample; do not deploy this preview to a production stable update channel.
 
-            All Windows and Linux installers, the seven browser extensions, the SBOM and the update manifest are covered by SHA256SUMS.txt.
-            The browser ZIPs are developer/source packages, not approved or signed browser-store distributions.
+            All Windows and Linux installers, the SBOM and the update manifest are covered by SHA256SUMS.txt.
 
-            All six Windows packages and four Linux packages are compiled from the **same Git revision** using distinct Free/Pro bundle identifiers; the seven extension ZIPs are generated from audited source at that commit.
+            All six Windows packages and four Linux packages are compiled from the **same Git revision** using distinct Free/Pro bundle identifiers.
 
             ### Changes in v${{ steps.version.outputs.value }}
             - Separate Tauri/Rust update notices from incompatible WinUI/.NET website installers.
-            - Fix the collapsed browser extension popup shown in compact browser
-              toolbar windows: stable document sizing, readable one-line actions,
-              proper icon/label alignment and responsive dark/light layout.
-            - Ship seven independently bundled browser extensions v0.2.2 and
-              verify small screens with Chromium screenshots/geometry tests.
+            - Focus on desktop capture, recording, editing and local media management.
             - Display release availability at the bottom-right of the Windows
               application, with a close action remembered for that version only.
               A newer release can notify again; startup checks remain optional.
@@ -608,10 +568,7 @@ jobs:
             throw "Release $tag must remain a private prerelease draft until asset verification completes"
           }
           if ($release.target_commitish -ne '${{ github.sha }}') { throw "Draft $tag targets a different revision" }
-          # Publishing an installer-only release is a failure: every browser
-          # extension, the update notice, the SBOM and the hashes must ship.
-          $browserZips = @('chrome','firefox','edge','brave','opera','vivaldi','safari') |
-            ForEach-Object { "Snapvere-$($_)-extension-0.2.2.zip" }
+          # Require all desktop packages, the update notice, SBOM and hashes.
           $requiredAssets = @(
             'Snapvere-Portable.exe',
             'Snapvere-Setup.exe',
@@ -626,7 +583,7 @@ jobs:
             'Snapvere-SBOM.cdx.json',
             'Snapvere-update-stable.json',
             'SHA256SUMS.txt'
-          ) + $browserZips
+          )
           $actualAssets = @($release.assets | ForEach-Object { $_.name })
           $missing = @($requiredAssets | Where-Object { $actualAssets -notcontains $_ })
           if ($missing.Count -ne 0) {

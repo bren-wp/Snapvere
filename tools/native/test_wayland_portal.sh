@@ -173,10 +173,13 @@ done
 cc -Wall -Wextra -Werror -O2 -I"$root/apps/desktop/src-tauri/native" \
     "$root/tools/native/wayland_portal_probe.c" "$root/apps/desktop/src-tauri/native/linux_wayland.c" \
     -o "$runtime/portal-probe" $(pkg-config --cflags --libs gio-unix-2.0 gstreamer-app-1.0 gstreamer-video-1.0)
-GST_DEBUG=pipewiresrc:6 G_MESSAGES_DEBUG=all timeout 105 "$runtime/portal-probe" >"$runtime/probe.log" 2>&1 & probe=$!; pids+=("$probe")
+# Keep the machine-readable stdout protocol separate from GStreamer/GLib
+# stderr. Buffered stdout and concurrent diagnostic writes can otherwise
+# interleave within a line and corrupt an otherwise valid acceptance result.
+GST_DEBUG=pipewiresrc:6 G_MESSAGES_DEBUG=all timeout 105 "$runtime/portal-probe" >"$runtime/probe.log" 2>"$runtime/probe-diagnostics.log" & probe=$!; pids+=("$probe")
 for _ in {1..900}; do
   grep -q '^SEPARATE_OUTPUT_MARKER_ABSENT$' "$runtime/probe.log" && break
-  kill -0 "$probe" 2>/dev/null || { tail -120 "$runtime/probe.log"; exit 1; }
+  kill -0 "$probe" 2>/dev/null || { tail -120 "$runtime/probe.log" "$runtime/probe-diagnostics.log"; exit 1; }
   sleep .1
 done
 grep -q '^SEPARATE_OUTPUT_MARKER_ABSENT$' "$runtime/probe.log"
@@ -210,9 +213,11 @@ python3 - "$started" "$runtime/probe.log" <<'PY'
 import sys
 lines=open(sys.argv[2], encoding="utf-8").read().splitlines()
 received=[int(s.split()[1]) for s in lines if s.startswith("SAME_OUTPUT_MARKER_PRESENT ")]
-assert len(received)==1 and received[0]>=int(sys.argv[1])
-assert "BASELINE_REPAINT_PHASES 2" in lines
-assert "SUSTAINED_MARKER_SAMPLES 3" in lines
+assert len(received)==1 and received[0]>=int(sys.argv[1]), ("Invalid marker timestamp", received, sys.argv[1])
+assert lines.count("BASELINE_REPAINT_PHASES 2")==1, ("Missing or duplicate baseline repaint evidence", lines)
+assert lines.count("SEPARATE_OUTPUT_MARKER_ABSENT")==1, ("Missing or duplicate separate-output evidence", lines)
+assert lines.count("SUSTAINED_MARKER_SAMPLES 3")==1, ("Missing or duplicate sustained-marker evidence", lines)
+assert lines.index("BASELINE_REPAINT_PHASES 2") < lines.index("SEPARATE_OUTPUT_MARKER_ABSENT") < lines.index(f"SAME_OUTPUT_MARKER_PRESENT {received[0]}") < lines.index("SUSTAINED_MARKER_SAMPLES 3"), ("Out-of-order portal evidence", lines)
 print(f"Native compositor move-to-PipeWire sample: {(received[0]-int(sys.argv[1]))/1000:.3f} ms")
 print("Same-output exclusion is NOT supported by this tested path.")
 PY

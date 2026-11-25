@@ -34,3 +34,11 @@ test("settings keep explicitly chosen values within supported ranges", () => {
     ["light", "webp", "gif", 50, 66, 60, 7200, true, false, "D:/Videos/Snapvere"],
   );
 });
+
+test("Pro audio gains retain explicit silence and reject corrupt or out-of-range values", () => {
+  assert.equal(normalizeSettings({ proMicGain: 0, proSystemGain: 200 }).proMicGain, 0);
+  assert.equal(normalizeSettings({ proMicGain: 0, proSystemGain: 200 }).proSystemGain, 200);
+  for (const value of [-1, 201, 1.5, NaN, Infinity, "50", null]) {
+    assert.equal(normalizeSettings({ proMicGain: value }).proMicGain, 100);
+  }
+});

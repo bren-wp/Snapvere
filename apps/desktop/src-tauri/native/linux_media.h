@@ -15,6 +15,8 @@ int snapvere_audio_list(AudioNode *nodes, guint capacity, guint32 *cookie);
 int snapvere_audio_validate(guint64 mic, guint64 monitor, guint32 expected_cookie,
                             guint32 *actual_cookie);
 void *snapvere_audio_open(guint64 mic, guint64 monitor, guint32 cookie);
+void *snapvere_audio_open_with_gains(guint64 mic, guint64 monitor, guint32 cookie,
+                                    guint mic_gain, guint monitor_gain);
 int snapvere_audio_pull(void *handle, guint8 *data, gsize capacity);
 void snapvere_audio_free(void *handle);
 

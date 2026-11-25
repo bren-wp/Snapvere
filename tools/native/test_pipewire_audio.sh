@@ -119,6 +119,8 @@ done
 
 # The actual recorder mixer must receive both requested sources.
 G_MESSAGES_DEBUG=all timeout 10s "$runtime/mixer-probe" "$source_serial" "$sink_serial"
+# Both selected inputs must remain healthy while producing actual silence.
+G_MESSAGES_DEBUG=all timeout 10s "$runtime/mixer-probe" "$source_serial" "$sink_serial" muted
 
 # Remove the selected virtual microphone during the explicit pause.
 # The session must not substitute another available node or publish a partial MP4.
