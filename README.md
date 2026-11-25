@@ -149,16 +149,6 @@ Compare that SHA-256 with the manifest from the **same release**.
 The available installer packages are not presented as publisher-code-signed;
 a matching checksum does not independently establish publisher identity.
 
-## Browser screenshot extensions
-
-The repository also contains extension builds for **Chrome, Edge, Firefox,
-Brave, Opera, Vivaldi and Safari**. They capture a selected browser tab locally
-and can save or copy the result. Extension availability in this repository
-does not imply publication in browser stores; Safari distribution depends
-on Apple's packaging and signing requirements.
-
-[Browser extension guide](extensions/README.md)
-
 ## Privacy, licenses and documentation
 
 Snapvere is built around local capture and local storage. Screen content is

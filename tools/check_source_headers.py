@@ -2,8 +2,7 @@
 # Snapvere by Brendigo
 """Enforce branded headers on maintained desktop, website and QA source files.
 
-Generated browser-extension variants, machine-readable manifests, assets and
-third-party dependencies are validated separately and must not be altered by
+Machine-readable manifests, assets and third-party dependencies are validated separately and must not be altered by
 a generic header insertion.
 """
 

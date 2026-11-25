@@ -1,5 +1,11 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.34 — Desktop-only distribution (development)
+
+- Retire all seven browser add-ons, shared source, generated packages and dedicated CI. Desktop clipboard image import remains supported independently.
+- Require exactly 13 desktop release assets: six Windows packages, four Linux packages, SBOM, version-only update manifest and SHA256SUMS. Preserve exact-commit CI and unsigned prerelease verification.
+- Prior releases remain immutable historical records; no browser add-on packages will ship with new desktop releases.
+
 ## v0.2.33 — Preview release verification (development)
 
 - Address post-merge recurrence of upstream portal duplicate-frame failure with a tracked CI-only FPS capture-timer cancellation patch, checked against pinned v0.9.0; require three independent successful native portal sessions.
