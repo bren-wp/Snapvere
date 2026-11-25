@@ -345,14 +345,6 @@ impl Drop for BatchImageScratch {
 }
 
 #[cfg(test)]
-fn read_bounded_image(
-    source: &Path,
-    format: image::ImageFormat,
-) -> Result<image::DynamicImage, String> {
-    BatchImageScratch::default().decode(source, format)
-}
-
-#[cfg(test)]
 fn transform_exclusively(
     source: &Path,
     destination: &Path,
@@ -488,7 +480,13 @@ pub(super) async fn export(
             if preset == BatchPreset::Original {
                 copy_exclusively(&src, &file)
             } else {
-                transform_with_scratch(&src, &file, still_format(&shot.format)?, preset, &mut scratch)
+                transform_with_scratch(
+                    &src,
+                    &file,
+                    still_format(&shot.format)?,
+                    preset,
+                    &mut scratch,
+                )
             }
         });
         Ok(crate::models::BatchExportReport {
@@ -679,7 +677,9 @@ mod tests {
         symlink(&secret, &link).expect("symlink fixture");
         assert!(copy_exclusively(&link, &dest).is_err());
         assert!(!dest.exists());
-        assert!(read_bounded_image(&link, image::ImageFormat::Png).is_err());
+        assert!(BatchImageScratch::default()
+            .decode(&link, image::ImageFormat::Png)
+            .is_err());
         fs::remove_dir_all(dir).expect("cleanup");
     }
 

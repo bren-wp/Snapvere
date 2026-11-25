@@ -78,6 +78,13 @@ for required in ("BatchPreset", "MAX_IMAGE_PIXELS", "MAX_IMAGE_BYTES", "transfor
     assert required in native, f"Missing Pro image export safeguard: {required}"
 for preset in ("original", "png", "png1280", "png1920", "png3840", "webp", "webp1280", "webp1920"):
     assert f'"{preset}"' in native and f'value="{preset}"' in pro_home, f"Missing export preset: {preset}"
+saved_workspaces = read("apps/desktop/src/lib/proSavedWorkspaces.ts")
+for feature in ("saveCollection", "saveExportProfile", "deleteCollection", "deleteExportProfile"):
+    assert feature in saved_workspaces and feature in pro_home, f"Missing Pro saved workspace capability: {feature}"
+assert "SAVED_LIMIT = 12" in saved_workspaces
+assert "BatchImageScratch" in native and "try_reserve_exact" in native
+assert "tests/proSavedWorkspaces.test.mjs" in read("apps/desktop/package.json")
+assert "tests/latestPreviewRequest.test.mjs" in read("apps/desktop/package.json")
 frontend = read("apps/desktop/src/lib/edition.ts")
 assert 'VITE_SNAPVERE_EDITION === "pro"' in frontend
 assert "import.meta" in frontend
