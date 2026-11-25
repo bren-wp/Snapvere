@@ -2,6 +2,9 @@
 
 ## v0.2.33 — Preview release verification (development)
 
+- Discard explicitly corrupted Wayland video buffers without resetting the valid-frame deadline; require a larger negotiated producer pool and preserve strict geometry/consent checks. Establish the synthetic baseline within a bounded startup interval before moving the marker.
+- Require English document language for README frontend screenshot generation and clarify screenshot provenance; installed native screenshots remain pending.
+
 - Restore valid shell syntax for the pinned Wayland portal test backend selection; retain all mandatory assertions.
 - Avoid invalidating audio device enumeration on unrelated PipeWire graph removals, while still rejecting removed enumerated devices and selected identities. Add bounded diagnostic output for isolated mixer QA failures.
 

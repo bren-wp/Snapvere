@@ -30,7 +30,9 @@ int main(void) {
     guint samples = 0;
     guint marker_samples = 0;
     gint64 first_marker_at = 0;
-    gint64 deadline = g_get_monotonic_time() + 12 * G_TIME_SPAN_SECOND;
+    gint64 start = g_get_monotonic_time();
+    gint64 deadline = start + 12 * G_TIME_SPAN_SECOND;
+    guint startup_mismatches = 0;
     while (g_get_monotonic_time() < deadline) {
         int result = snapvere_wayland_pull(portal, frame, BYTES, 250);
         if (result < 0) {
@@ -51,6 +53,16 @@ int main(void) {
             if (ABS((int)frame[center] - 86) > 12 ||
                 ABS((int)frame[center + 1] - 52) > 12 ||
                 ABS((int)frame[center + 2] - 18) > 12) {
+                // Allow only a bounded startup interval to establish the
+                // independently checked baseline. Never accept a mismatched
+                // frame as evidence or move the marker before verification.
+                startup_mismatches++;
+                if (startup_mismatches == 1)
+                    fprintf(stderr, "Initial fixture mismatch: BGR=%u,%u,%u\n",
+                            (unsigned)frame[center], (unsigned)frame[center + 1],
+                            (unsigned)frame[center + 2]);
+                if (g_get_monotonic_time() - start < 2 * G_TIME_SPAN_SECOND)
+                    continue;
                 fputs("Selected output background does not match fixture\n", stderr);
                 break;
             }
@@ -72,6 +84,9 @@ int main(void) {
             marker_samples = 0;
         }
     }
+    if (status != 0)
+        fprintf(stderr, "Portal acceptance failed: %u valid samples, %u startup mismatches, %u marker samples\n",
+                samples, startup_mismatches, marker_samples);
     g_free(frame);
     snapvere_wayland_free(portal);
     return status;

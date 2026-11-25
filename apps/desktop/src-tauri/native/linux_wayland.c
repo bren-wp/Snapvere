@@ -305,7 +305,8 @@ static gboolean copy_frame(GstSample *sample, guint w, guint h, guint8 *data, gs
     GstCaps *caps = gst_sample_get_caps(sample);
     GstBuffer *buffer = gst_sample_get_buffer(sample);
     GstVideoInfo info;
-    if (!caps || !buffer || !gst_video_info_from_caps(&info, caps) ||
+    if (!caps || !buffer || GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_CORRUPTED) ||
+        !gst_video_info_from_caps(&info, caps) ||
         GST_VIDEO_INFO_FORMAT(&info) != GST_VIDEO_FORMAT_BGRA ||
         (guint)GST_VIDEO_INFO_WIDTH(&info) != w ||
         (guint)GST_VIDEO_INFO_HEIGHT(&info) != h) return FALSE;
@@ -380,7 +381,7 @@ void *snapvere_wayland_open(gint x, gint y, guint logical_width, guint logical_h
     // Return producer buffers promptly: the recorder already copies BGRA
     // into its own bounded memory. Do not pin the portal's last pool buffer.
     ctx->pipeline = gst_parse_launch(
-        "pipewiresrc name=video always-copy=true ! videoconvert ! video/x-raw,format=BGRA "
+        "pipewiresrc name=video always-copy=true min-buffers=4 ! videoconvert ! video/x-raw,format=BGRA "
         "! appsink name=frames sync=false max-buffers=2 drop=true "
         "enable-last-sample=false wait-on-eos=false", &error);
     if (error || !ctx->pipeline) {
@@ -470,6 +471,15 @@ int snapvere_wayland_pull(void *handle, guint8 *data, gsize capacity, guint time
         }
         return 0;
     }
+    // A portal can return an explicitly corrupted buffer during initial
+    // negotiation or producer starvation. Never copy it or renew the clock.
+    GstBuffer *buffer = gst_sample_get_buffer(sample);
+    if (buffer && GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_CORRUPTED)) {
+        gst_sample_unref(sample);
+        if (!video_alive(ctx)) return -1;
+        g_debug("Wayland corrupted sample discarded");
+        return g_get_monotonic_time() - ctx->last_frame > 3 * G_TIME_SPAN_SECOND ? -1 : 0;
+    }
     gboolean ok = video_alive(ctx) &&
         copy_frame(sample, ctx->width, ctx->height, data, capacity);
     gst_sample_unref(sample);
@@ -505,6 +515,12 @@ int snapvere_wayland_test_frame(void) {
         !memcmp(output, expected, sizeof(output)) &&
         !copy_frame(sample, 2, 2, output, sizeof(output) - 1) &&
         !copy_frame(sample, 1, 4, output, sizeof(output));
+    gst_sample_unref(sample);
+    GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_CORRUPTED);
+    sample = gst_sample_new(buffer, caps, NULL, NULL);
+    memset(output, 0xA5, sizeof(output));
+    valid = valid && !copy_frame(sample, 2, 2, output, sizeof(output));
+    for (guint i = 0; i < sizeof(output); i++) valid = valid && output[i] == 0xA5;
     gst_sample_unref(sample);
     gst_buffer_unref(buffer);
 

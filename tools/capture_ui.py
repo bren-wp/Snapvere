@@ -81,6 +81,7 @@ TAURI_PREVIEW = r"""
           cursorInRecordings: !linux
         };
       }
+      if (command === "get_app_language") return "en";
       if (command === "get_frozen_rgba") return previewRgbaPacket();
       if (command === "get_frozen_frame") return window.__SNAPVERE_PREVIEW_FRAME_URL;
       if (command === "import_clipboard_image") {
@@ -149,6 +150,11 @@ TAURI_PREVIEW = r"""
 })();
 """
 
+def english_screenshot(page, **kwargs):
+    page.wait_for_function("() => document.documentElement.lang === 'en'", timeout=10000)
+    return page.screenshot(**kwargs)
+
+
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True, args=["--disable-web-security"])
     app = browser.new_context(viewport={"width": 1120, "height": 740},
@@ -172,7 +178,7 @@ with sync_playwright() as p:
         "Desktop capture workspace overflows horizontally"
     )
     page.wait_for_timeout(1200)
-    page.screenshot(path=str(OUTPUT / "home.png"), full_page=False)
+    english_screenshot(page, path=str(OUTPUT / "home.png"), full_page=False)
     clipboard_import = page.get_by_role("button", name="Import from clipboard", exact=True)
     clipboard_import.wait_for(timeout=10000)
     bounds = clipboard_import.bounding_box()
@@ -246,11 +252,11 @@ with sync_playwright() as p:
     ).get_attribute("aria-current") == "page", "Keyboard sidebar navigation broke"
     settings.get_by_role("navigation").get_by_role("button", name="Capture settings").click()
     settings.wait_for_timeout(1500)
-    settings.screenshot(path=str(OUTPUT / "settings.png"), full_page=False)
+    english_screenshot(settings, path=str(OUTPUT / "settings.png"), full_page=False)
     for tab in ("Hotkeys", "Capture", "Recording", "Save", "Privacy", "About"):
         settings.get_by_role("navigation").get_by_role("button", name=tab + " settings", exact=True).click()
         settings.wait_for_timeout(200)
-        settings.screenshot(path=str(OUTPUT / ("settings-" + tab.lower() + ".png")))
+        english_screenshot(settings, path=str(OUTPUT / ("settings-" + tab.lower() + ".png")))
     # Confirm that Settings reflects native OS registration rather than merely
     # displaying the stored PrintScreen preference.
     settings.get_by_role("navigation").get_by_role(
@@ -391,7 +397,7 @@ with sync_playwright() as p:
     assert not editor.evaluate("() => document.documentElement.scrollWidth > window.innerWidth + 2"), (
         "Editor overflows horizontally"
     )
-    editor.screenshot(path=str(OUTPUT / "editor.png"))
+    english_screenshot(editor, path=str(OUTPUT / "editor.png"))
     # The same real React screens must also be exercised with light-mode tokens.
     # These are synthetic browser previews, not Windows/WebView2 acceptance.
     light = browser.new_context(viewport={"width": 1120, "height": 740},
@@ -465,7 +471,7 @@ with sync_playwright() as p:
     compact_page = compact.new_page()
     compact_page.goto("http://127.0.0.1:1420/", wait_until="networkidle")
     compact_page.get_by_role("banner").get_by_role("button", name="Capture region").wait_for(timeout=30000)
-    compact_page.screenshot(path=str(OUTPUT / "home-compact.png"))
+    english_screenshot(compact_page, path=str(OUTPUT / "home-compact.png"))
     compact.close()
     # Compare each edition with the same platform-specific IPC contract at the
     # same viewport. These are deterministic Chromium fixtures, NOT real OS QA.
@@ -626,7 +632,7 @@ with sync_playwright() as p:
     }""")
     if lit_pixels < 8:
         raise RuntimeError("Capture overlay rendered black or empty pixels instead of the desktop")
-    capture_page.screenshot(path=str(OUTPUT / "capture-overlay.png"))
+    english_screenshot(capture_page, path=str(OUTPUT / "capture-overlay.png"))
     selection.close()
 
     # Synthetic DPR layout sweep: a browser device-scale factor is NOT Windows
