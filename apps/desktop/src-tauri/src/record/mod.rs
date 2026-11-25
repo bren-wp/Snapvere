@@ -509,7 +509,7 @@ pub fn crop_preview_packet(app: &AppHandle, session: &str, after: u64) -> Result
         .preview
         .as_ref()
         .ok_or("Recording preview is unavailable")?;
-    let preview = crate::state::lock(preview);
+    let mut preview = crate::state::lock(preview);
     preview.check_session(session)?;
     preview.packet(after)
 }
@@ -529,11 +529,12 @@ pub fn acknowledge_crop_preview(
         .preview
         .as_ref()
         .ok_or("Recording preview is unavailable")?;
-    let total = crate::state::lock(preview).acknowledge(session, frame_id)?;
+    let receipt = crate::state::lock(preview).acknowledge(session, frame_id)?;
     log(&format!(
-        "Paused preview render receipt: {total} us (includes IPC and pause)"
+        "Paused preview receipt: total={} us, sample-to-packet={} us, packet-to-receipt={} us (includes IPC and pause; not physical presentation)",
+        receipt.total_us, receipt.sample_to_packet_us, receipt.packet_to_receipt_us
     ));
-    Ok(total)
+    Ok(receipt.total_us)
 }
 
 pub fn resume_crop_preview(

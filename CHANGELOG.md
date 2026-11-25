@@ -2,6 +2,8 @@
 
 ## v0.2.33 — Preview release verification (development)
 
+- Bind paused render receipts to actual nonempty frame packet issuance; reject premature, stale and repeated receipts and separate native sample-to-packet and packet-to-receipt timing. Physical display latency remains unverified.
+
 - Reconcile unsigned preview labels after successful main release workflows, in addition to the scheduled and manual audit.
 - Fail draft publication on missing or mismatched GitHub asset SHA-256 digests, upload state, size or target revision; resolve the published tag to the tested commit.
 - Clarify experimental Linux recording and prohibit deploying the unsigned preview manifest to the stable channel.
