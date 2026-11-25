@@ -56,7 +56,9 @@ fn validate_stage_pair(source: &str, staged: &str, kind: &str) -> Result<Uuid> {
     ensure!(
         source.is_absolute()
             && source.file_name().is_some()
-            && !source.components().any(|part| matches!(part, std::path::Component::ParentDir))
+            && !source
+                .components()
+                .any(|part| matches!(part, std::path::Component::ParentDir))
             && staged.is_absolute()
             && source.parent() == staged.parent()
             && source != staged,
@@ -186,8 +188,7 @@ fn ensure_regular(path: &Path) -> Result<()> {
         // SAFETY: file owns the live handle and info is writable for this call.
         unsafe { GetFileInformationByHandle(HANDLE(file.as_raw_handle()), &mut info) }?;
         ensure!(
-            opened.is_file() && opened.file_attributes() & 0x400 == 0
-                && info.nNumberOfLinks == 1,
+            opened.is_file() && opened.file_attributes() & 0x400 == 0 && info.nNumberOfLinks == 1,
             "Redirected or multiply linked gallery file"
         );
     }
@@ -313,7 +314,10 @@ pub fn delete(db: &mut Db, id: &str) -> Result<()> {
 fn recover_job(db: &Db, job: &PendingDeletion) -> Result<()> {
     let current = db.get(&job.id)?;
     if job.committed {
-        ensure!(current.is_none(), "Committed deletion still has a gallery row");
+        ensure!(
+            current.is_none(),
+            "Committed deletion still has a gallery row"
+        );
         cleanup_files(job).context("Could not complete a committed gallery deletion")
     } else {
         let shot = current.context("Uncommitted deletion has no gallery row")?;

@@ -263,7 +263,9 @@ mod shortcut_validation_tests {
 
 /// Frontend command: trenutno aktivni hotkeyi (Settings ih prikazuje kao stvarno stanje).
 #[tauri::command]
-pub fn active_hotkeys(window: tauri::WebviewWindow) -> Result<(Option<String>, Option<String>), String> {
+pub fn active_hotkeys(
+    window: tauri::WebviewWindow,
+) -> Result<(Option<String>, Option<String>), String> {
     commands::require_window_label(window.label(), &["settings"])?;
     Ok(current())
 }

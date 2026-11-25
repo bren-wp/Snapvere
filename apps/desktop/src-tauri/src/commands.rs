@@ -167,7 +167,14 @@ pub fn get_app_language(window: tauri::WebviewWindow, app: AppHandle) -> Result<
     require_window_label(
         window.label(),
         &[
-            "home", "settings", "overlay", "editor", "recbar", "recdraw", "recframe", "recpreview",
+            "home",
+            "settings",
+            "overlay",
+            "editor",
+            "recbar",
+            "recdraw",
+            "recframe",
+            "recpreview",
         ],
     )?;
     let store = app.store("settings.json").map_err(estr)?;
