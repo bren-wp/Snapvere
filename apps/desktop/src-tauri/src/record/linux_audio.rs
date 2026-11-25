@@ -36,7 +36,13 @@ static SELECTED: Mutex<Option<Selection>> = Mutex::new(None);
 unsafe extern "C" {
     fn snapvere_audio_list(nodes: *mut NativeNode, capacity: u32, cookie: *mut u32) -> c_int;
     fn snapvere_audio_validate(mic: u64, monitor: u64, cookie: u32, actual: *mut u32) -> c_int;
-    fn snapvere_audio_open(mic: u64, monitor: u64, cookie: u32) -> *mut c_void;
+    fn snapvere_audio_open_with_gains(
+        mic: u64,
+        monitor: u64,
+        cookie: u32,
+        mic_gain: u32,
+        monitor_gain: u32,
+    ) -> *mut c_void;
     fn snapvere_audio_pull(handle: *mut c_void, data: *mut u8, capacity: usize) -> c_int;
     fn snapvere_audio_free(handle: *mut c_void);
 }
@@ -146,6 +152,7 @@ pub(super) struct Mixer {
     mic: u64,
     monitor: u64,
     cookie: u32,
+    gains: [u32; 2],
     capture: Option<Capture>,
     pending: VecDeque<[i16; 2]>,
     clock: DriftClock,
@@ -153,7 +160,10 @@ pub(super) struct Mixer {
 }
 
 impl Mixer {
-    pub(super) fn selected(opts: &RecordOptions) -> Result<Option<Self>, String> {
+    pub(super) fn selected(
+        opts: &RecordOptions,
+        _app: &tauri::AppHandle,
+    ) -> Result<Option<Self>, String> {
         if !opts.mic && !opts.system_audio {
             return Ok(None);
         }
@@ -168,10 +178,23 @@ impl Mixer {
         if (opts.mic && mic == 0) || (opts.system_audio && monitor == 0) {
             return Err("Select every requested audio device before recording".into());
         }
+        #[cfg(feature = "pro")]
+        let gains = {
+            use tauri_plugin_store::StoreExt;
+            let store = _app.store("settings.json").map_err(|e| e.to_string())?;
+            let read = |key: &str| match store.get(key).and_then(|v| v.as_u64()) {
+                Some(value @ 0..=200) => value as u32,
+                _ => 100,
+            };
+            [read("proMicGain"), read("proSystemGain")]
+        };
+        #[cfg(not(feature = "pro"))]
+        let gains = [100; 2];
         Ok(Some(Self {
             mic,
             monitor,
             cookie: selection.cookie,
+            gains,
             capture: None,
             pending: VecDeque::new(),
             clock: DriftClock::default(),
@@ -184,9 +207,16 @@ impl Mixer {
             return Err("PipeWire capture already active".into());
         }
         // SAFETY: numeric serials only; the native graph has no external URLs.
-        let handle =
-            NonNull::new(unsafe { snapvere_audio_open(self.mic, self.monitor, self.cookie) })
-                .ok_or("Requested PipeWire input unavailable")?;
+        let handle = NonNull::new(unsafe {
+            snapvere_audio_open_with_gains(
+                self.mic,
+                self.monitor,
+                self.cookie,
+                self.gains[0],
+                self.gains[1],
+            )
+        })
+        .ok_or("Requested PipeWire input unavailable")?;
         self.capture = Some(Capture(handle));
         Ok(())
     }

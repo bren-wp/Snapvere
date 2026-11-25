@@ -85,7 +85,7 @@ pub(super) fn run(
     #[cfg(not(any(windows, all(target_os = "linux", feature = "linux-native-media"))))]
     let mixer: Option<()> = None;
     #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
-    let mut mixer = linux_audio::Mixer::selected(&opts)?;
+    let mut mixer = linux_audio::Mixer::selected(&opts, app)?;
 
     let mut encoder = open_encoder(
         path,

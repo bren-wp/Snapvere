@@ -2,7 +2,9 @@
 
 ## v0.2.34 — Desktop-only distribution (development)
 
-- Add separate Windows Pro microphone and system audio gain controls (0–200%, validated locally and applied before mixing on the next recording). Free retains unity gain. Linux independent gain and live meters are not implemented.
+- Extend the experimental Linux native audio adapter with independently validated microphone and monitor gains on the selected GStreamer mixer pads. Preserve unity gain for Free, session identity checks and pause/resume behavior. Add a native zero-gain PCM probe; public Linux MP4/audio capability remains disabled pending acceptance.
+
+- Add separate Windows Pro microphone and system audio gain controls (0–200%, validated locally and applied before mixing on the next recording). Free retains unity gain. Public Linux audio controls and live meters are not enabled.
 
 - Add Pro MP4 segment review with A/B bounds, repeat playback, localized controls and explicit preview-only behavior. No video files are rewritten or exported by these controls.
 - Stop unclaimed WASAPI endpoints after initialization timeout, check stop inside packet draining and isolate nonfinite samples from other mixed sources.
