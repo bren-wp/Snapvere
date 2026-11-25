@@ -44,7 +44,6 @@ elevated = {
 assert not (set(shared["permissions"]) & elevated), "Privileged plugin grant found on all WebViews"
 assert set(home["permissions"]) == {
     "core:webview:allow-create-webview-window",
-    "dialog:allow-ask",
 }, "Home permissions expanded without review"
 assert set(settings["permissions"]) == {
     "autostart:default", "opener:default", "dialog:allow-open",
@@ -55,7 +54,7 @@ assert set(settings["permissions"]) == {
 for name in ("home-privileged.json", "settings-privileged.json"):
     assert "*" not in "".join(read(name)["windows"]), f"Wildcard privileged capability: {name}"
 
-print("Tauri capability boundary OK: unprivileged capture, Settings-only store writes, Home-only dialogs")
+print("Tauri capability boundary OK: unprivileged capture, Settings-only store writes, native destructive confirmation")
 
 # Plugin grants do not restrict application-defined commands. Those need
 # explicit Rust-side caller checks, especially for frozen screens and gallery.
@@ -151,3 +150,9 @@ for name, allowed in protected_ipc.items():
         ), "Only recbar may resume through the generic pause command"
 
 print(f"Rust IPC origin boundary OK: {len(protected_ipc)} sensitive commands")
+
+# Destructive IPC owns confirmation rather than trusting a renderer boolean.
+delete_source = commands.split("pub async fn delete_screenshot(", 1)[1].split("#[tauri::command]", 1)[0]
+assert ".blocking_show()" in delete_source and "if !confirmed" in delete_source
+assert delete_source.index("if !confirmed") < delete_source.index("crate::gallery_delete::delete(")
+assert "dialog:allow-ask" not in home["permissions"]

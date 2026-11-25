@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { readCapturePreferences } from "../lib/capturePreferencesStore";
 import { clipboardImportCopy } from "../lib/clipboardImportCopy";
 import { emit, listen } from "@tauri-apps/api/event";
@@ -278,15 +277,8 @@ export default function Home() {
 
   const onDelete = useCallback(async (s: Screenshot) => {
     if (proExportLock.current) return false;
-    const ok = await ask(`"${s.name}" — ${t("This item will be removed from the gallery and deleted from disk.")}`, {
-      title: t(isVideo(s) ? "Delete recording?" : "Delete screenshot?"),
-      kind: "warning",
-      okLabel: t("Delete"),
-      cancelLabel: t("Cancel"),
-    });
-    if (!ok || proExportLock.current) return false;
     try {
-      await ipc.deleteScreenshot(s.id);
+      if (!await ipc.deleteScreenshot(s.id)) return false;
       setProSelected((prev) => { const next = new Set(prev); next.delete(s.id); return next; });
       const currentlyLoaded = loadedItems.current;
       if (currentlyLoaded.some((item) => item.id === s.id)) {

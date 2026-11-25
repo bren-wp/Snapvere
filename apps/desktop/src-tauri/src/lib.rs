@@ -7,6 +7,7 @@ mod db;
 mod gallery_delete;
 mod logging;
 mod models;
+mod pinned_directory;
 mod record;
 mod shortcuts;
 mod shutdown;

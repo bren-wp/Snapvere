@@ -1893,15 +1893,63 @@ pub async fn copy_media_image(
 }
 
 #[tauri::command]
-pub fn delete_screenshot(
+pub async fn delete_screenshot(
     window: tauri::WebviewWindow,
-    state: State<AppState>,
+    app: AppHandle,
     id: String,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     require_window_label(window.label(), &["home"])?;
-    // Hold the DB mutex during staging and the atomic SQLite commit.
-    // An on-disk intent restores media after interrupted deletion.
-    crate::gallery_delete::delete(&mut lock(&state.db), &id).map_err(estr)
+    tauri::async_runtime::spawn_blocking(move || {
+        use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+
+        // Serialize with Save As and native batch export, without holding a
+        // database lock while the user decides.
+        let _guard = image_export::SaveAsGuard::acquire()?;
+        let state = app.state::<AppState>();
+        let shot = lock(&state.db)
+            .get(&id)
+            .map_err(estr)?
+            .ok_or("This capture is no longer in the gallery")?;
+        let language = get_app_language(window.clone(), app.clone())?;
+        let labels = crate::tray_locale::deletion_labels(&language);
+        let title = if shot.source == "recording" || shot.format == "mp4" {
+            labels[0]
+        } else {
+            labels[1]
+        };
+        let name: String = shot
+            .name
+            .chars()
+            .filter(|ch| !ch.is_control())
+            .take(200)
+            .collect();
+        let confirmed = app
+            .dialog()
+            .message(format!("\"{name}\" — {}", labels[2]))
+            .title(title)
+            .kind(MessageDialogKind::Warning)
+            .buttons(MessageDialogButtons::OkCancelCustom(
+                labels[3].to_owned(),
+                labels[4].to_owned(),
+            ))
+            .parent(&window)
+            .blocking_show();
+        if !confirmed {
+            return Ok(false);
+        }
+        let mut db = lock(&state.db);
+        let current = db
+            .get(&id)
+            .map_err(estr)?
+            .ok_or("This capture is no longer in the gallery")?;
+        if current.file_path != shot.file_path || current.thumb_path != shot.thumb_path {
+            return Err("Gallery item changed during confirmation".into());
+        }
+        crate::gallery_delete::delete(&mut db, &id).map_err(estr)?;
+        Ok(true)
+    })
+    .await
+    .map_err(estr)?
 }
 
 #[tauri::command]

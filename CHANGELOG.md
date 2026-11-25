@@ -2,6 +2,10 @@
 
 ## v0.2.35 — Update notification and IPC hardening (preview)
 
+- Move localized destructive confirmation into the native backend. Cancel returns without touching gallery data; confirm rechecks the selected row before deletion.
+- Reuse the pinned-directory implementation for gallery deletion and recovery; require journal/gallery path agreement and reject inconsistent recovery state. The same-user leaf-entry race and cross-restart directory identity require further verification.
+- Validate native PipeWire caps and mapped PCM pointers before reading.
+
 - Restrict global shortcut changes to Settings and require explicit caller identity for all registered native IPC commands. Audit all 50 handlers, including specialized export validation.
 - Reject mismatched frozen monitor IDs rather than substituting another screen.
 - Validate recovery intent paths and tokens, reject redirected ancestors and use OS no-replace rename for gallery staging and restoration. Directory-handle pinning and native acceptance remain outstanding.

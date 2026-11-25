@@ -214,7 +214,7 @@ impl Db {
             "INSERT INTO pending_deletions
              (id, file_path, staged_file_path, thumb_path, staged_thumb_path, committed)
              SELECT ?1, ?2, ?3, ?4, ?5, 0
-             FROM screenshots WHERE id = ?1",
+             FROM screenshots WHERE id = ?1 AND file_path = ?2 AND thumb_path IS ?4",
             params![
                 job.id,
                 job.file_path,
@@ -230,7 +230,15 @@ impl Db {
     /// Atomically remove the row and mark its staged media as safe to clean.
     pub fn commit_delete(&mut self, id: &str) -> anyhow::Result<()> {
         let tx = self.conn.transaction()?;
-        let removed = tx.execute("DELETE FROM screenshots WHERE id = ?1", params![id])?;
+        let removed = tx.execute(
+            "DELETE FROM screenshots WHERE id = ?1 AND EXISTS (
+                SELECT 1 FROM pending_deletions p
+                WHERE p.id = screenshots.id AND p.committed = 0
+                  AND p.file_path = screenshots.file_path
+                  AND p.thumb_path IS screenshots.thumb_path
+            )",
+            params![id],
+        )?;
         anyhow::ensure!(removed == 1, "No gallery entry to delete");
         let marked = tx.execute(
             "UPDATE pending_deletions SET committed = 1 WHERE id = ?1 AND committed = 0",
