@@ -2,6 +2,8 @@
 
 ## v0.2.33 — Preview release verification (development)
 
+- Address isolated portal buffer starvation by testing the pinned upstream xdg-desktop-portal-wlr 0.8.4 revision; require sustained real marker samples instead of accepting a single frame. Distribution 0.8.1 and physical acceptance remain unresolved.
+
 - Bind paused render receipts to actual nonempty frame packet issuance; reject premature, stale and repeated receipts and separate native sample-to-packet and packet-to-receipt timing. Physical display latency remains unverified.
 
 - Reconcile unsigned preview labels after successful main release workflows, in addition to the scheduled and manual audit.

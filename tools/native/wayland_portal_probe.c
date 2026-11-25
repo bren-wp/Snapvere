@@ -28,6 +28,8 @@ int main(void) {
     int status = 1;
     gboolean baseline = FALSE;
     guint samples = 0;
+    guint marker_samples = 0;
+    gint64 first_marker_at = 0;
     gint64 deadline = g_get_monotonic_time() + 12 * G_TIME_SPAN_SECOND;
     while (g_get_monotonic_time() < deadline) {
         int result = snapvere_wayland_pull(portal, frame, BYTES, 250);
@@ -56,10 +58,18 @@ int main(void) {
             puts("SEPARATE_OUTPUT_MARKER_ABSENT");
             fflush(stdout);
         } else if (present) {
-            printf("SAME_OUTPUT_MARKER_PRESENT %" G_GINT64_FORMAT "\n", g_get_monotonic_time());
-            fflush(stdout);
-            status = 0;
-            break;
+            if (marker_samples == 0) first_marker_at = g_get_monotonic_time();
+            marker_samples++;
+            // A single frame is insufficient evidence of a functioning stream.
+            if (marker_samples == 3) {
+                printf("SAME_OUTPUT_MARKER_PRESENT %" G_GINT64_FORMAT "\n", first_marker_at);
+                printf("SUSTAINED_MARKER_SAMPLES %u\n", marker_samples);
+                fflush(stdout);
+                status = 0;
+                break;
+            }
+        } else {
+            marker_samples = 0;
         }
     }
     g_free(frame);

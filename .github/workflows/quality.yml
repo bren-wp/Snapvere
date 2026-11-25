@@ -361,7 +361,8 @@ jobs:
   wayland-portal:
     name: Native Wayland portal window inclusion (isolated wlroots)
     # Noble's xdpw 0.7.1 requires DMA-BUF with screencopy v3 even on
-    # Pixman headless outputs. Resolute provides the newer portal backend.
+    # Pixman headless outputs. Resolute's packaged 0.8.1 also stalled after
+    # one frame; exercise the pinned upstream 0.8.4 starvation fix.
     runs-on: ubuntu-26.04
     timeout-minutes: 12
     permissions:
@@ -382,10 +383,25 @@ jobs:
             build-essential pkg-config libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             gstreamer1.0-pipewire gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
             sway swaybg grim python3-gi python3-gi-cairo python3-pil gir1.2-gtk-3.0 \
-            pipewire wireplumber dbus-daemon fuse3 xdg-desktop-portal xdg-desktop-portal-wlr
+            pipewire wireplumber dbus-daemon fuse3 xdg-desktop-portal xdg-desktop-portal-wlr \
+            meson ninja-build libpipewire-0.3-dev libwayland-dev wayland-protocols \
+            libinih-dev libgbm-dev libdrm-dev libsystemd-dev
           dpkg-query -W sway xdg-desktop-portal xdg-desktop-portal-wlr pipewire gstreamer1.0-pipewire
+      - name: Build pinned upstream portal backend with buffer starvation fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          revision=34153094662acd713241ca6cbbb20003ef67da5f
+          source="$RUNNER_TEMP/snapvere-xdpw-source"
+          git init "$source"
+          git -C "$source" fetch --depth=1 https://github.com/emersion/xdg-desktop-portal-wlr.git "$revision"
+          git -C "$source" checkout --detach FETCH_HEAD
+          test "$(git -C "$source" rev-parse HEAD)" = "$revision"
+          meson setup "$RUNNER_TEMP/snapvere-xdpw-build" "$source" -Dsd-bus-provider=libsystemd -Dman-pages=disabled -Dsystemd=disabled
+          meson compile -C "$RUNNER_TEMP/snapvere-xdpw-build"
+          test -x "$RUNNER_TEMP/snapvere-xdpw-build/xdg-desktop-portal-wlr"
       - name: Verify actual authorized video before and after moving a native window
-        run: bash tools/native/test_wayland_portal.sh
+        run: SNAPVERE_QA_PORTAL_BACKEND="$RUNNER_TEMP/snapvere-xdpw-build/xdg-desktop-portal-wlr" bash tools/native/test_wayland_portal.sh
 
   linux:
     name: Linux x86_64 native tests and preview packages
