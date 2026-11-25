@@ -47,6 +47,7 @@ impl PinnedDirectory {
         }
         #[cfg(windows)]
         {
+            use std::fs::OpenOptions;
             use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
             let mut ancestors = Vec::new();
             for ancestor in path.ancestors().collect::<Vec<_>>().into_iter().rev() {
