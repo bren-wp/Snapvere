@@ -1,6 +1,13 @@
 # Snapvere by Brendigo — Release history
 
-## v0.2.32 — Release integrity (development)
+## v0.2.33 — Preview release verification (development)
+
+- Reconcile unsigned preview labels after successful main release workflows, in addition to the scheduled and manual audit.
+- Fail draft publication on missing or mismatched GitHub asset SHA-256 digests, upload state, size or target revision; resolve the published tag to the tested commit.
+- Clarify experimental Linux recording and prohibit deploying the unsigned preview manifest to the stable channel.
+- Record the successful isolated Sway portal marker test for v0.2.32; physical compositor and full UI acceptance remain open.
+
+## v0.2.32 — Release integrity (preview)
 
 - Add isolated real Wayland portal inclusion test and session-bound browser render receipts for paused preview latency; retain live window safety gate.
 
