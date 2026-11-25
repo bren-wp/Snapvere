@@ -47,6 +47,8 @@ Free provides the core private screenshot, annotation, recording and local libra
 | PNG | Original, 1280, 1920 or 3840 px |
 | Lossless WebP | Original, 1280 or 1920 px |
 
+Save up to twelve named smart collections with gallery search and category filters, and twelve named export profiles with the native export presets. Both are stored locally.
+
 Image exports never enlarge the source, and original captures remain in the local library. The repository's Pro builds are previews, not paid-license-enforced distributions.
 
 ## See Snapvere in English

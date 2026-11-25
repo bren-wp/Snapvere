@@ -2,6 +2,8 @@
 
 ## v0.2.34 — Desktop-only distribution (development)
 
+- Add locally named Pro smart collections (saved gallery queries and categories, evaluated using the existing paginated database search) and custom export profiles (saved validated native presets), with bounded storage, explicit save/remove and all 12 UI languages.
+
 - Pair DXGI acquisition and GPU mapping with RAII release guards; invalidate cached pixels after capture or release failure. Reuse one bounded compressed-image input buffer for sequential Pro exports, clearing initialized bytes between items and preserving the original non-overwriting export policy.
 
 - Coalesce preview refresh bursts into one active IPC request and one latest pending request; discard revoked responses, clear renderer pixel buffers, and reject late callbacks after teardown. Keep pause-only native preview authorization.
