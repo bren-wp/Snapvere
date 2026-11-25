@@ -49,6 +49,8 @@ jobs:
           assert.equal(dep.integrity, 'sha512-JroBFEmaejC7szGSfqOhF1QZHLKvX2wTA1+fWyfkpy3BjzdQKNPLKa2FtgeKVUDy5/UPUNkXEeCHJ5ZRBMLTVA==');
           console.log('Verified patched picomatch tarball is pinned by SHA-512');
           NODE
+      - name: Regression-test release orchestration (mock GitHub API)
+        run: python tools/test_release_preflight.py
       - name: Verify Snapvere by Brendigo source headers
         run: python tools/check_source_headers.py
       - name: Enforce reachable Rust modules (dead-code graph)
