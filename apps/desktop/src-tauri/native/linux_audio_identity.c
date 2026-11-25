@@ -11,6 +11,7 @@ typedef struct {
     guint capacity, length;
     guint32 cookie;
     guint32 ids[2];
+    guint32 listed_ids[128];
     guint count[2];
     int seq;
     gboolean done, error, info;
@@ -52,6 +53,7 @@ static void on_global(void *data, uint32_t id, uint32_t permissions,
             return;
         }
         const char *description = spa_dict_lookup(props, "node.description");
+        ctx->listed_ids[ctx->length] = id;
         AudioNode *node = &ctx->nodes[ctx->length++];
         node->serial = number;
         node->role = role;
@@ -70,7 +72,13 @@ static void on_global(void *data, uint32_t id, uint32_t permissions,
 
 static void on_remove(void *data, uint32_t id) {
     Identity *ctx = data;
-    if (ctx->nodes) ctx->error = TRUE;
+    // Unrelated transient clients, links and streams are removed during
+    // normal graph churn. Only invalidate a snapshot of an enumerated node.
+    if (ctx->nodes) {
+        for (guint i = 0; i < ctx->length; i++) {
+            if (ctx->listed_ids[i] == id) ctx->error = TRUE;
+        }
+    }
     for (guint i = 0; i < 2; i++)
         if (ctx->count[i] && ctx->ids[i] == id) ctx->error = TRUE;
 }

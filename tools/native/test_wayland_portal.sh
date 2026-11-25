@@ -125,7 +125,10 @@ wireplumber >"$runtime/wireplumber.log" 2>&1 & pids+=("$!")
 # explicitly pinned upstream build; local QA defaults to the distro binary.
 backend="${SNAPVERE_QA_PORTAL_BACKEND:-}"
 if [[ -z "$backend" ]]; then
-  backend="$(dpkg-query -L xdg-desktop-portal-wlr | grep -E '/(libexec|lib)/xdg-desktop-portal-wlr
+  backend="$(dpkg-query -L xdg-desktop-portal-wlr | grep -E '/(libexec|lib)/xdg-desktop-portal-wlr$')"
+fi
+[[ "$backend" == /* && -x "$backend" ]]
+echo "Testing portal backend: $backend"
 "$backend" -l DEBUG -c "$XDG_CONFIG_HOME/xdg-desktop-portal-wlr/config" >"$runtime/portal-wlr.log" 2>&1 & backend_pid=$!; pids+=("$backend_pid")
 backend_ready=0
 for _ in {1..100}; do

@@ -2,6 +2,9 @@
 
 ## v0.2.33 — Preview release verification (development)
 
+- Restore valid shell syntax for the pinned Wayland portal test backend selection; retain all mandatory assertions.
+- Avoid invalidating audio device enumeration on unrelated PipeWire graph removals, while still rejecting removed enumerated devices and selected identities. Add bounded diagnostic output for isolated mixer QA failures.
+
 - Address isolated portal buffer starvation by testing the pinned upstream xdg-desktop-portal-wlr 0.8.4 revision; require sustained real marker samples instead of accepting a single frame. Distribution 0.8.1 and physical acceptance remain unresolved.
 
 - Bind paused render receipts to actual nonempty frame packet issuance; reject premature, stale and repeated receipts and separate native sample-to-packet and packet-to-receipt timing. Physical display latency remains unverified.
