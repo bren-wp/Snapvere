@@ -49,6 +49,8 @@ Free provides the core private screenshot, annotation, recording and local libra
 
 Save up to twelve named smart collections with gallery search and category filters, and twelve named export profiles with the native export presets. Both are stored locally.
 
+Review MP4 segments with Pro A/B playback boundaries and repeat a selected range without changing the recording. This is a review tool, not a video trimming or rendering engine.
+
 Image exports never enlarge the source, and original captures remain in the local library. The repository's Pro builds are previews, not paid-license-enforced distributions.
 
 ## See Snapvere in English

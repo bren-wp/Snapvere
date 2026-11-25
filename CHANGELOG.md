@@ -2,6 +2,9 @@
 
 ## v0.2.34 — Desktop-only distribution (development)
 
+- Add Pro MP4 segment review with A/B bounds, repeat playback, localized controls and explicit preview-only behavior. No video files are rewritten or exported by these controls.
+- Stop unclaimed WASAPI endpoints after initialization timeout, check stop inside packet draining and isolate nonfinite samples from other mixed sources.
+
 - Add locally named Pro smart collections (saved gallery queries and categories, evaluated using the existing paginated database search) and custom export profiles (saved validated native presets), with bounded storage, explicit save/remove and all 12 UI languages.
 
 - Pair DXGI acquisition and GPU mapping with RAII release guards; invalidate cached pixels after capture or release failure. Reuse one bounded compressed-image input buffer for sequential Pro exports, clearing initialized bytes between items and preserving the original non-overwriting export policy.

@@ -145,7 +145,8 @@ impl Mixer {
             let mut samples = crate::state::lock(&q.samples);
             for slot in mix.iter_mut().take(n) {
                 match samples.pop_front() {
-                    Some(s) => *slot += s,
+                    Some(s) if s.is_finite() => *slot += s.clamp(-1.0, 1.0),
+                    Some(_) => {}
                     None => break,
                 }
             }
@@ -196,18 +197,20 @@ fn capture_thread(
             return;
         }
     };
-    let _ = ready.send(Ok(()));
+    // If the initialization caller timed out, never keep recording an
+    // unclaimed endpoint. The normal Stop/drop path below still runs.
+    let accepted = ready.send(Ok(())).is_ok();
 
     let mut resampler = Resampler::new(fmt.rate);
     let mut scratch: Vec<f32> = Vec::new();
 
-    while !stop.load(Ordering::Acquire) {
+    while accepted && !stop.load(Ordering::Acquire) {
         // WASAPI errors are not empty packets; failing selected audio must stop
         // the recording rather than silently filling the MP4 with zeros.
         let result = (|| -> Result<(), String> {
             let mut packet = unsafe { capture.GetNextPacketSize() }
                 .map_err(|e| format!("GetNextPacketSize: {e}"))?;
-            while packet > 0 {
+            while packet > 0 && !stop.load(Ordering::Acquire) {
                 let mut data: *mut u8 = std::ptr::null_mut();
                 let mut frames = 0u32;
                 let mut flags = 0u32;
@@ -613,6 +616,24 @@ mod tests {
         unsafe { to_stereo_f32(data.as_ptr(), 1, &fmt, &mut out) };
         assert_eq!(out[0], 0.0);
         assert!(out[1] > 0.0, "side right must reach right speaker");
+    }
+
+    #[test]
+    fn mixer_rejects_nonfinite_samples_without_poisoning_other_sources() {
+        let q1 = Arc::new(Queue {
+            samples: Mutex::new(VecDeque::from(vec![f32::NAN, f32::INFINITY])),
+        });
+        let q2 = Arc::new(Queue {
+            samples: Mutex::new(VecDeque::from(vec![0.5, -0.5])),
+        });
+        let mixer = Mixer {
+            queues: vec![q1, q2],
+            stop: Arc::new(AtomicBool::new(false)),
+            threads: vec![],
+            failure: Arc::new(Mutex::new(None)),
+            kinds: vec![],
+        };
+        assert_eq!(mixer.pull(1), vec![16383, -16383]);
     }
 
     #[test]
