@@ -331,6 +331,20 @@ static gboolean copy_frame(GstSample *sample, guint w, guint h, guint8 *data, gs
     return valid;
 }
 
+// This is a capture-only pipeline, not a playback pipeline. Older
+// pipewiresrc versions schedule GstBaseSrc against absolute producer PTS
+// (upstream 8837678), potentially retaining a buffer until the system's
+// monotonic uptime elapses again. A NULL fixed pipeline clock disables
+// that wait even on plugins without the newer sync property. The Rust
+// recorder independently paces encoding using Instant and media time.
+static void configure_capture_clock(GstPipeline *pipeline, GstElement *input) {
+    gst_pipeline_use_clock(pipeline, NULL);
+    if (g_object_class_find_property(G_OBJECT_GET_CLASS(input), "provide-clock"))
+        g_object_set(input, "provide-clock", FALSE, NULL);
+    if (g_object_class_find_property(G_OBJECT_GET_CLASS(input), "sync"))
+        g_object_set(input, "sync", FALSE, NULL);
+}
+
 // Detach the producer's memory on the GStreamer streaming thread, after
 // pipewiresrc has returned from its internal PipeWire loop lock. The old
 // always-copy path can recycle under the loop lock (upstream 30ff8da).
@@ -433,6 +447,11 @@ void *snapvere_wayland_open(gint x, gint y, guint logical_width, guint logical_h
         if (input) gst_object_unref(input);
         goto fail;
     }
+    if (!GST_IS_PIPELINE(ctx->pipeline)) {
+        gst_object_unref(input);
+        goto fail;
+    }
+    configure_capture_clock(GST_PIPELINE(ctx->pipeline), input);
     GstElement *source_filter = gst_bin_get_by_name(GST_BIN(ctx->pipeline), "source_caps");
     gchar *source_spec = g_strdup_printf(
         "video/x-raw,format=(string){BGRx,BGRA,RGBx,RGBA,xBGR,ABGR,xRGB,ARGB},width=(int)%u,height=(int)%u",
@@ -548,8 +567,40 @@ int snapvere_wayland_pull(void *handle, guint8 *data, gsize capacity, guint time
 
 // Native buffer regression; no fake portal or claim of compositor consent.
 #ifdef SNAPVERE_WAYLAND_TEST
+// Test the fixed NULL clock policy on an actual GStreamer pipeline.
+// No physical capture or portal is involved in this clock fixture.
+static gboolean test_capture_clock(void) {
+    GError *error = NULL;
+    GstElement *pipeline = gst_parse_launch(
+        "fakesrc name=source is-live=true num-buffers=1 ! fakesink sync=false", &error);
+    if (error || !pipeline || !GST_IS_PIPELINE(pipeline)) {
+        g_clear_error(&error);
+        if (pipeline) gst_object_unref(pipeline);
+        return FALSE;
+    }
+    GstElement *source = gst_bin_get_by_name(GST_BIN(pipeline), "source");
+    if (!source) {
+        gst_object_unref(pipeline);
+        return FALSE;
+    }
+    configure_capture_clock(GST_PIPELINE(pipeline), source);
+    gst_object_unref(source);
+    gboolean ok = gst_element_set_state(pipeline, GST_STATE_PLAYING) != GST_STATE_CHANGE_FAILURE;
+    GstBus *bus = gst_element_get_bus(pipeline);
+    GstMessage *message = bus ? gst_bus_timed_pop_filtered(bus, GST_SECOND,
+        GST_MESSAGE_EOS | GST_MESSAGE_ERROR) : NULL;
+    GstClock *clock = gst_element_get_clock(pipeline);
+    ok = ok && message && GST_MESSAGE_TYPE(message) == GST_MESSAGE_EOS && !clock;
+    if (clock) gst_object_unref(clock);
+    if (message) gst_message_unref(message);
+    if (bus) gst_object_unref(bus);
+    gst_element_set_state(pipeline, GST_STATE_NULL);
+    gst_object_unref(pipeline);
+    return ok;
+}
+
 int snapvere_wayland_test_frame(void) {
-    if (!gst_init_check(NULL, NULL, NULL)) return 1;
+    if (!gst_init_check(NULL, NULL, NULL) || !test_capture_clock()) return 1;
     GstCaps *caps = gst_caps_from_string("video/x-raw,format=BGRA,width=2,height=2");
     GstBuffer *buffer = gst_buffer_new_allocate(NULL, 24, NULL);
     if (!caps || !buffer) {
