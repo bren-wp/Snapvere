@@ -469,7 +469,7 @@ jobs:
             - **SHA256SUMS.txt** — integrity checksums for all packages and the dependency inventory
             - **Snapvere-SBOM.cdx.json** — reproducible CycloneDX 1.6 dependency inventory from npm and Cargo lockfiles
             - **Seven browser extension ZIP packages v0.2.2** — Chrome, Firefox, Edge, Brave, Opera, Vivaldi and Safari independently bundled source packages (Safari requires Apple packaging/signing)
-            - **Snapvere-update-stable.json** — server-ready version notification manifest; upload it as `stable.json` to your configured `update.snapvere.com` only after the matching Tauri release is available on the official download page
+            - **Snapvere-update-stable.json** — legacy-named, unsigned version-notice sample; do not deploy this preview to a production stable update channel.
 
             All Windows and Linux installers, the seven browser extensions, the SBOM and the update manifest are covered by SHA256SUMS.txt.
             The browser ZIPs are developer/source packages, not approved or signed browser-store distributions.
@@ -499,7 +499,7 @@ jobs:
             are opened on the official website and should be verified against
             publisher signatures and published SHA-256 hashes.
 
-            **Preview release.** Linux uses the same React/Tauri design, screenshot/editor/gallery and silent GIF backend; Linux MP4, microphone, system audio and recorded mouse cursor are not implemented. Linux X11/Wayland compatibility needs physical QA.
+            **Preview release.** Linux uses the same React/Tauri design, screenshot/editor/gallery and silent GIF backend. Experimental native MP4, PipeWire microphone/system audio and Wayland portal components have isolated CI coverage but remain gated pending native acceptance. No production support or physical compatibility is implied.
 
             Native Windows 10/11 capture, recorder, audio, multi-monitor,
             accessibility, install/upgrade/uninstall and 1:1 visual comparisons are not yet
@@ -530,6 +530,7 @@ jobs:
           if (-not $release.draft -or -not $release.prerelease) {
             throw "Release $tag must remain a private prerelease draft until asset verification completes"
           }
+          if ($release.target_commitish -ne '${{ github.sha }}') { throw "Draft $tag targets a different revision" }
           # Publishing an installer-only release is a failure: every browser
           # extension, the update notice, the SBOM and the hashes must ship.
           $browserZips = @('chrome','firefox','edge','brave','opera','vivaldi','safari') |
@@ -571,7 +572,17 @@ jobs:
           if ($unhashed.Count -ne 0 -or $checksumFiles.Count -ne ($requiredAssets.Count - 1)) {
             throw "Published release assets are not fully covered by SHA256SUMS.txt"
           }
-          Write-Host "Verified $($requiredAssets.Count) draft assets and SHA-256 coverage"
+          foreach ($asset in $release.assets) {
+            $local = Get-Item -LiteralPath (Join-Path 'dist-installers' $asset.name) -ErrorAction Stop
+            if ($asset.state -ne 'uploaded' -or $asset.size -le 0 -or $asset.size -ne $local.Length) {
+              throw "Remote asset state or size mismatch: $($asset.name)"
+            }
+            $expectedDigest = 'sha256:' + (Get-FileHash -LiteralPath $local.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($asset.digest -cne $expectedDigest) {
+              throw "Remote asset SHA-256 missing or incorrect: $($asset.name)"
+            }
+          }
+          Write-Host "Verified $($requiredAssets.Count) draft assets, remote SHA-256 digests and checksum coverage"
           # Publish exactly the already-verified draft ID, never an accidentally
           # created release with the same name or an unverified asset set.
           $published = gh api --method PATCH "repos/$repo/releases/$releaseId" -F draft=false -F prerelease=true | ConvertFrom-Json
@@ -584,5 +595,9 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $verified.id -ne $releaseId -or
               $verified.tag_name -ne $tag -or $verified.draft -or -not $verified.prerelease) {
             throw "Published release cannot be verified by immutable release ID"
+          }
+          $tagCommit = gh api "repos/$repo/commits/$tag" --jq '.sha'
+          if ($LASTEXITCODE -ne 0 -or $tagCommit -ne '${{ github.sha }}') {
+            throw "Published tag $tag does not resolve to the tested commit"
           }
           Write-Host "Published verified Free and Pro prerelease packages: $tag (id=$releaseId)"

@@ -305,7 +305,8 @@ static gboolean copy_frame(GstSample *sample, guint w, guint h, guint8 *data, gs
     GstCaps *caps = gst_sample_get_caps(sample);
     GstBuffer *buffer = gst_sample_get_buffer(sample);
     GstVideoInfo info;
-    if (!caps || !buffer || !gst_video_info_from_caps(&info, caps) ||
+    if (!caps || !buffer || GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_CORRUPTED) ||
+        !gst_video_info_from_caps(&info, caps) ||
         GST_VIDEO_INFO_FORMAT(&info) != GST_VIDEO_FORMAT_BGRA ||
         (guint)GST_VIDEO_INFO_WIDTH(&info) != w ||
         (guint)GST_VIDEO_INFO_HEIGHT(&info) != h) return FALSE;
@@ -328,6 +329,57 @@ static gboolean copy_frame(GstSample *sample, guint w, guint h, guint8 *data, gs
     }
     gst_buffer_unmap(buffer, &map);
     return valid;
+}
+
+// This is a capture-only pipeline, not a playback pipeline. Older
+// pipewiresrc versions schedule GstBaseSrc against absolute producer PTS
+// (upstream 8837678), potentially retaining a buffer until the system's
+// monotonic uptime elapses again. A NULL fixed pipeline clock disables
+// that wait even on plugins without the newer sync property. The Rust
+// recorder independently paces encoding using Instant and media time.
+static void configure_capture_clock(GstPipeline *pipeline, GstElement *input) {
+    gst_pipeline_use_clock(pipeline, NULL);
+    if (g_object_class_find_property(G_OBJECT_GET_CLASS(input), "provide-clock"))
+        g_object_set(input, "provide-clock", FALSE, NULL);
+    if (g_object_class_find_property(G_OBJECT_GET_CLASS(input), "sync"))
+        g_object_set(input, "sync", FALSE, NULL);
+}
+
+// Detach the producer's memory on the GStreamer streaming thread, after
+// pipewiresrc has returned from its internal PipeWire loop lock. The old
+// always-copy path can recycle under the loop lock (upstream 30ff8da).
+// Preserve video stride/offset and timestamps, but never retain pool parents.
+static GstBuffer *detach_video_buffer(GstBuffer *source) {
+    if (!source || GST_BUFFER_FLAG_IS_SET(source, GST_BUFFER_FLAG_CORRUPTED))
+        return NULL;
+    gsize size = gst_buffer_get_size(source);
+    if (!size || size > 128u * 1024u * 1024u) return NULL;
+    GstBuffer *copy = gst_buffer_copy_deep(source);
+    if (!copy) return NULL;
+    GstParentBufferMeta *parent;
+    while ((parent = gst_buffer_get_parent_buffer_meta(copy)) != NULL) {
+        if (!gst_buffer_remove_meta(copy, &parent->parent)) {
+            gst_buffer_unref(copy);
+            return NULL;
+        }
+    }
+    if (gst_buffer_get_size(copy) != size) {
+        gst_buffer_unref(copy);
+        return NULL;
+    }
+    return copy;
+}
+
+static GstPadProbeReturn detach_video_probe(GstPad *pad, GstPadProbeInfo *info,
+                                            gpointer user_data) {
+    (void)pad;
+    (void)user_data;
+    GstBuffer *source = GST_PAD_PROBE_INFO_BUFFER(info);
+    GstBuffer *copy = detach_video_buffer(source);
+    if (!copy) return GST_PAD_PROBE_DROP;
+    GST_PAD_PROBE_INFO_DATA(info) = copy;
+    gst_buffer_unref(source);
+    return GST_PAD_PROBE_OK;
 }
 
 void snapvere_wayland_free(void *handle) {
@@ -377,10 +429,11 @@ void *snapvere_wayland_open(gint x, gint y, guint logical_width, guint logical_h
     g_main_context_pop_thread_default(ctx->context);
     if (!ok) goto fail;
     GError *error = NULL;
-    // Return producer buffers promptly: the recorder already copies BGRA
-    // into its own bounded memory. Do not pin the portal's last pool buffer.
+    // Restrict input negotiation before conversion, then detach buffers at
+    // the source pad outside the PipeWire loop; never queue producer memory.
     ctx->pipeline = gst_parse_launch(
-        "pipewiresrc name=video always-copy=true ! videoconvert ! video/x-raw,format=BGRA "
+        "pipewiresrc name=video always-copy=false min-buffers=4 max-buffers=8 "
+        "! capsfilter name=source_caps ! videoconvert ! video/x-raw,format=BGRA "
         "! appsink name=frames sync=false max-buffers=2 drop=true "
         "enable-last-sample=false wait-on-eos=false", &error);
     if (error || !ctx->pipeline) {
@@ -392,6 +445,28 @@ void *snapvere_wayland_open(gint x, gint y, guint logical_width, guint logical_h
     ctx->video_bus = gst_element_get_bus(ctx->pipeline);
     if (!input || !ctx->sink || !ctx->video_bus) {
         if (input) gst_object_unref(input);
+        goto fail;
+    }
+    if (!GST_IS_PIPELINE(ctx->pipeline)) {
+        gst_object_unref(input);
+        goto fail;
+    }
+    configure_capture_clock(GST_PIPELINE(ctx->pipeline), input);
+    GstElement *source_filter = gst_bin_get_by_name(GST_BIN(ctx->pipeline), "source_caps");
+    gchar *source_spec = g_strdup_printf(
+        "video/x-raw,format=(string){BGRx,BGRA,RGBx,RGBA,xBGR,ABGR,xRGB,ARGB},width=(int)%u,height=(int)%u",
+        width, height);
+    GstCaps *source_caps = gst_caps_from_string(source_spec);
+    g_free(source_spec);
+    GstPad *source_pad = gst_element_get_static_pad(input, "src");
+    gboolean configured = source_filter && source_caps && source_pad &&
+        gst_pad_add_probe(source_pad, GST_PAD_PROBE_TYPE_BUFFER, detach_video_probe, NULL, NULL);
+    if (configured) g_object_set(source_filter, "caps", source_caps, NULL);
+    if (source_pad) gst_object_unref(source_pad);
+    if (source_caps) gst_caps_unref(source_caps);
+    if (source_filter) gst_object_unref(source_filter);
+    if (!configured) {
+        gst_object_unref(input);
         goto fail;
     }
     GstCaps *expected = gst_caps_new_simple("video/x-raw",
@@ -470,6 +545,15 @@ int snapvere_wayland_pull(void *handle, guint8 *data, gsize capacity, guint time
         }
         return 0;
     }
+    // A portal can return an explicitly corrupted buffer during initial
+    // negotiation or producer starvation. Never copy it or renew the clock.
+    GstBuffer *buffer = gst_sample_get_buffer(sample);
+    if (buffer && GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_CORRUPTED)) {
+        gst_sample_unref(sample);
+        if (!video_alive(ctx)) return -1;
+        g_debug("Wayland corrupted sample discarded");
+        return g_get_monotonic_time() - ctx->last_frame > 3 * G_TIME_SPAN_SECOND ? -1 : 0;
+    }
     gboolean ok = video_alive(ctx) &&
         copy_frame(sample, ctx->width, ctx->height, data, capacity);
     gst_sample_unref(sample);
@@ -483,8 +567,40 @@ int snapvere_wayland_pull(void *handle, guint8 *data, gsize capacity, guint time
 
 // Native buffer regression; no fake portal or claim of compositor consent.
 #ifdef SNAPVERE_WAYLAND_TEST
+// Test the fixed NULL clock policy on an actual GStreamer pipeline.
+// No physical capture or portal is involved in this clock fixture.
+static gboolean test_capture_clock(void) {
+    GError *error = NULL;
+    GstElement *pipeline = gst_parse_launch(
+        "fakesrc name=source is-live=true num-buffers=1 ! fakesink sync=false", &error);
+    if (error || !pipeline || !GST_IS_PIPELINE(pipeline)) {
+        g_clear_error(&error);
+        if (pipeline) gst_object_unref(pipeline);
+        return FALSE;
+    }
+    GstElement *source = gst_bin_get_by_name(GST_BIN(pipeline), "source");
+    if (!source) {
+        gst_object_unref(pipeline);
+        return FALSE;
+    }
+    configure_capture_clock(GST_PIPELINE(pipeline), source);
+    gst_object_unref(source);
+    gboolean ok = gst_element_set_state(pipeline, GST_STATE_PLAYING) != GST_STATE_CHANGE_FAILURE;
+    GstBus *bus = gst_element_get_bus(pipeline);
+    GstMessage *message = bus ? gst_bus_timed_pop_filtered(bus, GST_SECOND,
+        GST_MESSAGE_EOS | GST_MESSAGE_ERROR) : NULL;
+    GstClock *clock = gst_element_get_clock(pipeline);
+    ok = ok && message && GST_MESSAGE_TYPE(message) == GST_MESSAGE_EOS && !clock;
+    if (clock) gst_object_unref(clock);
+    if (message) gst_message_unref(message);
+    if (bus) gst_object_unref(bus);
+    gst_element_set_state(pipeline, GST_STATE_NULL);
+    gst_object_unref(pipeline);
+    return ok;
+}
+
 int snapvere_wayland_test_frame(void) {
-    if (!gst_init_check(NULL, NULL, NULL)) return 1;
+    if (!gst_init_check(NULL, NULL, NULL) || !test_capture_clock()) return 1;
     GstCaps *caps = gst_caps_from_string("video/x-raw,format=BGRA,width=2,height=2");
     GstBuffer *buffer = gst_buffer_new_allocate(NULL, 24, NULL);
     if (!caps || !buffer) {
@@ -505,6 +621,26 @@ int snapvere_wayland_test_frame(void) {
         !memcmp(output, expected, sizeof(output)) &&
         !copy_frame(sample, 2, 2, output, sizeof(output) - 1) &&
         !copy_frame(sample, 1, 4, output, sizeof(output));
+    gst_sample_unref(sample);
+    // The detached copy must preserve the padded frame and release its parent.
+    GstBuffer *parent = gst_buffer_new_allocate(NULL, 4, NULL);
+    gst_buffer_add_parent_buffer_meta(buffer, parent);
+    GstBuffer *detached = detach_video_buffer(buffer);
+    valid = valid && detached && !gst_buffer_get_parent_buffer_meta(detached);
+    if (detached) {
+        GstSample *detached_sample = gst_sample_new(detached, caps, NULL, NULL);
+        valid = valid && copy_frame(detached_sample, 2, 2, output, sizeof(output)) &&
+            !memcmp(output, expected, sizeof(output));
+        gst_sample_unref(detached_sample);
+        gst_buffer_unref(detached);
+    }
+    gst_buffer_unref(parent);
+    GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_CORRUPTED);
+    valid = valid && !detach_video_buffer(buffer);
+    sample = gst_sample_new(buffer, caps, NULL, NULL);
+    memset(output, 0xA5, sizeof(output));
+    valid = valid && !copy_frame(sample, 2, 2, output, sizeof(output));
+    for (guint i = 0; i < sizeof(output); i++) valid = valid && output[i] == 0xA5;
     gst_sample_unref(sample);
     gst_buffer_unref(buffer);
 

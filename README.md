@@ -37,12 +37,16 @@ Snapvere gives you a simple sequence: **capture → annotate → save or copy**.
 | 🖥️ | **Ready when you are** | Launch quietly at Windows sign-in; capture from the icon beside the clock |
 | 🔒 | **Privacy by design** | No automatic capture upload; locally stored captures and gallery data |
 
-## See Snapvere
+## See Snapvere in English
 
-These images are **genuine screenshots of the repository's rendered React
-application interface**, not AI illustrations. They show the application layout;
-hardware capture, physical Windows integration and exact native pixel matching
-must be checked separately.
+Explore the capture workspace, annotation editor and settings in the primary
+English interface. These screenshots come from the application's actual React
+components rendered with a test IPC bridge, not AI illustrations or design
+mockups. They are frontend previews, not photographs or screenshots of an
+installed native Windows or Linux build. Native capture and pixel-level
+platform verification remain separate.
+
+[View the latest screenshot verification runs](https://github.com/bren-wp/Snapvere/actions/workflows/screenshots.yml)
 
 <table>
 <tr>
@@ -58,7 +62,7 @@ must be checked separately.
 </table>
 
 <details>
-<summary><b>🖼️ Explore more real interface previews</b></summary>
+<summary><b>🖼️ Explore more English interface screenshots</b></summary>
 
 <img src="docs/screenshots/home-compact.png" alt="Snapvere compact gallery layout" width="760" />
 

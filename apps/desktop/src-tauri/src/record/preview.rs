@@ -104,6 +104,12 @@ struct SampleTiming {
     encoder_to_sample_us: u64,
 }
 
+pub(super) struct RenderReceipt {
+    pub total_us: u64,
+    pub sample_to_packet_us: u64,
+    pub packet_to_receipt_us: u64,
+}
+
 fn micros(duration: std::time::Duration) -> u64 {
     u64::try_from(duration.as_micros()).unwrap_or(u64::MAX)
 }
@@ -121,6 +127,7 @@ pub(super) struct Preview {
     frame_revision: u64,
     timing: Option<SampleTiming>,
     acknowledged: bool,
+    packet_issued_at: Option<Instant>,
 }
 
 struct Raster {
@@ -221,12 +228,14 @@ impl Preview {
             frame_revision: 0,
             timing: None,
             acknowledged: false,
+            packet_issued_at: None,
         }
     }
 
     pub(super) fn begin_pause(&mut self) {
         self.session = uuid::Uuid::new_v4().to_string();
         self.acknowledged = false;
+        self.packet_issued_at = None;
     }
 
     pub(super) fn check_session(&self, session: &str) -> Result<(), String> {
@@ -261,7 +270,7 @@ impl Preview {
 
     // Fixed little-endian header: dimensions, sequence, recorder PTS,
     // annotation revision. A slow reader sees the newest frame only.
-    pub(super) fn packet(&self, after: u64) -> Result<Vec<u8>, String> {
+    pub(super) fn packet(&mut self, after: u64) -> Result<Vec<u8>, String> {
         let frame = self
             .frame
             .as_ref()
@@ -276,23 +285,39 @@ impl Preview {
         packet.extend_from_slice(&self.timestamp_100ns.to_le_bytes());
         packet.extend_from_slice(&self.frame_revision.to_le_bytes());
         packet.extend_from_slice(frame.as_raw());
+        // Empty polls and retries must not reset the first issuance clock.
+        self.packet_issued_at.get_or_insert_with(Instant::now);
         Ok(packet)
     }
 
     /// A browser acknowledgement after a rendering opportunity gives an
     /// upper bound through the return IPC, not a physical display timestamp.
-    /// At most one receipt per pause token, with no renderer-supplied clock.
-    pub(super) fn acknowledge(&mut self, session: &str, frame_id: u64) -> Result<u64, String> {
+    /// At most one receipt per pause token, after issuing the matching frame.
+    /// The timestamps measure native packet issuance and the return IPC, not
+    /// confirmed delivery, compositor presentation or a trusted renderer clock.
+    pub(super) fn acknowledge(
+        &mut self,
+        session: &str,
+        frame_id: u64,
+    ) -> Result<RenderReceipt, String> {
         self.check_session(session)?;
         if self.acknowledged || self.frame_id != frame_id {
             return Err("Stale or repeated preview acknowledgement".into());
         }
         let timing = self.timing.ok_or("Recording has no preview frame")?;
-        let total = timing
+        let issued = self
+            .packet_issued_at
+            .ok_or("Preview frame has not been issued")?;
+        let now = Instant::now();
+        let total_us = timing
             .capture_to_sample_us
-            .saturating_add(micros(timing.sampled_at.elapsed()));
+            .saturating_add(micros(now.duration_since(timing.sampled_at)));
         self.acknowledged = true;
-        Ok(total)
+        Ok(RenderReceipt {
+            total_us,
+            sample_to_packet_us: micros(issued.duration_since(timing.sampled_at)),
+            packet_to_receipt_us: micros(now.duration_since(issued)),
+        })
     }
 
     pub(super) fn needs_sample(&self, frame_id: u64) -> bool {
@@ -573,6 +598,7 @@ impl Preview {
         self.timestamp_100ns = stamp.timestamp_100ns;
         self.frame_revision = self.revision;
         self.acknowledged = false;
+        self.packet_issued_at = None;
         self.timing = Some(SampleTiming {
             sampled_at,
             capture_to_sample_us: micros(sampled_at.duration_since(stamp.capture_started)),
@@ -734,13 +760,26 @@ mod tests {
         let snapshot = preview.snapshot().unwrap();
         assert!(preview.acknowledge("stale", 1).is_err());
         assert!(preview.acknowledge(&snapshot.session, 2).is_err());
-        let elapsed = preview.acknowledge(&snapshot.session, 1).unwrap();
-        assert!(elapsed >= snapshot.capture_to_sample_us);
+        assert!(preview.acknowledge(&snapshot.session, 1).is_err());
+        assert!(preview.packet(1).unwrap().is_empty());
+        assert!(preview.acknowledge(&snapshot.session, 1).is_err());
+        assert!(!preview.packet(0).unwrap().is_empty());
+        let first_issue = preview.packet_issued_at.unwrap();
+        assert!(!preview.packet(0).unwrap().is_empty());
+        assert_eq!(preview.packet_issued_at, Some(first_issue));
+        let receipt = preview.acknowledge(&snapshot.session, 1).unwrap();
+        assert!(receipt.total_us >= snapshot.capture_to_sample_us);
+        assert!(receipt.total_us >= receipt.sample_to_packet_us + receipt.packet_to_receipt_us);
         assert!(preview.acknowledge(&snapshot.session, 1).is_err());
         preview.begin_pause();
         assert!(preview.acknowledge(&snapshot.session, 1).is_err());
         let current = preview.snapshot().unwrap();
+        assert!(preview.acknowledge(&current.session, 1).is_err());
+        preview.packet(0).unwrap();
         assert!(preview.acknowledge(&current.session, 1).is_ok());
+        preview.remember(&frame, stamp(2, 100)).unwrap();
+        assert!(preview.acknowledge(&current.session, 2).is_err());
+        assert!(preview.acknowledge(&current.session, 1).is_err());
     }
 
     #[test]

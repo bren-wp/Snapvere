@@ -1,6 +1,31 @@
 # Snapvere by Brendigo — Release history
 
-## v0.2.32 — Release integrity (development)
+## v0.2.33 — Preview release verification (development)
+
+- Disable redundant clock scheduling in the capture-only Wayland video pipeline: debug logs showed absolute producer PTS at 115.514 s while the pipeline was only 0.194 s old. Use a fixed NULL pipeline clock and disable source clock/sync where supported; preserve recorder monotonic pacing and all real-video safety checks.
+
+- Detach bounded Wayland source buffers outside the internal PipeWire dequeue lock; retain exact geometry, packed system-memory caps and corrupted-frame rejection. Add parent-buffer lifetime regression coverage and isolated source diagnostics.
+
+- Pin isolated Wayland CI to upstream portal v0.9.0, including the documented fix for the exact `session already has a frame object` protocol error and initial-frame scheduling. Keep all real video acceptance assertions mandatory.
+
+- Exercise actual repaint damage on the authorized Wayland output, independently verify both fixture phases and require both through the real portal before moving the marker. Retain three consecutive marker samples and all production timeouts.
+
+- Discard explicitly corrupted Wayland video buffers without resetting the valid-frame deadline; require a larger negotiated producer pool and preserve strict geometry/consent checks. Establish the synthetic baseline within a bounded startup interval before moving the marker.
+- Require English document language for README frontend screenshot generation and clarify screenshot provenance; installed native screenshots remain pending.
+
+- Restore valid shell syntax for the pinned Wayland portal test backend selection; retain all mandatory assertions.
+- Avoid invalidating audio device enumeration on unrelated PipeWire graph removals, while still rejecting removed enumerated devices and selected identities. Add bounded diagnostic output for isolated mixer QA failures.
+
+- Address isolated portal buffer starvation by testing the pinned upstream xdg-desktop-portal-wlr 0.8.4 revision; require sustained real marker samples instead of accepting a single frame. Distribution 0.8.1 and physical acceptance remain unresolved.
+
+- Bind paused render receipts to actual nonempty frame packet issuance; reject premature, stale and repeated receipts and separate native sample-to-packet and packet-to-receipt timing. Physical display latency remains unverified.
+
+- Reconcile unsigned preview labels after successful main release workflows, in addition to the scheduled and manual audit.
+- Fail draft publication on missing or mismatched GitHub asset SHA-256 digests, upload state, size or target revision; resolve the published tag to the tested commit.
+- Clarify experimental Linux recording and prohibit deploying the unsigned preview manifest to the stable channel.
+- Record the successful isolated Sway portal marker test for v0.2.32; physical compositor and full UI acceptance remain open.
+
+## v0.2.32 — Release integrity (preview)
 
 - Add isolated real Wayland portal inclusion test and session-bound browser render receipts for paused preview latency; retain live window safety gate.
 

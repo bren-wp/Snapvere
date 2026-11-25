@@ -1,6 +1,10 @@
 name: Audit unsigned Snapvere release preview labels
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ['Snapvere Windows and Linux preview release']
+    types: [completed]
+    branches: [main]
   push:
     branches: [main]
     paths:
@@ -15,6 +19,7 @@ concurrency:
 jobs:
   audit-unsigned-preview-metadata:
     name: Reconcile unsigned Tauri preview release labels
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:

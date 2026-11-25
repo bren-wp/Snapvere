@@ -62,6 +62,22 @@ for _ in {1..100}; do
 done
 [[ -n "${WAYLAND_DISPLAY:-}" && -n "${SWAYSOCK:-}" ]]
 swaymsg -t get_outputs | python3 -c 'import json,sys; outputs={o["name"]:o["rect"] for o in json.load(sys.stdin) if o["active"]}; assert outputs["HEADLESS-1"]==dict(x=0,y=0,width=640,height=480); assert outputs["HEADLESS-2"]==dict(x=640,y=0,width=640,height=480)'
+# Damage-driven ext_image_copy_capture may not emit on an idle output.
+# Map a separate animated, known-color surface on the authorized output.
+swaymsg 'focus output HEADLESS-1; workspace 1'
+/usr/bin/python3 "$root/tools/native/wayland_marker.py" --baseline >"$runtime/baseline.log" 2>&1 & baseline_pid=$!; pids+=("$baseline_pid")
+baseline_ready=0
+for _ in {1..100}; do
+  kill -0 "$baseline_pid" || { cat "$runtime/baseline.log"; exit 1; }
+  if swaymsg -t get_tree | grep 'Snapvere QA baseline' >/dev/null; then
+    baseline_ready=1
+    break
+  fi
+  sleep .1
+done
+[[ "$baseline_ready" == 1 ]] || { echo "GTK baseline window did not map"; exit 1; }
+swaymsg '[title="Snapvere QA baseline"] move container to output HEADLESS-1'
+swaymsg '[title="Snapvere QA baseline"] fullscreen enable'
 swaymsg 'focus output HEADLESS-2; workspace 2'
 /usr/bin/python3 "$root/tools/native/wayland_marker.py" >"$runtime/marker.log" 2>&1 & marker_pid=$!; pids+=("$marker_pid")
 marker_ready=0
@@ -95,7 +111,21 @@ import sys
 r,g,b=Image.open(sys.argv[1]).convert("RGB").getpixel((320,240))
 assert r>220 and g<35 and b>220, ("Control window is not visible on the other output", (r,g,b))
 PY
-# Independently verify that the selected output shows the known background.
+# Independently verify both real repaint phases on the authorized output.
+/usr/bin/python3 - "$runtime/background.png" <<'PY'
+from PIL import Image
+import subprocess, sys, time
+phases = set()
+for _ in range(60):
+    subprocess.run(["grim", "-o", "HEADLESS-1", sys.argv[1]], check=True)
+    r,g,b=Image.open(sys.argv[1]).convert("RGB").getpixel((320,240))
+    if abs(r-18)<=2 and abs(g-52)<=2:
+        for phase in (80,92):
+            if abs(b-phase)<=2: phases.add(phase)
+    if len(phases)==2: break
+    time.sleep(.025)
+assert phases == {80,92}, ("Animated authorized-output fixture not visible", phases)
+PY
 grim -o HEADLESS-1 "$runtime/background.png"
 /usr/bin/python3 - "$runtime/background.png" <<'PY'
 from PIL import Image
@@ -121,10 +151,14 @@ pipewire >"$runtime/pipewire.log" 2>&1 & pids+=("$!")
 for _ in {1..100}; do [[ -S "$runtime/pipewire-0" ]] && break; sleep .1; done
 [[ -S "$runtime/pipewire-0" ]]
 wireplumber >"$runtime/wireplumber.log" 2>&1 & pids+=("$!")
-# Start the actual distribution backend with diagnostics captured. Resolve
-# its packaged executable rather than relying on an old libexec layout.
-backend="$(dpkg-query -L xdg-desktop-portal-wlr | grep -E '/(libexec|lib)/xdg-desktop-portal-wlr$')"
-[[ -x "$backend" ]]
+# Start the actual backend with diagnostics captured. CI may select the
+# explicitly pinned upstream build; local QA defaults to the distro binary.
+backend="${SNAPVERE_QA_PORTAL_BACKEND:-}"
+if [[ -z "$backend" ]]; then
+  backend="$(dpkg-query -L xdg-desktop-portal-wlr | grep -E '/(libexec|lib)/xdg-desktop-portal-wlr$')"
+fi
+[[ "$backend" == /* && -x "$backend" ]]
+echo "Testing portal backend: $backend"
 "$backend" -l DEBUG -c "$XDG_CONFIG_HOME/xdg-desktop-portal-wlr/config" >"$runtime/portal-wlr.log" 2>&1 & backend_pid=$!; pids+=("$backend_pid")
 backend_ready=0
 for _ in {1..100}; do
@@ -139,15 +173,16 @@ done
 cc -Wall -Wextra -Werror -O2 -I"$root/apps/desktop/src-tauri/native" \
     "$root/tools/native/wayland_portal_probe.c" "$root/apps/desktop/src-tauri/native/linux_wayland.c" \
     -o "$runtime/portal-probe" $(pkg-config --cflags --libs gio-unix-2.0 gstreamer-app-1.0 gstreamer-video-1.0)
-G_MESSAGES_DEBUG=all timeout 105 "$runtime/portal-probe" >"$runtime/probe.log" 2>&1 & probe=$!; pids+=("$probe")
+GST_DEBUG=pipewiresrc:6 G_MESSAGES_DEBUG=all timeout 105 "$runtime/portal-probe" >"$runtime/probe.log" 2>&1 & probe=$!; pids+=("$probe")
 for _ in {1..900}; do
   grep -q '^SEPARATE_OUTPUT_MARKER_ABSENT$' "$runtime/probe.log" && break
-  kill -0 "$probe" 2>/dev/null || { cat "$runtime/probe.log"; exit 1; }
+  kill -0 "$probe" 2>/dev/null || { tail -120 "$runtime/probe.log"; exit 1; }
   sleep .1
 done
 grep -q '^SEPARATE_OUTPUT_MARKER_ABSENT$' "$runtime/probe.log"
 # Both monotonic readings use Linux CLOCK_MONOTONIC on the same machine.
 started="$(python3 -c 'import time; print(time.monotonic_ns()//1000)')"
+swaymsg '[title="Snapvere QA baseline"] fullscreen disable'
 swaymsg '[title="Snapvere QA marker"] fullscreen disable'
 swaymsg '[title="Snapvere QA marker"] move container to output HEADLESS-1'
 swaymsg 'focus output HEADLESS-1'
@@ -170,12 +205,14 @@ done
 [[ "$visible" == 1 ]] || { echo "Moved marker not visible on captured output"; exit 1; }
 echo "Native marker verified visible on captured output"
 wait "$probe"
-cat "$runtime/probe.log"
+grep -E "^(BASELINE_REPAINT_PHASES|SEPARATE_OUTPUT_MARKER_ABSENT|SAME_OUTPUT_MARKER_PRESENT|SUSTAINED_MARKER_SAMPLES)" "$runtime/probe.log"
 python3 - "$started" "$runtime/probe.log" <<'PY'
 import sys
 lines=open(sys.argv[2], encoding="utf-8").read().splitlines()
 received=[int(s.split()[1]) for s in lines if s.startswith("SAME_OUTPUT_MARKER_PRESENT ")]
 assert len(received)==1 and received[0]>=int(sys.argv[1])
+assert "BASELINE_REPAINT_PHASES 2" in lines
+assert "SUSTAINED_MARKER_SAMPLES 3" in lines
 print(f"Native compositor move-to-PipeWire sample: {(received[0]-int(sys.argv[1]))/1000:.3f} ms")
 print("Same-output exclusion is NOT supported by this tested path.")
 PY

@@ -20,8 +20,16 @@ runtime="$XDG_RUNTIME_DIR"
 [[ -d "$runtime" && "$PIPEWIRE_RUNTIME_DIR" == "$runtime" ]]
 pids=()
 cleanup() {
+    local status=$?
+    trap - EXIT
+    if [[ "$status" != 0 ]]; then
+        for file in "$runtime"/*.log; do
+            [[ ! -f "$file" ]] || { echo "=== ${file##*/} ==="; tail -60 "$file"; }
+        done
+    fi
     for pid in "${pids[@]}"; do kill "$pid" 2>/dev/null || true; done
     for pid in "${pids[@]}"; do wait "$pid" 2>/dev/null || true; done
+    exit "$status"
 }
 trap cleanup EXIT
 cc -Wall -Wextra -Werror -O2 -I"$root/apps/desktop/src-tauri/native" "$root/tools/native/pipewire_capture_probe.c" \
@@ -110,7 +118,7 @@ print("AAC/H264 decoded, pause excluded, duration skew:", abs(ad - vd))
 done
 
 # The actual recorder mixer must receive both requested sources.
-timeout 10s "$runtime/mixer-probe" "$source_serial" "$sink_serial"
+G_MESSAGES_DEBUG=all timeout 10s "$runtime/mixer-probe" "$source_serial" "$sink_serial"
 
 # Remove the selected virtual microphone during the explicit pause.
 # The session must not substitute another available node or publish a partial MP4.

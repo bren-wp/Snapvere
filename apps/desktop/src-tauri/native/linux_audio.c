@@ -37,6 +37,8 @@ static gboolean healthy(SnapvereAudio *ctx) {
     if (ctx->terminal_error) return FALSE;
     GstMessage *message = gst_bus_pop_filtered(ctx->bus, GST_MESSAGE_ERROR | GST_MESSAGE_EOS);
     if (message) {
+        g_debug("Audio mixer pipeline terminated: %s",
+                GST_MESSAGE_TYPE(message) == GST_MESSAGE_ERROR ? "error" : "EOS");
         gst_message_unref(message);
         ctx->terminal_error = TRUE;
         return FALSE;
@@ -93,8 +95,10 @@ static gboolean configure_input(SnapvereAudio *ctx, guint index, guint64 serial)
 }
 
 void *snapvere_audio_open(guint64 mic, guint64 monitor, guint32 cookie) {
-    if (!cookie || snapvere_audio_validate(mic, monitor, cookie, NULL) != 0)
+    if (!cookie || snapvere_audio_validate(mic, monitor, cookie, NULL) != 0) {
+        g_debug("Audio mixer rejected selected input identity");
         return NULL;
+    }
     GError *error = NULL;
     if (!gst_init_check(NULL, NULL, &error)) {
         g_clear_error(&error);
@@ -122,6 +126,7 @@ void *snapvere_audio_open(guint64 mic, guint64 monitor, guint32 cookie) {
     ctx->pipeline = gst_parse_launch(description, &error);
     g_free(description);
     if (error || !ctx->pipeline) {
+        g_debug("Audio mixer pipeline construction failed");
         g_clear_error(&error);
         goto fail;
     }
@@ -141,9 +146,18 @@ void *snapvere_audio_open(guint64 mic, guint64 monitor, guint32 cookie) {
             // Detect a server restart or device removal during graph startup.
             if (snapvere_audio_validate(mic, monitor, cookie, NULL) == 0)
                 return ctx;
+            g_debug("Audio mixer identity changed during startup");
             break;
         }
         if (ctx->terminal_error) break;
+    }
+    for (guint i = 0; i < 2; i++) {
+        if (!ctx->selected[i]) continue;
+        InputHealth *health = &ctx->health[i];
+        g_mutex_lock(&health->lock);
+        g_debug("Audio mixer startup input %u: seen=%d discontinuity=%d",
+                i, health->seen != 0, health->discontinuity);
+        g_mutex_unlock(&health->lock);
     }
 fail:
     snapvere_audio_free(ctx);
