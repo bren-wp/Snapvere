@@ -1,0 +1,97 @@
+diff --git a/src/screencast/wlr_screencast.c b/src/screencast/wlr_screencast.c
+--- a/src/screencast/wlr_screencast.c
++++ b/src/screencast/wlr_screencast.c
+@@ -26,38 +26,61 @@
+ #include "logger.h"
+ #include "fps_limit.h"
+ 
+-static void wlr_frame_capture_start(struct xdpw_screencast_instance *cast) {
+-	fps_limit_measure_start(&cast->fps_limit, cast->framerate);
+-	if (cast->ctx->ext_image_copy_capture_manager
+-			&& cast->ctx->ext_output_image_capture_source_manager) {
+-		xdpw_ext_ic_frame_capture(cast);
+-	} else if (cast->ctx->screencopy_manager) {
+-		xdpw_wlr_sc_frame_capture(cast);
+-	}
+-}
+-
+-static void wlr_frame_capture_timer(void *data) {
+-	wlr_frame_capture_start((struct xdpw_screencast_instance *)data);
+-}
+-
+-void xdpw_wlr_frame_capture(struct xdpw_screencast_instance *cast) {
+-	uint64_t delay_ns = fps_limit_measure_end(&cast->fps_limit, cast->framerate);
+-	if (delay_ns > 0) {
+-		logprint(TRACE, "pipewire: scheduling capture in %"PRIu64" ms", delay_ns / (1000 * 1000));
+-		xdpw_add_timer(cast->ctx->state, delay_ns, wlr_frame_capture_timer, cast);
+-	} else {
+-		wlr_frame_capture_start(cast);
+-	}
+-}
+-
+-void xdpw_wlr_frame_cancel(struct xdpw_screencast_instance *cast) {
+-	if (cast->ctx->ext_image_copy_capture_manager
+-			&& cast->ctx->ext_output_image_capture_source_manager) {
+-		xdpw_ext_ic_frame_cancel(cast);
+-	} else if (cast->ctx->screencopy_manager) {
+-		xdpw_wlr_sc_frame_cancel(cast);
+-	}
+-}
++static void wlr_frame_capture_start(struct xdpw_screencast_instance *cast) {
++	/* A delayed capture must never start after its buffer was returned. */
++	if (!cast->pwr_stream_state || !cast->current_frame.pw_buffer ||
++			!cast->current_frame.xdpw_buffer) {
++		return;
++	}
++	fps_limit_measure_start(&cast->fps_limit, cast->framerate);
++	if (cast->ctx->ext_image_copy_capture_manager
++			&& cast->ctx->ext_output_image_capture_source_manager) {
++		xdpw_ext_ic_frame_capture(cast);
++	} else if (cast->ctx->screencopy_manager) {
++		xdpw_wlr_sc_frame_capture(cast);
++	}
++}
++
++static void wlr_frame_capture_timer(void *data) {
++	wlr_frame_capture_start((struct xdpw_screencast_instance *)data);
++}
++
++static void wlr_cancel_capture_timers(struct xdpw_screencast_instance *cast) {
++	struct xdpw_timer *timer, *tmp;
++	wl_list_for_each_safe(timer, tmp, &cast->ctx->state->timers, link) {
++		if (timer->func == wlr_frame_capture_timer && timer->user_data == cast) {
++			logprint(DEBUG, "wlr: cancelling delayed capture");
++			xdpw_destroy_timer(timer);
++		}
++	}
++}
++
++void xdpw_wlr_frame_capture(struct xdpw_screencast_instance *cast) {
++	/* At most one delayed start can belong to the currently dequeued buffer. */
++	wlr_cancel_capture_timers(cast);
++	if (!cast->pwr_stream_state || !cast->current_frame.pw_buffer ||
++			!cast->current_frame.xdpw_buffer) {
++		return;
++	}
++	uint64_t delay_ns = fps_limit_measure_end(&cast->fps_limit, cast->framerate);
++	if (delay_ns > 0) {
++		logprint(TRACE, "pipewire: scheduling capture in %"PRIu64" ms", delay_ns / (1000 * 1000));
++		xdpw_add_timer(cast->ctx->state, delay_ns, wlr_frame_capture_timer, cast);
++	} else {
++		wlr_frame_capture_start(cast);
++	}
++}
++
++void xdpw_wlr_frame_cancel(struct xdpw_screencast_instance *cast) {
++	/* The upstream frame cancellation must also cancel a pending FPS timer. */
++	wlr_cancel_capture_timers(cast);
++	if (cast->ctx->ext_image_copy_capture_manager
++			&& cast->ctx->ext_output_image_capture_source_manager) {
++		xdpw_ext_ic_frame_cancel(cast);
++	} else if (cast->ctx->screencopy_manager) {
++		xdpw_wlr_sc_frame_cancel(cast);
++	}
++}
+ 
+ void xdpw_wlr_session_close(struct xdpw_screencast_instance *cast) {
+ 	if (cast->ctx->ext_image_copy_capture_manager

@@ -398,11 +398,21 @@ jobs:
           git -C "$source" fetch --depth=1 https://github.com/emersion/xdg-desktop-portal-wlr.git "$revision"
           git -C "$source" checkout --detach FETCH_HEAD
           test "$(git -C "$source" rev-parse HEAD)" = "$revision"
+          # CI-only patch; never modify the user's installed portal.
+          git -C "$source" apply --check "$GITHUB_WORKSPACE/tools/native/xdpw-0.9.0-capture-timer.patch"
+          git -C "$source" apply "$GITHUB_WORKSPACE/tools/native/xdpw-0.9.0-capture-timer.patch"
           meson setup "$RUNNER_TEMP/snapvere-xdpw-build" "$source" -Dsd-bus-provider=libsystemd -Dman-pages=disabled -Dsystemd=disabled
           meson compile -C "$RUNNER_TEMP/snapvere-xdpw-build"
           test -x "$RUNNER_TEMP/snapvere-xdpw-build/xdg-desktop-portal-wlr"
       - name: Verify actual authorized video before and after moving a native window
-        run: SNAPVERE_QA_PORTAL_BACKEND="$RUNNER_TEMP/snapvere-xdpw-build/xdg-desktop-portal-wlr" bash tools/native/test_wayland_portal.sh
+        run: |
+          set -euo pipefail
+          export SNAPVERE_QA_PORTAL_BACKEND="$RUNNER_TEMP/snapvere-xdpw-build/xdg-desktop-portal-wlr"
+          # Independent sessions, not retries: every run must succeed.
+          for trial in 1 2 3; do
+            echo "Portal acceptance session $trial/3"
+            bash tools/native/test_wayland_portal.sh
+          done
 
   linux:
     name: Linux x86_64 native tests and preview packages
