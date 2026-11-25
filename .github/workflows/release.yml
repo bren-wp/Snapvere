@@ -2,12 +2,9 @@ name: Snapvere Windows and Linux preview release
 on:
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/release.yml'
-      - 'apps/**'
-      - 'tools/build_browser_extensions.py'
-      - 'tools/test_browser_extension_line_endings.py'
-      - '.gitattributes'
+    # The version/release preflight decides whether a build is needed.
+    # Keep this unfiltered so native, QA and workflow-only merges cannot
+    # strand a version after the final required checks pass.
   workflow_dispatch:
 permissions:
   contents: read
@@ -15,7 +12,66 @@ concurrency:
   group: snapvere-desktop-release-main
   cancel-in-progress: false
 jobs:
+  release-preflight:
+    name: Resolve version and existing release before expensive builds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Plan exact-revision preview publication
+        id: plan
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == refs/heads/main ]] || { echo "::error::Releases require main"; exit 1; }
+          [[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]] || { echo "::error::Checkout SHA mismatch"; exit 1; }
+          main_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          if [[ "$main_sha" != "$GITHUB_SHA" ]]; then
+            echo "Superseded main revision; a newer push has its own release run."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          version="$(jq -er '.version' apps/desktop/package.json)"
+          [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { echo "::error::Invalid release SemVer"; exit 1; }
+          [[ "$(jq -er '.version' apps/desktop/src-tauri/tauri.conf.json)" == "$version" ]] || { echo "::error::Version mismatch"; exit 1; }
+          tag="v$version"
+          releases="$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100")"
+          matches="$(jq -c --arg tag "$tag" '[.[][] | select(.tag_name == $tag)]' <<< "$releases")"
+          count="$(jq 'length' <<< "$matches")"
+          [[ "$count" -le 1 ]] || { echo "::error::Multiple releases for $tag"; exit 1; }
+          refs="$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$tag")"
+          tag_count="$(jq --arg ref "refs/tags/$tag" '[.[] | select(.ref == $ref)] | length' <<< "$refs")"
+          if [[ "$count" == 1 ]]; then
+            target="$(jq -r '.[0].target_commitish' <<< "$matches")"
+            [[ "$(jq -r '.[0].prerelease' <<< "$matches")" == true ]] || { echo "::error::$tag is not marked preview; reconcile metadata first"; exit 1; }
+            if [[ "$(jq -r '.[0].draft' <<< "$matches")" == false ]]; then
+              [[ "$tag_count" == 1 ]] || { echo "::error::Published release is missing its tag"; exit 1; }
+              [[ "$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq '.sha')" == "$target" ]] || { echo "::error::Published release tag/target mismatch"; exit 1; }
+              echo "$tag is already published; leaving all existing assets untouched."
+              echo "build=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            [[ "$target" == "$GITHUB_SHA" ]] || { echo "::error::Existing draft targets another commit; review it before recovery"; exit 1; }
+          elif [[ "$tag_count" != 0 ]]; then
+            echo "::error::Existing tag without a matching release; refusing to reuse it"
+            exit 1
+          fi
+          if [[ "$tag_count" == 1 ]]; then
+            [[ "$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq '.sha')" == "$GITHUB_SHA" ]] || { echo "::error::Draft tag targets another revision"; exit 1; }
+          fi
+          echo "build=true" >> "$GITHUB_OUTPUT"
+
   release-gate:
+    needs: release-preflight
+    if: needs.release-preflight.outputs.build == 'true'
     name: Require successful quality and visual checks for this main commit
     runs-on: ubuntu-24.04
     timeout-minutes: 185
@@ -202,15 +258,28 @@ jobs:
           if ($cargoLockVersion -ne $config.version) { throw "Cargo.lock version mismatch: $cargoLockVersion" }
           if ($npmLock['version'] -ne $config.version -or $npmLock['packages']['']['version'] -ne $config.version) { throw 'npm lockfile version differs from release version' }
           "value=$($config.version)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-      - name: Prevent overwriting an existing release tag
+      - name: Refuse published or mismatched releases; allow exact-SHA draft recovery
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
+          $repo = $env:GITHUB_REPOSITORY
           $releaseTag = 'v${{ steps.version.outputs.value }}'
-          $matching = git ls-remote --tags origin "refs/tags/$releaseTag"
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot verify release tag availability' }
-          if (-not [string]::IsNullOrWhiteSpace(($matching | Out-String).Trim())) {
-            throw "Refusing to overwrite existing release: $releaseTag. Bump all app versions."
+          $releaseJson = gh api --paginate --slurp "repos/$repo/releases?per_page=100"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect releases' }
+          $matches = @(($releaseJson | ConvertFrom-Json -NoEnumerate) | ForEach-Object { $_ } | ForEach-Object { $_ } | Where-Object { $_.tag_name -eq $releaseTag })
+          if ($matches.Count -gt 1) { throw 'Duplicate releases' }
+          if ($matches.Count -eq 1 -and (-not $matches[0].draft -or -not $matches[0].prerelease -or $matches[0].target_commitish -ne $env:GITHUB_SHA)) {
+            throw 'Refusing to overwrite a published or mismatched release'
+          }
+          $refsJson = gh api "repos/$repo/git/matching-refs/tags/$releaseTag"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect release tag' }
+          $refs = @(($refsJson | ConvertFrom-Json) | Where-Object { $_.ref -eq "refs/tags/$releaseTag" })
+          if ($refs.Count -gt 0) {
+            if ($matches.Count -ne 1) { throw 'Tag exists without a recoverable draft' }
+            $tagSha = gh api "repos/$repo/commits/$releaseTag" --jq '.sha'
+            if ($LASTEXITCODE -ne 0 -or $tagSha -ne $env:GITHUB_SHA) { throw 'Draft tag SHA mismatch' }
           }
       - name: Install dependencies using lockfile without arbitrary lifecycle scripts
         working-directory: apps/desktop
@@ -442,6 +511,14 @@ jobs:
             $verified = gh api "repos/$repo/releases/tags/$tag" | ConvertFrom-Json
             if ($LASTEXITCODE -ne 0 -or -not $verified.prerelease) { throw "Unsigned release $tag is still marked stable" }
           }
+      - name: Recheck main before staging the release draft
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $mainSha = gh api "repos/$env:GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha'
+          if ($LASTEXITCODE -ne 0 -or $mainSha -ne $env:GITHUB_SHA) { throw 'Main changed during build; refusing to stage a stale release' }
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -520,9 +597,9 @@ jobs:
           # GitHub's tag-based release endpoint may return HTTP 404 for drafts
           # that do not yet have a published tag ref. Locate the private draft
           # by its tag_name in the authenticated release collection instead.
-          $releases = @(gh api "repos/$repo/releases?per_page=100" | ConvertFrom-Json)
+          $releaseJson = gh api --paginate --slurp "repos/$repo/releases?per_page=100"
           if ($LASTEXITCODE -ne 0) { throw "Cannot inspect draft releases for $repo" }
-          $matches = @($releases | Where-Object { $_.tag_name -eq $tag })
+          $matches = @(($releaseJson | ConvertFrom-Json -NoEnumerate) | ForEach-Object { $_ } | ForEach-Object { $_ } | Where-Object { $_.tag_name -eq $tag })
           if ($matches.Count -ne 1) { throw "Expected exactly one draft release for $tag; found $($matches.Count)" }
           $release = $matches[0]
           $releaseId = [long]$release.id
@@ -585,6 +662,8 @@ jobs:
           Write-Host "Verified $($requiredAssets.Count) draft assets, remote SHA-256 digests and checksum coverage"
           # Publish exactly the already-verified draft ID, never an accidentally
           # created release with the same name or an unverified asset set.
+          $mainSha = gh api "repos/$repo/git/ref/heads/main" --jq '.object.sha'
+          if ($LASTEXITCODE -ne 0 -or $mainSha -ne $env:GITHUB_SHA) { throw 'Main changed before publication; leaving verified draft private' }
           $published = gh api --method PATCH "repos/$repo/releases/$releaseId" -F draft=false -F prerelease=true | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0) { throw "Unable to publish verified prerelease $tag" }
           if ($published.id -ne $releaseId -or $published.tag_name -ne $tag -or
