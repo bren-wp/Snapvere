@@ -419,8 +419,38 @@ fn delete_one(staged: &str, identity: Option<&str>) -> Result<()> {
     directory.sync_entries().map_err(anyhow::Error::msg)
 }
 
+/// Check both source/destination pairs before moving either member.
+/// Rechecks in stage_one still protect against changes after this preflight.
+fn preflight_stage(source: &str, staged: &str, identity: Option<&str>) -> Result<()> {
+    let source = Path::new(source);
+    let staged = Path::new(staged);
+    let directory = pin_parent(source)?;
+    let expected = checked_leaf(&directory, identity)?;
+    let source = pinned_path(&directory, source)?;
+    let staged = pinned_path(&directory, staged)?;
+    ensure!(!exists(&staged)?, "Unexpected staging file");
+    if expected == "missing" {
+        ensure!(
+            !exists(&source)?,
+            "Previously absent gallery media appeared"
+        );
+    } else {
+        verify_leaf(&source, expected)?;
+    }
+    Ok(())
+}
+
 fn stage_files(job: &PendingDeletion) -> Result<()> {
     validate_job(job)?;
+    preflight_stage(
+        &job.file_path,
+        &job.staged_file_path,
+        job.file_identity.as_deref(),
+    )?;
+    if let (Some(source), Some(staged)) = (&job.thumb_path, &job.staged_thumb_path) {
+        preflight_stage(source, staged, job.thumb_identity.as_deref())?;
+    }
+
     stage_one(
         &job.file_path,
         &job.staged_file_path,
@@ -747,6 +777,28 @@ mod tests {
         drop(locked);
         rename_verified_noreplace(&source, &target, &identity)?;
         assert_eq!(fs::read(target)?, b"original");
+        Ok(())
+    }
+
+    #[test]
+    fn staging_thumbnail_conflict_preserves_both_original_paths() -> Result<()> {
+        let (folder, db, shot) = fixture()?;
+        let job = intent(&shot)?;
+        db.prepare_delete(&job)?;
+        let thumb = shot.thumb_path.as_deref().unwrap();
+        let backup = folder.join("original-thumbnail.webp");
+        fs::rename(thumb, &backup)?;
+        fs::write(thumb, b"unrelated thumbnail")?;
+        assert!(stage_files(&job).is_err());
+        assert_eq!(fs::read(&shot.file_path)?, b"original");
+        assert_eq!(fs::read(thumb)?, b"unrelated thumbnail");
+        assert_eq!(fs::read(&backup)?, b"thumbnail");
+        assert!(!Path::new(&job.staged_file_path).exists());
+        assert!(!Path::new(job.staged_thumb_path.as_deref().unwrap()).exists());
+        assert!(db.get(&shot.id)?.is_some());
+        assert!(db.pending_delete(&shot.id)?.is_some());
+        drop(db);
+        fs::remove_dir_all(folder)?;
         Ok(())
     }
 
