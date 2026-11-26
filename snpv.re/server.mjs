@@ -1,5 +1,6 @@
 // Snapvere by Brendigo
 import { createServer } from "node:http";
+import { constants as fsConstants } from "node:fs";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, statfs, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
@@ -154,7 +155,15 @@ export async function createShareServer({storage,key,now=Date.now,quotaBytes=def
   admission=new Promise(resolve=>{unlock=resolve;});
   await previous;
   try{
-   const bytes=await storedBytes(root);
+   // A concurrent upload can publish or discard a staging directory while
+   // accounting walks it. Retry a bounded number of times; never silently
+   // omit a disappearing entry or turn an accounting error into admission.
+   let bytes;
+   for(let attempt=0;attempt<3;attempt++){
+    try{bytes=await storedBytes(root);break;}
+    catch(error){if(error.code!=="ENOENT")throw error;}
+   }
+   if(bytes===undefined)return false;
    const disk=await statfs(root,{bigint:true});
    const needed=size+4096;
    if(bytes+reserved+needed>quotaBytes||disk.bavail*disk.bsize<BigInt(reserved+needed+diskHeadroom))return false;
@@ -206,10 +215,21 @@ export async function createShareServer({storage,key,now=Date.now,quotaBytes=def
      admitted=true;
      pending=await mkdtemp(join(root,"pending-"));
      const sha256=await stageUpload(req,join(pending,"media"),size,type);
-     if(!sha256)return json(res,415,{error:"Invalid media signature"});
+     if(!sha256){
+      await rm(pending,{recursive:true,force:true});pending=null;
+      return json(res,415,{error:"Invalid media signature"});
+     }
      if(res.destroyed)return;
-     if(!grantValid(key,grant,now()))return json(res,401,{error:"Upload code expired"});
-     try{await mkdir(join(used,hash(grant)),{mode:0o700});}catch(e){if(e.code==="EEXIST")return json(res,409,{error:"Upload code already used"});throw e;}
+     if(!grantValid(key,grant,now())){
+      await rm(pending,{recursive:true,force:true});pending=null;
+      return json(res,401,{error:"Upload code expired"});
+     }
+     try{await mkdir(join(used,hash(grant)),{mode:0o700});}
+     catch(e){
+      if(e.code!=="EEXIST")throw e;
+      await rm(pending,{recursive:true,force:true});pending=null;
+      return json(res,409,{error:"Upload code already used"});
+     }
      const {token,revocation}=grantCapabilities(key,grant),expiresAt=now()+ttl*1000;
      await writeFile(join(pending,"meta.json"),JSON.stringify({type,size,expiresAt,sha256,grant:hash(grant),revoke:hash(revocation)}),{flag:"wx",mode:0o600,flush:true});
      await rename(pending,join(root,hash(token)));pending=null;
@@ -233,8 +253,12 @@ export async function createShareServer({storage,key,now=Date.now,quotaBytes=def
    if(reads>=16)return json(res,503,{error:"Try again"});
    reads++;let fd;
    try{
-    fd=await open(join(dir,"media"),"r");const info=await fd.stat();
-    if(!info.isFile()||info.size!==meta.size||meta.expiresAt<=now())return unavailable(res);
+    const path=join(dir,"media");
+    const before=await lstat(path);
+    if(!before.isFile()||before.isSymbolicLink()||before.nlink!==1)return unavailable(res);
+    fd=await open(path,fsConstants.O_RDONLY|(fsConstants.O_NOFOLLOW||0)|(fsConstants.O_NONBLOCK||0));
+    const info=await fd.stat();
+    if(!info.isFile()||info.nlink!==1||info.dev!==before.dev||info.ino!==before.ino||info.size!==meta.size||meta.expiresAt<=now())return unavailable(res);
     const r=range(req.headers.range,meta.size);
     if(!r){res.writeHead(416,{"Content-Range":"bytes */"+meta.size});return res.end();}
     const [start,end]=r,partial=Boolean(req.headers.range);

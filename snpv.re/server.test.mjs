@@ -1,7 +1,7 @@
 // Snapvere by Brendigo
 import test from "node:test";
 import assert from "node:assert/strict";
-import {mkdtemp,rm,mkdir,writeFile,readFile,stat} from "node:fs/promises";
+import {mkdtemp,rm,mkdir,writeFile,readFile,stat,readdir,symlink,rename} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {createHash} from "node:crypto";
@@ -16,7 +16,10 @@ test("one-use upload, private retrieval, range, revocation and expiry",async()=>
  try{
   assert.equal((await upload("invalid")).status,401);
   const grant=createGrant(key,clock+3600000);
-  assert.equal((await upload(grant,Buffer.from("invalid"))).status,415);
+  for(let i=0;i<8;i++){
+   assert.equal((await upload(grant,Buffer.from("invalid"))).status,415);
+   assert.equal((await readdir(storage)).some(name=>name.startsWith("pending-")),false);
+  }
   const created=await upload(grant);assert.equal(created.status,201);
   const share=await created.json();assert.match(share.url,/^https:\/\/snpv\.re\/[A-Za-z0-9_-]{43}$/);
   assert.equal((await upload(grant)).status,409);
@@ -32,6 +35,16 @@ test("one-use upload, private retrieval, range, revocation and expiry",async()=>
   assert.equal(meta.revocation,undefined);
   const media=await fetch(endpoint+"/media",{headers:{Range:"bytes=0-7"}});assert.equal(media.status,206);assert.deepEqual(Buffer.from(await media.arrayBuffer()),png.subarray(0,8));
   assert.equal(media.headers.get("cache-control"),"no-store");
+  // A replaced leaf must never serve an unrelated same-sized file.
+  if(process.platform!=="win32"){
+   const folder=join(storage,createHash("sha256").update(share.url.split("/").pop()).digest("hex"));
+   const original=join(folder,"media"),saved=join(folder,"original"),other=join(storage,"unrelated-media");
+   await writeFile(other,Buffer.alloc(png.length,23));
+   await rename(original,saved);await symlink(other,original);
+   assert.equal((await fetch(endpoint+"/media")).status,404);
+   await rm(original);await rename(saved,original);await rm(other);
+   const full=await fetch(endpoint+"/media");assert.deepEqual(Buffer.from(await full.arrayBuffer()),png);
+  }
   const cors=await fetch(endpoint,{method:"OPTIONS",headers:{Origin:"http://tauri.localhost","Access-Control-Request-Method":"DELETE","Access-Control-Request-Headers":"authorization"}});
   assert.equal(cors.status,204);assert.equal(cors.headers.get("access-control-allow-methods"),"DELETE");
   const denied=await fetch(endpoint,{method:"OPTIONS",headers:{Origin:"https://other.invalid","Access-Control-Request-Method":"DELETE"}});
