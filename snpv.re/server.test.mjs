@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {mkdtemp,rm,mkdir,writeFile,readFile,stat} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
+import {createHash} from "node:crypto";
 import {createShareServer,createGrant,purgeExpired} from "./server.mjs";
 test("one-use upload, private retrieval, range, revocation and expiry",async()=>{
  const storage=await mkdtemp(join(tmpdir(),"snapvere-share-")),key="test-only-secret-12345678901234567890";let clock=1700000000000;
@@ -21,6 +22,7 @@ test("one-use upload, private retrieval, range, revocation and expiry",async()=>
   assert.equal((await upload(grant)).status,409);
   const endpoint=base+"/api/v1/shares/"+share.url.split("/").pop();
   const meta=await (await fetch(endpoint)).json();assert.equal(meta.revoke,undefined);
+  assert.equal(meta.sha256,createHash("sha256").update(png).digest("hex"));
   const media=await fetch(endpoint+"/media",{headers:{Range:"bytes=0-7"}});assert.equal(media.status,206);assert.deepEqual(Buffer.from(await media.arrayBuffer()),png.subarray(0,8));
   assert.equal(media.headers.get("cache-control"),"no-store");
   const cors=await fetch(endpoint,{method:"OPTIONS",headers:{Origin:"http://tauri.localhost","Access-Control-Request-Method":"DELETE","Access-Control-Request-Headers":"authorization"}});
@@ -40,5 +42,22 @@ test("one-use upload, private retrieval, range, revocation and expiry",async()=>
   assert.equal(await readFile(join(malformed,"media"),"utf8"),"preserve");
   assert.equal(await readFile(unrelated,"utf8"),"keep");
   assert.equal((await stat(malformed)).isDirectory(),true);
+ }finally{server.closeAllConnections();await new Promise(r=>server.close(r));await rm(storage,{recursive:true,force:true});}
+});
+
+test("storage quota rejects uploads without spending the code or changing existing files",async()=>{
+ const storage=await mkdtemp(join(tmpdir(),"snapvere-quota-")),key="test-only-secret-12345678901234567890";const clock=1700000000000;
+ const filler=join(storage,"existing");await writeFile(filler,Buffer.alloc(4096,7));
+ const server=await createShareServer({storage,key,now:()=>clock,quotaBytes:8192});
+ await new Promise(r=>server.listen(0,"127.0.0.1",r));
+ const endpoint="http://127.0.0.1:"+server.address().port+"/api/v1/shares";
+ const body=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jR1sAAAAASUVORK5CYII=","base64"),grant=createGrant(key,clock+3600000);
+ const upload=()=>fetch(endpoint,{method:"POST",headers:{Authorization:"Bearer "+grant,"Content-Type":"image/png","X-Share-TTL":"3600"},body});
+ try{
+  assert.equal((await upload()).status,507);
+  assert.deepEqual(await readFile(filler),Buffer.alloc(4096,7));
+  await rm(filler);
+  const accepted=await upload();assert.equal(accepted.status,201);
+  assert.match((await accepted.json()).url,/^https:\/\/snpv\.re\//);
  }finally{server.closeAllConnections();await new Promise(r=>server.close(r));await rm(storage,{recursive:true,force:true});}
 });

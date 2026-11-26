@@ -1,7 +1,7 @@
 // Snapvere by Brendigo
 import { createServer } from "node:http";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, statfs, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pipeline } from "node:stream/promises";
@@ -10,10 +10,12 @@ const site = resolve(here,"../site");
 const tokenRE = /^[A-Za-z0-9_-]{43}$/;
 const ttlSet = new Set([3600,86400,604800]);
 const limit = 16*1024*1024;
+const defaultQuota = 2*1024*1024*1024;
+const diskHeadroom = 64*1024*1024;
 const hash = v => createHash("sha256").update(v).digest("hex");
 const mime = {
  "image/png": b => b.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])),
- "image/jpeg": b => b.length>=4 && b[0]===255 && b[1]===216 && b[2]===255 && b.at(-2)===255 && b.at(-1)===217,
+ "image/jpeg": (b,tail,size) => size>=4 && b[0]===255 && b[1]===216 && b[2]===255 && tail[0]===255 && tail[1]===217,
  "image/gif": b => ["GIF87a","GIF89a"].includes(b.toString("ascii",0,6)),
  "image/webp": b => b.toString("ascii",0,4)==="RIFF" && b.toString("ascii",8,12)==="WEBP",
  "video/mp4": b => b.length>=12 && b.toString("ascii",4,8)==="ftyp",
@@ -84,13 +86,74 @@ export async function purgeExpired(storage,now=Date.now()){
  }
  return {removed,preserved};
 }
-export async function createShareServer({storage,key,now=Date.now}){
+// Stream into an exclusive staging file with bounded memory and hash
+// the exact bytes written. Never publish a partial request.
+async function stageUpload(req,path,size,type){
+ const fd=await open(path,"wx",0o600);
+ const digest=createHash("sha256");
+ const prefix=Buffer.alloc(16),tail=Buffer.alloc(2);
+ let length=0;
+ try{
+  for await(const chunk of req){
+   if(length+chunk.length>size)throw Error("Oversized upload");
+   if(length<16)chunk.copy(prefix,length,0,Math.min(chunk.length,16-length));
+   if(chunk.length>=2)chunk.copy(tail,0,chunk.length-2);
+   else if(chunk.length===1){tail[0]=tail[1];tail[1]=chunk[0];}
+   let offset=0;
+   while(offset<chunk.length){
+    const {bytesWritten}=await fd.write(chunk,offset,chunk.length-offset,null);
+    if(bytesWritten===0)throw Error("Short disk write");
+    offset+=bytesWritten;
+   }
+   digest.update(chunk);length+=chunk.length;
+  }
+  if(!req.complete||length!==size||!mime[type](prefix.subarray(0,Math.min(length,16)),tail,length))return null;
+  await fd.sync();
+  return digest.digest("hex");
+ }finally{await fd.close();}
+}
+
+// Include incomplete and unknown files in quota accounting. Unexpected
+// links and special files fail closed rather than being removed.
+async function storedBytes(root){
+ let bytes=0,entries=0;
+ async function visit(dir,depth){
+  if(depth>4)throw Error("Storage nesting too deep");
+  for(const entry of await readdir(dir,{withFileTypes:true})){
+   if(++entries>100000)throw Error("Storage entry limit exceeded");
+   const path=join(dir,entry.name),info=await lstat(path);
+   if(info.isSymbolicLink())throw Error("Unexpected storage link");
+   if(info.isDirectory()){await visit(path,depth+1);continue;}
+   if(!info.isFile()||info.nlink!==1)throw Error("Unexpected storage file");
+   bytes+=info.size;
+   if(!Number.isSafeInteger(bytes))throw Error("Invalid storage size");
+  }
+ }
+ await visit(root,0);return bytes;
+}
+export async function createShareServer({storage,key,now=Date.now,quotaBytes=defaultQuota}){
  if(!storage||!key||Buffer.byteLength(key)<32)throw Error("Private storage and signing secret required");
  const root=await storageRoot(storage);
  const used=join(root,"used");await mkdir(used,{recursive:true,mode:0o700});
  const usedInfo=await lstat(used);
  if(!usedInfo.isDirectory()||usedInfo.isSymbolicLink()||(process.platform!=="win32"&&(usedInfo.mode&0o077)))throw Error("Invalid private grant storage");
- let uploads=0,reads=0;
+ if(!Number.isSafeInteger(quotaBytes)||quotaBytes<1)throw Error("Invalid storage quota");
+ let uploads=0,reads=0,reserved=0;
+ // Serialize admission; in-flight bytes may be counted twice, deliberately
+ // preferring rejection over exceeding the budget.
+ let admission=Promise.resolve();
+ async function reserve(size){
+  const previous=admission;let unlock;
+  admission=new Promise(resolve=>{unlock=resolve;});
+  await previous;
+  try{
+   const bytes=await storedBytes(root);
+   const disk=await statfs(root,{bigint:true});
+   const needed=size+4096;
+   if(bytes+reserved+needed>quotaBytes||disk.bavail*disk.bsize<BigInt(reserved+needed+diskHeadroom))return false;
+   reserved+=needed;return true;
+  }finally{unlock();}
+ }
  const server=createServer({requestTimeout:30000,headersTimeout:10000,maxHeaderSize:8192},async(req,res)=>{
   for(const [k,v] of Object.entries(security))res.setHeader(k,v);
   const origin=req.headers.origin;
@@ -115,21 +178,24 @@ export async function createShareServer({storage,key,now=Date.now}){
     const type=req.headers["content-type"],size=Number(req.headers["content-length"]),ttl=Number(req.headers["x-share-ttl"]);
     if(!Object.hasOwn(mime,type)||!ttlSet.has(ttl)||!Number.isSafeInteger(size)||size<1||size>limit)return json(res,400,{error:"Invalid type, size or expiry"});
     if(uploads>=2)return json(res,503,{error:"Try again"});
-    uploads++;let pending;
+    uploads++;let pending,admitted=false;
     try{
-     const chunks=[];let length=0;
-     for await(const chunk of req){length+=chunk.length;if(length>size||length>limit)throw Error("Oversized upload");chunks.push(chunk);}
-     const data=Buffer.concat(chunks,length);
-     if(length!==size||!mime[type](data))return json(res,415,{error:"Invalid media signature"});
+     if(!await reserve(size))return json(res,507,{error:"Share storage unavailable"});
+     admitted=true;
+     pending=await mkdtemp(join(root,"pending-"));
+     const sha256=await stageUpload(req,join(pending,"media"),size,type);
+     if(!sha256)return json(res,415,{error:"Invalid media signature"});
+     if(res.destroyed)return;
      if(!grantValid(key,grant,now()))return json(res,401,{error:"Upload code expired"});
      try{await mkdir(join(used,hash(grant)),{mode:0o700});}catch(e){if(e.code==="EEXIST")return json(res,409,{error:"Upload code already used"});throw e;}
      const token=randomBytes(32).toString("base64url"),revocation=randomBytes(32).toString("base64url"),expiresAt=now()+ttl*1000;
-     pending=await mkdtemp(join(root,"pending-"));
-     await writeFile(join(pending,"media"),data,{flag:"wx",mode:0o600,flush:true});
-     await writeFile(join(pending,"meta.json"),JSON.stringify({type,size,expiresAt,revoke:hash(revocation)}),{flag:"wx",mode:0o600,flush:true});
+     await writeFile(join(pending,"meta.json"),JSON.stringify({type,size,expiresAt,sha256,revoke:hash(revocation)}),{flag:"wx",mode:0o600,flush:true});
      await rename(pending,join(root,hash(token)));pending=null;
      return json(res,201,{url:"https://snpv.re/"+token,expiresAt,revocation});
-    }finally{uploads--;if(pending)await rm(pending,{recursive:true,force:true});}
+    }finally{
+     try{if(pending)await rm(pending,{recursive:true,force:true});}
+     finally{if(admitted)reserved-=size+4096;uploads--;}
+    }
    }
    const match=/^\/api\/v1\/shares\/([A-Za-z0-9_-]{43})(\/media)?$/.exec(path);
    if(!match)return unavailable(res);
@@ -141,7 +207,7 @@ export async function createShareServer({storage,key,now=Date.now}){
     await rm(dir,{recursive:true,force:true});res.writeHead(204);return res.end();
    }
    if(req.method!=="GET"||!Object.hasOwn(mime,meta.type)||!Number.isSafeInteger(meta.size)||meta.size<1||meta.size>limit||!Number.isSafeInteger(meta.expiresAt)||meta.expiresAt<=now())return unavailable(res);
-   if(!media)return json(res,200,{type:meta.type,size:meta.size,expiresAt:meta.expiresAt});
+   if(!media)return json(res,200,{type:meta.type,size:meta.size,expiresAt:meta.expiresAt,...(typeof meta.sha256==="string"&&shareDirRE.test(meta.sha256)?{sha256:meta.sha256}:{})});
    if(reads>=16)return json(res,503,{error:"Try again"});
    reads++;let fd;
    try{
@@ -161,6 +227,6 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  if(!key||Buffer.byteLength(key)<32)throw Error("Strong signing secret required");
  if(process.argv[2]==="grant"){process.stdout.write(createGrant(key,Date.now()+3600000)+"\n");}
  else if(process.argv[2]==="purge-expired"){process.stdout.write(JSON.stringify(await purgeExpired(process.env.SNAPVERE_SHARE_STORAGE))+"\n");}
- else if(!process.argv[2]){const server=await createShareServer({storage:process.env.SNAPVERE_SHARE_STORAGE,key});server.listen(Number(process.env.PORT||8080),"127.0.0.1");}
+ else if(!process.argv[2]){const server=await createShareServer({storage:process.env.SNAPVERE_SHARE_STORAGE,key,quotaBytes:Number(process.env.SNAPVERE_SHARE_QUOTA_BYTES||defaultQuota)});server.listen(Number(process.env.PORT||8080),"127.0.0.1");}
  else throw Error("Unknown command");
 }
