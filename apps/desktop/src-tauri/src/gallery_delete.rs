@@ -255,7 +255,10 @@ fn stage_one(source: &str, staged: &str, identity: Option<&str>) -> Result<()> {
     let staged = pinned_path(&directory, staged)?;
     ensure!(!exists(&staged)?, "Unexpected staging file");
     if expected == "missing" {
-        ensure!(!exists(&source)?, "Previously absent gallery media appeared");
+        ensure!(
+            !exists(&source)?,
+            "Previously absent gallery media appeared"
+        );
         return Ok(());
     }
     verify_leaf(&source, expected)?;
