@@ -1,13 +1,14 @@
 // Snapvere by Brendigo
 import { useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Copy, FolderOpen, Trash2, Video, Play, Image as ImageIcon } from "lucide-react";
+import { Copy, FolderOpen, Trash2, Video, Play, Share2, Image as ImageIcon } from "lucide-react";
 import type { Screenshot } from "../../lib/types";
 import { isVideo } from "../../lib/types";
 import { useLanguage } from "../../lib/LanguageProvider";
 import { formatMediaDate, formatMediaSize } from "../../lib/mediaFormatting";
 import { galleryPreviewPaths } from "../../lib/galleryPaging";
 import { galleryStatusCopy } from "../../lib/galleryStatusCopy";
+import { shareCopy } from "../../lib/shareCapture";
 
 function CapturePreview({ paths, name, video, unavailable }: {
   paths: string[]; name: string; video: boolean; unavailable: string;
@@ -30,6 +31,7 @@ export default function CaptureCard({
   onOpen,
   onReveal,
   onCopyPath,
+  onShare,
   onDelete,
   selected,
   onToggleSelect,
@@ -39,6 +41,7 @@ export default function CaptureCard({
   onOpen: () => void;
   onReveal: () => void;
   onCopyPath: () => void;
+  onShare: () => void;
   onDelete: () => void;
   selected?: boolean;
   onToggleSelect?: () => void;
@@ -120,6 +123,11 @@ export default function CaptureCard({
           className="grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white transition hover:bg-black/75"
         >
           <Copy size={15} />
+        </button>
+        <button type="button" onClick={(e) => { e.stopPropagation(); onShare(); }}
+          title={shareCopy(language).title} aria-label={shareCopy(language).title}
+          className="grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white transition hover:bg-black/75">
+          <Share2 size={15} />
         </button>
         <button
           type="button"

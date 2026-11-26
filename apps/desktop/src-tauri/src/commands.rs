@@ -1913,6 +1913,42 @@ pub async fn copy_media_image(
     .map_err(|e| format!("copy task: {e}"))?
 }
 
+/// Read only a registered gallery item, never a caller-provided filesystem path.
+#[tauri::command]
+pub async fn read_share_media(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    id: String,
+) -> Result<Response, String> {
+    require_window_label(window.label(), &["home"])?;
+    tauri::async_runtime::spawn_blocking(move || {
+        use std::io::Read;
+        const MAX_SHARE_BYTES: u64 = 16 * 1024 * 1024;
+        let _guard = image_export::SaveAsGuard::acquire()?;
+        let path = media_path(&app, &id)?;
+        let (mut file, expected) =
+            crate::pinned_directory::open_bounded_source(&path, MAX_SHARE_BYTES)?;
+        let before = file.metadata().map_err(estr)?;
+        let mut bytes = Vec::new();
+        bytes
+            .try_reserve_exact(expected as usize)
+            .map_err(|_| "Not enough memory to share capture".to_string())?;
+        bytes.resize(expected as usize, 0);
+        file.read_exact(&mut bytes).map_err(estr)?;
+        let mut extra = [0_u8; 1];
+        let after = file.metadata().map_err(estr)?;
+        if file.read(&mut extra).map_err(estr)? != 0
+            || after.len() != expected
+            || before.modified().map_err(estr)? != after.modified().map_err(estr)?
+        {
+            return Err("Share source changed during reading".into());
+        }
+        Ok(Response::new(bytes))
+    })
+    .await
+    .map_err(estr)?
+}
+
 #[tauri::command]
 pub async fn delete_screenshot(
     window: tauri::WebviewWindow,

@@ -57,7 +57,11 @@ for path in CODE:
             path == DESKTOP / "lib/updateFeed.ts"
             and line.strip().startswith("const response = await fetch(UPDATE_FEED_URL,")
         )
-        if pattern.search(line) and not official_feed:
+        explicit_share = (
+            path == DESKTOP / "lib/shareCapture.ts"
+            and line.strip().startswith("const response = await fetch(SHARE_ENDPOINT,")
+        )
+        if pattern.search(line) and not (official_feed or explicit_share):
             raise AssertionError(
                 f"Unreviewed network/process primitive: {path}:{number}: {line.strip()}"
             )
@@ -89,5 +93,8 @@ feed = (DESKTOP / "lib/updateFeed.ts").read_text(encoding="utf-8")
 assert 'https://update.snapvere.com/stable.json' in feed
 assert 'https://snapvere.com/download/' in feed
 assert 'credentials: "omit"' in feed and 'redirect: "error"' in feed
-print("No unreviewed process spawning or network calls; only the official read-only update feed is allowed")
+share = (DESKTOP / "lib/shareCapture.ts").read_text(encoding="utf-8")
+assert 'https://snpv.re/api/v1/shares' in share
+assert 'credentials: "omit"' in share and 'redirect: "error"' in share
+print("No unreviewed process spawning or network calls; explicit sharing and update feed reviewed")
 print("No third-party analytics or website interaction telemetry is permitted")

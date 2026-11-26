@@ -149,6 +149,7 @@ export const ipc = {
   revealMedia: (id: string) => invoke<void>("reveal_media", { id }),
   copyMediaImage: (id: string) => invoke<void>("copy_media_image", { id }),
   copyMediaPath: (id: string) => invoke<void>("copy_media_path", { id }),
+  readShareMedia: (id: string) => invoke<ArrayBuffer>("read_share_media", { id }),
   /** Pro native builds only: bounded, ID-based, user-approved local folder export. */
   proExportBatch: (ids: string[], preset: ProExportPreset) =>
     invoke<BatchExportReport>("pro_export_batch", { ids, preset }),
