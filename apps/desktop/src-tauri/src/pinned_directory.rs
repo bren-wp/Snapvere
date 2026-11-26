@@ -15,6 +15,19 @@ pub(crate) struct PinnedDirectory {
 }
 
 impl PinnedDirectory {
+    pub(crate) fn identity(&self) -> Result<String, String> {
+        #[cfg(target_os = "linux")]
+        {
+            file_identity(&self._directory)
+        }
+        #[cfg(windows)]
+        {
+            file_identity(self._ancestors.last().ok_or("Missing directory handle")?)
+        }
+        #[cfg(not(any(target_os = "linux", windows)))]
+        Err("Filesystem identity unsupported".into())
+    }
+
     pub(crate) fn open(path: &Path) -> Result<Self, String> {
         if !path.is_absolute() {
             return Err("An absolute directory is required".into());
@@ -135,4 +148,35 @@ pub(crate) fn open_bounded_source(source: &Path, max: u64) -> Result<(File, u64)
         return Err("Invalid or oversized gallery file".into());
     }
     Ok((reader, metadata.len()))
+}
+
+/// Stable across rename/restart on the same filesystem; not an authenticity hash.
+pub(crate) fn file_identity(file: &File) -> Result<String, String> {
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let meta = file.metadata().map_err(|error| error.to_string())?;
+        Ok(format!("linux:{:x}:{:x}", meta.dev(), meta.ino()))
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawHandle;
+        use windows::Win32::Foundation::HANDLE;
+        use windows::Win32::Storage::FileSystem::{
+            GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+        };
+        let mut info = BY_HANDLE_FILE_INFORMATION::default();
+        // SAFETY: the borrowed File keeps its handle live; info is writable.
+        unsafe { GetFileInformationByHandle(HANDLE(file.as_raw_handle()), &mut info) }
+            .map_err(|error| error.to_string())?;
+        Ok(format!(
+            "windows:{:x}:{:08x}{:08x}",
+            info.dwVolumeSerialNumber, info.nFileIndexHigh, info.nFileIndexLow
+        ))
+    }
+    #[cfg(not(any(target_os = "linux", windows)))]
+    {
+        let _ = file;
+        Err("Filesystem identity unsupported".into())
+    }
 }

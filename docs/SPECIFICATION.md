@@ -85,3 +85,8 @@ Active-window screenshot capture, remote storage, password-protected share links
 - Manual Windows 10/11 field testing of capture, multi-monitor geometry, DPI, WebView2/driver differences, hotkeys, recording audio and actual physical device performance before release acceptance.
 
 **Brand and legal:** The app and marketing identity must show SNAPVERE and BRENDIGO exclusively as the product/publisher identities. Copyright and licence notices associated with third-party materials may not be falsely reassigned or suppressed.
+
+
+## Gallery schema evolution (v0.2.36 candidate)
+
+SQLite schema v2 adds nullable `file_identity` and `thumb_identity` to `pending_deletions` in a transaction. New intents store native directory and media identifiers; legacy NULL values require conservative deferred recovery. Linux uses device/inode and Windows volume/file-index. These identifiers are not content hashes or proof against reuse; the final pathname operations still require race-hardening. No destructive schema changes or automatic deletion of legacy media. Do not downgrade across the schema migration.

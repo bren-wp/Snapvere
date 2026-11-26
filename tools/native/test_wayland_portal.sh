@@ -48,7 +48,7 @@ workspace 2 output HEADLESS-2
 default_border none
 default_floating_border none
 CONF
-sway --config "$runtime/sway.conf" >"$runtime/sway.log" 2>&1 & pids+=("$!")
+sway --config "$runtime/sway.conf" >"$runtime/sway.log" 2>&1 & sway_pid=$!; pids+=("$sway_pid")
 shopt -s nullglob
 for _ in {1..100}; do
   for socket in "$runtime"/wayland-*; do
@@ -61,7 +61,19 @@ for _ in {1..100}; do
   sleep .1
 done
 [[ -n "${WAYLAND_DISPLAY:-}" && -n "${SWAYSOCK:-}" ]]
-swaymsg -t get_outputs | python3 -c 'import json,sys; outputs={o["name"]:o["rect"] for o in json.load(sys.stdin) if o["active"]}; assert outputs["HEADLESS-1"]==dict(x=0,y=0,width=640,height=480); assert outputs["HEADLESS-2"]==dict(x=640,y=0,width=640,height=480)'
+# A socket can exist before Sway is ready to answer IPC. Wait only for
+# setup readiness; never retry or waive the actual portal acceptance test.
+outputs_ready=0
+for _ in {1..100}; do
+  kill -0 "$sway_pid" || { cat "$runtime/sway.log"; exit 1; }
+  if timeout 2 swaymsg -t get_outputs >"$runtime/outputs.json" 2>"$runtime/sway-ipc.log" &&
+     python3 -c 'import json,sys; outputs={o["name"]:o["rect"] for o in json.load(sys.stdin) if o["active"]}; assert outputs["HEADLESS-1"]==dict(x=0,y=0,width=640,height=480); assert outputs["HEADLESS-2"]==dict(x=640,y=0,width=640,height=480)' <"$runtime/outputs.json" 2>"$runtime/outputs-validation.log"; then
+    outputs_ready=1
+    break
+  fi
+  sleep .1
+done
+[[ "$outputs_ready" == 1 ]] || { echo "Sway IPC outputs not ready"; exit 1; }
 # Damage-driven ext_image_copy_capture may not emit on an idle output.
 # Map a separate animated, known-color surface on the authorized output.
 swaymsg 'focus output HEADLESS-1; workspace 1'

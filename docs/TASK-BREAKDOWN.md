@@ -43,3 +43,8 @@ No placeholder active-window capture, incomplete private upload buttons, mock do
 Do not merge without passing relevant CI jobs. Publish a fresh set of Portable EXE / Setup EXE / MSI assets with checksums after a validated release revision. Confirm Windows behavior on physical hardware before marking the build production stable.
 
 The live public site currently presents a separate release technology and version. Reconcile public-product metadata, licensing and technical capability before replacing the live site with repository HTML.
+
+
+## Candidate recovery schema v2
+
+New deletion intents persist parent and leaf native identifiers, including known absence, before staging. Stage, precommit, rollback and committed cleanup validate these identifiers. Existing schema v1 rows are preserved; unknown identities are deferred for manual recovery, never inferred. Back up the gallery database and media together before upgrade; do not downgrade to an older application after migration. Physical filesystem, restart/power-loss and adversarial leaf replacement acceptance remain required.

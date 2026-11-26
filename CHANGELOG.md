@@ -2,6 +2,9 @@
 
 ## v0.2.36 — Shared media safety and documentation (preview candidate)
 
+- Add SQLite schema v2 with persistent native directory/file identifiers for deletion intents. Reject mismatched or legacy unverifiable identities during staging, rollback and cleanup; add replacement and legacy-journal tests. A same-user leaf race remains because rename/unlink are pathname based.
+- Wait for bounded Sway IPC/output readiness before native Wayland acceptance; preserve all three real capture sessions and strict output assertions.
+
 - Retain uncommitted gallery recovery intents when neither the original nor staged file is present, including a replaced empty media directory. Add a restart/restore regression; retain current synchronous rollback behavior for already missing files. Apply the exact Rust formatting correction reported by both native CI jobs.
 
 - Share native bounded source opening between Free clipboard copy and Pro batch export. Decode clipboard images from the same bounded byte snapshot used for dimension checks; reject redirected or multiply linked sources, unsupported formats and oversized data. Add regression tests.
