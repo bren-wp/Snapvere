@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import type { Annotation, PixelRect } from "./types";
 
 /** Convert committed logical selections to outward-rounded viewport rectangles.
