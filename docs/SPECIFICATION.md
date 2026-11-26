@@ -90,3 +90,6 @@ Active-window screenshot capture, remote storage, password-protected share links
 ## Gallery schema evolution (v0.2.36 candidate)
 
 SQLite schema v2 adds nullable `file_identity` and `thumb_identity` to `pending_deletions` in a transaction. New intents store native directory and media identifiers; legacy NULL values require conservative deferred recovery. Linux uses device/inode and Windows volume/file-index. These identifiers are not content hashes or proof against reuse; the final pathname operations still require race-hardening. No destructive schema changes or automatic deletion of legacy media. Do not downgrade across the schema migration.
+
+
+Windows committed gallery cleanup uses a verified DELETE-capable file handle and native file disposition; Linux syncs the pinned containing directory at the journal boundaries. Linux pathname deletion and native rename identity races, Windows directory durability and physical power-loss acceptance remain outstanding.

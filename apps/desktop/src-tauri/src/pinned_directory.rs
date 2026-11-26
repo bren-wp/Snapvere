@@ -15,6 +15,16 @@ pub(crate) struct PinnedDirectory {
 }
 
 impl PinnedDirectory {
+    /// Persist directory-entry changes on Linux before advancing the journal.
+    /// Windows directory durability is not established by this method.
+    pub(crate) fn sync_entries(&self) -> Result<(), String> {
+        #[cfg(target_os = "linux")]
+        self._directory
+            .sync_all()
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
     pub(crate) fn identity(&self) -> Result<String, String> {
         #[cfg(target_os = "linux")]
         {

@@ -154,7 +154,7 @@ fn pinned_path(directory: &PinnedDirectory, path: &Path) -> Result<PathBuf> {
         .join(path.file_name().context("Media path has no filename")?))
 }
 
-fn leaf_identity(path: &Path) -> Result<String> {
+fn open_leaf(path: &Path, delete_access: bool) -> Result<(fs::File, String)> {
     let before = fs::symlink_metadata(path)?;
     ensure!(
         before.is_file(),
@@ -162,6 +162,8 @@ fn leaf_identity(path: &Path) -> Result<String> {
     );
     let mut options = fs::OpenOptions::new();
     options.read(true);
+    #[cfg(not(windows))]
+    let _ = delete_access;
     #[cfg(target_os = "linux")]
     {
         use std::os::unix::fs::OpenOptionsExt;
@@ -171,6 +173,10 @@ fn leaf_identity(path: &Path) -> Result<String> {
     {
         use std::os::windows::fs::OpenOptionsExt;
         options.share_mode(1).custom_flags(0x00200000);
+        if delete_access {
+            // GENERIC_READ | DELETE; deny other write/delete opens.
+            options.access_mode(0x80000000 | 0x00010000);
+        }
     }
     let file = options.open(path)?;
     let metadata = file.metadata()?;
@@ -201,7 +207,12 @@ fn leaf_identity(path: &Path) -> Result<String> {
             "Redirected or multiply linked gallery file"
         );
     }
-    crate::pinned_directory::file_identity(&file).map_err(anyhow::Error::msg)
+    let identity = crate::pinned_directory::file_identity(&file).map_err(anyhow::Error::msg)?;
+    Ok((file, identity))
+}
+
+fn leaf_identity(path: &Path) -> Result<String> {
+    open_leaf(path, false).map(|(_, identity)| identity)
 }
 
 fn capture_identity(path: &Path) -> Result<String> {
@@ -270,7 +281,42 @@ fn restore_one(source: &str, staged: &str, identity: Option<&str>) -> Result<()>
         verify_leaf(&staged, expected)?;
         rename_noreplace(&staged, &source).context("Could not restore staged gallery media")?;
     }
-    verify_leaf(&source, expected)
+    verify_leaf(&source, expected)?;
+    directory.sync_entries().map_err(anyhow::Error::msg)
+}
+
+#[cfg(windows)]
+fn remove_verified(path: &Path, expected: &str) -> Result<()> {
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::Storage::FileSystem::{
+        FileDispositionInfo, SetFileInformationByHandle, FILE_DISPOSITION_INFO,
+    };
+
+    let (file, identity) = open_leaf(path, true)?;
+    ensure!(identity == expected, "Gallery media identity changed");
+    let info = FILE_DISPOSITION_INFO { DeleteFile: true };
+    // SAFETY: the verified File owns the live DELETE-capable handle;
+    // info is a correctly sized, initialized Windows ABI structure.
+    unsafe {
+        SetFileInformationByHandle(
+            HANDLE(file.as_raw_handle()),
+            FileDispositionInfo,
+            (&info as *const FILE_DISPOSITION_INFO).cast(),
+            std::mem::size_of::<FILE_DISPOSITION_INFO>() as u32,
+        )
+    }?;
+    drop(file);
+    ensure!(!exists(path)?, "Gallery cleanup remains pending");
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn remove_verified(path: &Path, expected: &str) -> Result<()> {
+    // Linux unlink remains pathname-based; do not claim an atomic identity
+    // compare-and-unlink against another process running as the same user.
+    verify_leaf(path, expected)?;
+    fs::remove_file(path).context("Could not clear committed deletion staging file")
 }
 
 fn delete_one(staged: &str, identity: Option<&str>) -> Result<()> {
@@ -278,11 +324,10 @@ fn delete_one(staged: &str, identity: Option<&str>) -> Result<()> {
     let directory = pin_parent(staged)?;
     let expected = checked_leaf(&directory, identity)?;
     let staged = pinned_path(&directory, staged)?;
-    if !exists(&staged)? {
-        return Ok(());
+    if exists(&staged)? {
+        remove_verified(&staged, expected)?;
     }
-    verify_leaf(&staged, expected)?;
-    fs::remove_file(&staged).context("Could not clear committed deletion staging file")
+    directory.sync_entries().map_err(anyhow::Error::msg)
 }
 
 fn stage_files(job: &PendingDeletion) -> Result<()> {
@@ -309,10 +354,10 @@ fn verify_staged_files(job: &PendingDeletion) -> Result<()> {
         ensure!(!exists(&source)?, "Original gallery path reappeared");
         if expected == "missing" {
             ensure!(!exists(&staged)?, "Unexpected staging file");
-            Ok(())
         } else {
-            verify_leaf(&staged, expected)
+            verify_leaf(&staged, expected)?;
         }
+        directory.sync_entries().map_err(anyhow::Error::msg)
     };
     verify(
         &job.file_path,
@@ -676,6 +721,29 @@ mod tests {
         assert!(db.pending_deletions()?.is_empty());
         drop(db);
         fs::remove_dir_all(folder)?;
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn verified_windows_cleanup_defers_while_file_is_locked() -> Result<()> {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let folder = tempfile::tempdir()?;
+        let path = folder.path().join("staged.png");
+        fs::write(&path, b"original")?;
+        let expected = leaf_identity(&path)?;
+        let guard = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(1)
+            .open(&path)?;
+        assert!(remove_verified(&path, &expected).is_err());
+        assert_eq!(fs::read(&path)?, b"original");
+        drop(guard);
+        assert!(remove_verified(&path, "unexpected identity").is_err());
+        assert_eq!(fs::read(&path)?, b"original");
+        remove_verified(&path, &expected)?;
+        assert!(!path.exists());
         Ok(())
     }
 

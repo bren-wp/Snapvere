@@ -2,6 +2,8 @@
 
 ## v0.2.36 — Shared media safety and documentation (preview candidate)
 
+- Use DELETE-capable verified Windows file handles for committed gallery cleanup with SetFileInformationByHandle; do not reopen a pathname for removal. Defer locked files and identity mismatches. Sync pinned Linux directory entries before SQLite commit and after restore/cleanup. Linux pathname unlink and both platforms' rename races remain open; Windows durability and native CI must be verified.
+
 - Add SQLite schema v2 with persistent native directory/file identifiers for deletion intents. Reject mismatched or legacy unverifiable identities during staging, rollback and cleanup; add replacement and legacy-journal tests. A same-user leaf race remains because rename/unlink are pathname based.
 - Wait for bounded Sway IPC/output readiness before native Wayland acceptance; preserve all three real capture sessions and strict output assertions.
 
