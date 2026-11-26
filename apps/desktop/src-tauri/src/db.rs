@@ -288,7 +288,10 @@ impl Db {
                  WHERE s.id = ?1 AND p.committed = 0",
                 params![id],
             )?;
-            anyhow::ensure!(archived == 1, "Could not preserve gallery recovery metadata");
+            anyhow::ensure!(
+                archived == 1,
+                "Could not preserve gallery recovery metadata"
+            );
         }
         let removed = tx.execute(
             "DELETE FROM screenshots WHERE id = ?1 AND EXISTS (
@@ -313,13 +316,16 @@ impl Db {
 
     #[cfg(target_os = "linux")]
     pub fn latest_quarantine(&self) -> anyhow::Result<Option<(String, String)>> {
-        Ok(self.conn.query_row(
-            "SELECT q.id, json_extract(q.snapshot, '$.name')
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT q.id, json_extract(q.snapshot, '$.name')
              FROM quarantine_metadata q JOIN pending_deletions p ON p.id = q.id
              WHERE p.committed = 1 ORDER BY q.rowid DESC LIMIT 1",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        ).optional()?)
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?)
     }
 
     /// Validate the complete archived row against the retained journal.
@@ -355,7 +361,9 @@ impl Db {
 
     #[cfg(target_os = "linux")]
     pub fn commit_quarantine_restore(&mut self, job: &PendingDeletion) -> anyhow::Result<()> {
-        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let snapshot = Self::quarantine_snapshot(&tx, job)?;
         let inserted = tx.execute(
             "INSERT INTO screenshots
@@ -385,11 +393,17 @@ impl Db {
             params![job.id, snapshot],
         )?;
         anyhow::ensure!(
-            tx.execute("DELETE FROM quarantine_metadata WHERE id = ?1", params![job.id])? == 1,
+            tx.execute(
+                "DELETE FROM quarantine_metadata WHERE id = ?1",
+                params![job.id]
+            )? == 1,
             "Missing quarantine metadata"
         );
         anyhow::ensure!(
-            tx.execute("DELETE FROM pending_deletions WHERE id = ?1 AND committed = 1", params![job.id])? == 1,
+            tx.execute(
+                "DELETE FROM pending_deletions WHERE id = ?1 AND committed = 1",
+                params![job.id]
+            )? == 1,
             "Missing committed quarantine journal"
         );
         tx.commit()?;

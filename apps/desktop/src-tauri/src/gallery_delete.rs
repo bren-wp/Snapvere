@@ -607,7 +607,9 @@ pub fn restore_quarantined(db: &mut Db, id: &str) -> Result<()> {
     ensure!(job.committed, "Quarantine item is not committed");
     db.validate_quarantine_restore(&job)?;
     ensure!(
-        job.file_identity.as_deref().is_some_and(|id| !id.ends_with("|missing")),
+        job.file_identity
+            .as_deref()
+            .is_some_and(|id| !id.ends_with("|missing")),
         "Original capture identity is unavailable"
     );
     restore_files(&job)?;

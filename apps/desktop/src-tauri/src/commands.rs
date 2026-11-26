@@ -1992,7 +1992,11 @@ pub async fn restore_latest_quarantined_capture(
             };
             let language = get_app_language(window.clone(), app.clone())?;
             let title = crate::tray_locale::quarantine_restore_title(&language);
-            let name: String = name.chars().filter(|ch| !ch.is_control()).take(200).collect();
+            let name: String = name
+                .chars()
+                .filter(|ch| !ch.is_control())
+                .take(200)
+                .collect();
             let confirmed = app
                 .dialog()
                 .message(name)
@@ -2004,8 +2008,7 @@ pub async fn restore_latest_quarantined_capture(
             if !confirmed {
                 return Ok(false);
             }
-            crate::gallery_delete::restore_quarantined(&mut lock(&state.db), &id)
-                .map_err(estr)?;
+            crate::gallery_delete::restore_quarantined(&mut lock(&state.db), &id).map_err(estr)?;
             Ok(true)
         })
         .await

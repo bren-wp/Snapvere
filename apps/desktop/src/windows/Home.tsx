@@ -12,6 +12,7 @@ import {
   FolderOpen,
   Monitor,
   RefreshCw,
+  Undo2,
   Settings as SettingsIcon,
   Search,
   Video,
@@ -441,6 +442,33 @@ export default function Home() {
               {IS_PRO ? proText.studioSubtitle : t("Capture, record, and annotate your screen.")}
             </p>
           </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {linuxQuarantine && (
+              <button type="button" className="snapvere-btn-secondary inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full focus-visible:ring-2 focus-visible:ring-accent"
+                aria-label={recoveryText.restore} title={recoveryText.restore}
+                disabled={restoreBusy || proExportBusy}
+                onClick={async () => {
+                  if (restoreLock.current || proExportLock.current) return;
+                  restoreLock.current = true;
+                  setRestoreBusy(true);
+                  try {
+                    if (await ipc.restoreLatestQuarantinedCapture()) {
+                      await load();
+                      setToast(recoveryText.restored);
+                    } else {
+                      setToast(recoveryText.noChange);
+                    }
+                  } catch (error) {
+                    console.error("Quarantine recovery failed", error);
+                    setToast(recoveryText.failed);
+                  } finally {
+                    restoreLock.current = false;
+                    setRestoreBusy(false);
+                  }
+                }}>
+                <Undo2 size={17} aria-hidden="true" />
+              </button>
+            )}
           <button
             type="button"
             onClick={() => void openSettings()}
@@ -450,6 +478,7 @@ export default function Home() {
             <SettingsIcon size={17} aria-hidden="true" />
             <span>{t("Settings")}</span>
           </button>
+          </div>
         </div>
         <div role="group" aria-label={t("Capture actions")} className="snapvere-workspace-actions">
           <button
@@ -495,31 +524,6 @@ export default function Home() {
             <ArrowUpRight className="snapvere-action-arrow" size={17} aria-hidden="true" />
           </button>
         </div>
-        {linuxQuarantine && (
-          <button type="button" className="snapvere-btn-secondary mt-2"
-            disabled={restoreBusy || proExportBusy}
-            onClick={async () => {
-              if (restoreLock.current || proExportLock.current) return;
-              restoreLock.current = true;
-              setRestoreBusy(true);
-              try {
-                if (await ipc.restoreLatestQuarantinedCapture()) {
-                  await load();
-                  setToast(recoveryText.restored);
-                } else {
-                  setToast(recoveryText.noChange);
-                }
-              } catch (error) {
-                console.error("Quarantine recovery failed", error);
-                setToast(recoveryText.failed);
-              } finally {
-                restoreLock.current = false;
-                setRestoreBusy(false);
-              }
-            }}>
-            {recoveryText.restore}
-          </button>
-        )}
         {IS_PRO && (
           <div className="snapvere-pro-ribbon" role="group" aria-label={proText.studioTitle}>
             <span className="snapvere-pro-ribbon-label">{APP_NAME}</span>
