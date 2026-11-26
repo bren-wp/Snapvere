@@ -135,6 +135,10 @@ impl Db {
                  ON screenshots(created_at DESC, id DESC);
              DROP INDEX IF EXISTS idx_screenshots_created;
              CREATE INDEX IF NOT EXISTS idx_screenshots_name ON screenshots(name);
+             CREATE TABLE IF NOT EXISTS quarantine_metadata (
+                 id TEXT PRIMARY KEY NOT NULL REFERENCES pending_deletions(id) ON DELETE RESTRICT,
+                 snapshot TEXT NOT NULL CHECK (json_valid(snapshot))
+             );
              COMMIT;",
         )?;
         Ok(())
@@ -258,9 +262,33 @@ impl Db {
         Ok(())
     }
 
-    /// Atomically remove the row and mark its staged media as safe to clean.
+    /// Atomically retire the active gallery row and commit its recovery intent.
     pub fn commit_delete(&mut self, id: &str) -> anyhow::Result<()> {
         let tx = self.conn.transaction()?;
+        #[cfg(target_os = "linux")]
+        {
+            // Preserve all record metadata and tag names in the same transaction
+            // before the gallery row and cascading tag relations are removed.
+            let archived = tx.execute(
+                "INSERT INTO quarantine_metadata (id, snapshot)
+                 SELECT s.id, json_object(
+                     'id', s.id, 'file_path', s.file_path, 'thumb_path', s.thumb_path,
+                     'name', s.name, 'format', s.format, 'width', s.width,
+                     'height', s.height, 'size_bytes', s.size_bytes,
+                     'source', s.source, 'created_at', s.created_at,
+                     'remote_id', s.remote_id, 'remote_slug', s.remote_slug,
+                     'remote_url', s.remote_url, 'remote_expires_at', s.remote_expires_at,
+                     'is_uploaded', s.is_uploaded,
+                     'tags', json((SELECT json_group_array(t.name)
+                         FROM screenshot_tags st JOIN tags t ON t.id = st.tag_id
+                         WHERE st.screenshot_id = s.id))
+                 )
+                 FROM screenshots s JOIN pending_deletions p ON p.id = s.id
+                 WHERE s.id = ?1 AND p.committed = 0",
+                params![id],
+            )?;
+            anyhow::ensure!(archived == 1, "Could not preserve gallery recovery metadata");
+        }
         let removed = tx.execute(
             "DELETE FROM screenshots WHERE id = ?1 AND EXISTS (
                 SELECT 1 FROM pending_deletions p
@@ -662,6 +690,39 @@ mod gallery_tests {
         assert_eq!(legacy.file_path, "original");
         db.migrate()?;
         assert!(db.pending_delete("legacy")?.is_some());
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_quarantine_preserves_metadata_and_prevents_forgetting_journal() -> anyhow::Result<()> {
+        let mut db = Db::open_in_memory()?;
+        db.insert(&shot("one", 100))?;
+        db.add_tag("one", "important")?;
+        db.conn.execute(
+            "UPDATE screenshots SET remote_id = 'legacy-id' WHERE id = 'one'",
+            [],
+        )?;
+        db.conn.execute(
+            "INSERT INTO pending_deletions
+             (id, file_path, staged_file_path, thumb_path, committed, file_identity, thumb_identity)
+             SELECT id, file_path, 'staged', thumb_path, 0, 'test-id', 'test-thumb'
+             FROM screenshots WHERE id = 'one'",
+            [],
+        )?;
+        db.commit_delete("one")?;
+        assert!(db.get("one")?.is_none());
+        let (tag, remote): (String, String) = db.conn.query_row(
+            "SELECT json_extract(snapshot, '$.tags[0]'),
+                    json_extract(snapshot, '$.remote_id')
+             FROM quarantine_metadata WHERE id = 'one'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        assert_eq!(tag, "important");
+        assert_eq!(remote, "legacy-id");
+        assert!(db.forget_delete("one").is_err());
+        assert!(db.pending_delete("one")?.unwrap().committed);
         Ok(())
     }
 
