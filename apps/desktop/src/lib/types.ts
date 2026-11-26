@@ -101,6 +101,8 @@ export interface RecordOptions {
 
 export interface RecordStatus {
   sessionId?: string | null;
+  blurRevision?: number;
+  encodedBlurRevision?: number;
   phase: RecordPhase;
   elapsedMs: number;
   frames: number;

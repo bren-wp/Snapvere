@@ -238,6 +238,8 @@ pub struct RecFrameRect {
 #[serde(rename_all = "camelCase")]
 pub struct RecordStatus {
     pub session_id: Option<String>,
+    pub blur_revision: u64,
+    pub encoded_blur_revision: u64,
     pub phase: RecordPhase,
     /// Trajanje snimljenog materijala u milisekundama (pauza se ne broji).
     pub elapsed_ms: u64,
@@ -256,6 +258,8 @@ impl RecordStatus {
     pub fn idle() -> Self {
         Self {
             session_id: None,
+            blur_revision: 0,
+            encoded_blur_revision: 0,
             phase: RecordPhase::Idle,
             elapsed_ms: 0,
             frames: 0,

@@ -29,15 +29,39 @@ impl Ctl {
         viewport: (u32, u32),
         surface: (u32, u32),
         scale: f64,
-    ) -> Result<(), String> {
+    ) -> Result<u64, String> {
         self.check_live_session(requested)?;
         if surface != (self.width, self.height) {
             return Err("Redaction window does not match the recording dimensions".into());
         }
         let mapped = pixels::map_redaction_rects(rects, viewport, surface, scale)?;
         let bounded = bounded_blur_rects(&mapped, self.width, self.height)?;
-        *crate::state::lock(&self.blur) = bounded;
-        Ok(())
+        let mut masks = crate::state::lock(&self.blur);
+        let revision = self
+            .blur_revision
+            .load(Ordering::Relaxed)
+            .checked_add(1)
+            .ok_or("Recording mask revision exhausted")?;
+        *masks = bounded;
+        self.blur_revision.store(revision, Ordering::Release);
+        Ok(revision)
+    }
+
+    /// The revision belongs to the exact mask set used for this frame.
+    pub(super) fn apply_frame_masks(&self, frame: &mut [u8]) -> u64 {
+        let masks = crate::state::lock(&self.blur);
+        let revision = self.blur_revision.load(Ordering::Relaxed);
+        for mask in masks.iter() {
+            pixels::pixelate_bgra(frame, self.width, self.height, mask);
+        }
+        revision
+    }
+
+    /// Called only after the encoder accepts this frame. Acceptance is not
+    /// proof of durable file finalization or irreversible content concealment.
+    pub(super) fn acknowledge_encoded_masks(&self, revision: u64) {
+        self.encoded_blur_revision
+            .fetch_max(revision, Ordering::Release);
     }
 }
 
@@ -58,6 +82,8 @@ mod tests {
             height: 100,
             format: RecordFormat::Gif,
             blur: Mutex::new(Vec::new()),
+            blur_revision: AtomicU64::new(0),
+            encoded_blur_revision: AtomicU64::new(0),
             preview: None,
             pause_ack: AtomicBool::new(false),
             started: Instant::now(),
@@ -89,6 +115,40 @@ mod tests {
         assert_eq!(masks.len(), 1);
         assert_eq!(masks[0].x, 10);
         assert_eq!(masks[0].width, 20);
+    }
+
+    #[test]
+    fn only_the_revision_used_for_the_encoded_frame_is_acknowledged() {
+        let ctl = recorder();
+        let size = (100, 100);
+        let mask = PixelRect {
+            x: 0,
+            y: 0,
+            width: 20,
+            height: 20,
+        };
+        let first = ctl
+            .replace_blur("new-session", &[mask], size, size, 1.0)
+            .unwrap();
+        let mut frame = vec![0; 100 * 100 * 4];
+        frame[0] = 255;
+        let captured = ctl.apply_frame_masks(&mut frame);
+        assert_eq!(captured, first);
+        assert_ne!(frame[0], 255);
+        assert_eq!(ctl.status().encoded_blur_revision, 0);
+
+        let next = ctl
+            .replace_blur("new-session", &[], size, size, 1.0)
+            .unwrap();
+        assert_eq!(next, first + 1);
+        ctl.acknowledge_encoded_masks(captured);
+        assert_eq!(ctl.status().encoded_blur_revision, first);
+        assert_eq!(ctl.status().blur_revision, next);
+        let captured = ctl.apply_frame_masks(&mut frame);
+        ctl.acknowledge_encoded_masks(captured);
+        assert_eq!(ctl.status().encoded_blur_revision, next);
+        ctl.acknowledge_encoded_masks(first);
+        assert_eq!(ctl.status().encoded_blur_revision, next);
     }
 
     #[test]

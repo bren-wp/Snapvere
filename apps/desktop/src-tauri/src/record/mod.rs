@@ -107,6 +107,8 @@ pub struct Ctl {
     /// Područja koja se pikseliziraju u svakom frameu (koordinate snimke).
     /// Jedini ne-atomik ovdje; lock je nenapadnut i drži se mikrosekundu po frameu.
     blur: Mutex<Vec<PixelRect>>,
+    blur_revision: AtomicU64,
+    encoded_blur_revision: AtomicU64,
     preview: Option<Mutex<preview::Preview>>,
     pause_ack: AtomicBool,
     /// Trenutak pokretanja — hotkey ne smije zaustaviti tek pokrenuto snimanje.
@@ -120,8 +122,13 @@ pub struct Ctl {
 
 impl Ctl {
     fn status(&self) -> RecordStatus {
+        // Read the acknowledged revision first to avoid reporting it ahead of the submitted one.
+        let encoded_blur_revision = self.encoded_blur_revision.load(Ordering::Acquire);
+        let blur_revision = self.blur_revision.load(Ordering::Acquire);
         RecordStatus {
             session_id: Some(self.session_id.clone()),
+            blur_revision,
+            encoded_blur_revision,
             phase: match self.phase.load(Ordering::Relaxed) {
                 PHASE_RECORDING => RecordPhase::Recording,
                 PHASE_PAUSED => RecordPhase::Paused,
@@ -289,6 +296,8 @@ pub fn start(
         height: oh,
         format: opts.format,
         blur: Mutex::new(Vec::new()),
+        blur_revision: AtomicU64::new(0),
+        encoded_blur_revision: AtomicU64::new(0),
         preview,
         pause_ack: AtomicBool::new(false),
         started: Instant::now(),
@@ -434,7 +443,7 @@ pub fn set_blur_regions(
     viewport: (u32, u32),
     surface: (u32, u32),
     scale: f64,
-) -> Result<(), String> {
+) -> Result<u64, String> {
     let state = app.state::<AppState>();
     let guard = crate::state::lock(&state.recorder);
     let Some(session) = guard.as_ref() else {

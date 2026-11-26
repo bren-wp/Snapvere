@@ -2,7 +2,7 @@
 //! Recorder worker loop. The worker owns frame capture and encoder finalization.
 
 use super::pixels::{
-    allocate_bgra, bgra_to_rgba_image, crop_bgra, pixelate_bgra, validate_source_geometry,
+    allocate_bgra, bgra_to_rgba_image, crop_bgra, validate_source_geometry,
 };
 use super::transport::Source;
 use super::*;
@@ -284,14 +284,8 @@ pub(super) fn run(
             );
         }
 
-        // Redact ide POSLIJE kursora: ako je pokazivač nad zamagljenim poljem,
-        // i on mora nestati. Destruktivno je — original nikad ne dođe do enkodera.
-        {
-            let rects = crate::state::lock(&ctl.blur);
-            for r in rects.iter() {
-                pixelate_bgra(&mut frame_buf, ow, oh, r);
-            }
-        }
+        // Apply the captured mask revision after cursor composition and before encoding.
+        let mask_revision = ctl.apply_frame_masks(&mut frame_buf);
 
         if let Some(preview) = &ctl.preview {
             if let Err(error) = crate::state::lock(preview).compose(&mut frame_buf) {
@@ -319,6 +313,8 @@ pub(super) fn run(
             recording_error = Some(error);
             break;
         }
+
+        ctl.acknowledge_encoded_masks(mask_revision);
 
         if let Some(preview) = &ctl.preview {
             let id = ctl.frames.load(Ordering::Relaxed) + 1;

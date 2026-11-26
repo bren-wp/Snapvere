@@ -1769,7 +1769,7 @@ pub fn set_blur_regions(
     rects: Vec<PixelRect>,
     viewport_width: u32,
     viewport_height: u32,
-) -> Result<(), String> {
+) -> Result<u64, String> {
     require_window_label(window.label(), &["recdraw"])?;
     let size = window.inner_size().map_err(estr)?;
     let scale = window.scale_factor().map_err(estr)?;
