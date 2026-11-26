@@ -100,6 +100,7 @@ export interface RecordOptions {
 }
 
 export interface RecordStatus {
+  sessionId?: string | null;
   phase: RecordPhase;
   elapsedMs: number;
   frames: number;
@@ -143,6 +144,7 @@ export type RecTool = AnnotationTool | "off";
 
 /** Poruka `snapvere:draw-tool` — HUD je izvor istine za alat, boju i debljinu. */
 export interface DrawToolMsg {
+  sessionId: string;
   tool: RecTool;
   color?: string;
   size?: number;

@@ -237,6 +237,7 @@ pub struct RecFrameRect {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecordStatus {
+    pub session_id: Option<String>,
     pub phase: RecordPhase,
     /// Trajanje snimljenog materijala u milisekundama (pauza se ne broji).
     pub elapsed_ms: u64,
@@ -254,6 +255,7 @@ pub struct RecordStatus {
 impl RecordStatus {
     pub fn idle() -> Self {
         Self {
+            session_id: None,
             phase: RecordPhase::Idle,
             elapsed_ms: 0,
             frames: 0,

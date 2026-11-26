@@ -63,6 +63,7 @@ export default function RecBar() {
   const [size, setSize] = useState(6);
   const [palette, setPalette] = useState(false);
   const closing = useRef(false);
+  const sessionRef = useRef<string | null>(null);
 
   // A 58px native HUD clips popovers positioned above its toolbar. Ask Rust
   // for a taller window only while the palette or an error is visible.
@@ -74,9 +75,16 @@ export default function RecBar() {
 
   // Tick iz Rusta (~4x/s) je izvor istine za tajmer — nema drifta u JS-u.
   useEffect(() => {
+    let active = true;
+    let seenState = false;
     const subs = [
-      listen<RecordStatus>("snapvere:rec-tick", (e) => setStatus(e.payload)),
+      listen<RecordStatus>("snapvere:rec-tick", (e) => {
+        if (e.payload.sessionId === sessionRef.current) setStatus(e.payload);
+      }),
       listen<RecordStatus>("snapvere:rec-state", (e) => {
+        if (!active) return;
+        seenState = true;
+        sessionRef.current = e.payload.sessionId ?? null;
         setStatus(e.payload);
         // Novo snimanje (prozor HUD-a živi između snimanja, komponenta se ne remounta):
         // otključaj Stop/Odbaci — inače bi nakon prvog snimanja zauvijek ostali mrtvi.
@@ -89,22 +97,34 @@ export default function RecBar() {
         // click-through nakon zatvaranja, pa bi "zalijepljen" alat samo zbunjivao.
         setTool("off");
         setPalette(false);
-        void emit("snapvere:draw-tool", { tool: "off" });
         void ipc.closeRecHud();
       }),
       // Sloj za crtanje može sam ugasiti alat (Esc) — traka mora pratiti.
-      listen<DrawToolMsg>("snapvere:draw-tool", (e) => setTool(e.payload.tool)),
+      listen<DrawToolMsg>("snapvere:draw-tool", (e) => {
+        // Only the active overlay can turn off the current tool.
+        if (e.payload.sessionId === sessionRef.current) setTool(e.payload.tool);
+      }),
     ];
     // Prvi status odmah, da traka ne bljesne prazna.
-    void ipc.recordingStatus().then(setStatus).catch(() => undefined);
+    void Promise.all(subs).then(async () => {
+      if (!active) return;
+      const initial = await ipc.recordingStatus();
+      if (active && !seenState) {
+        sessionRef.current = initial.sessionId ?? null;
+        setStatus(initial);
+      }
+    }).catch(() => undefined);
     return () => {
-      subs.forEach((s) => void s.then((un) => un()));
+      active = false;
+      subs.forEach((s) => void s.then((un) => un()).catch(() => undefined));
     };
   }, []);
 
   const sendTool = useCallback((t: RecTool, c: string, s: number) => {
-    void emit("snapvere:draw-tool", { tool: t, color: c, size: s });
-  }, []);
+    if (status?.sessionId) {
+      void emit("snapvere:draw-tool", { tool: t, color: c, size: s, sessionId: status.sessionId });
+    }
+  }, [status?.sessionId]);
 
   const pickTool = (t: RecTool) => {
     const next = t === tool && t !== "off" ? "off" : t;
@@ -117,10 +137,12 @@ export default function RecBar() {
   const finishing = status?.phase === "finishing";
 
   const togglePause = useCallback(async () => {
-    if (busy || finishing) return;
+    if (busy || finishing || !status?.sessionId) return;
+    const sessionId = status.sessionId;
     setBusy(true);
     try {
-      setStatus(await ipc.pauseRecording(!paused));
+      const next = await ipc.pauseRecording(!paused, sessionId);
+      if (sessionRef.current === sessionId) setStatus(next);
       setActionError(null);
     } catch (error) {
       console.error(error);
@@ -128,7 +150,7 @@ export default function RecBar() {
     } finally {
       setBusy(false);
     }
-  }, [busy, finishing, paused, t]);
+  }, [busy, finishing, paused, status?.sessionId, t]);
 
   const stop = useCallback(async () => {
     try {
@@ -205,7 +227,7 @@ export default function RecBar() {
       <button
         title={t("Undo")}
         aria-label={t("Undo")}
-        onClick={() => void emit("snapvere:draw-undo")}
+        onClick={() => status?.sessionId && void emit("snapvere:draw-undo", { sessionId: status.sessionId })}
         className="grid h-8 w-8 shrink-0 place-items-center rounded-lg transition hover:bg-white/15"
       >
         <Undo2 size={15} />
@@ -213,7 +235,7 @@ export default function RecBar() {
       <button
         title={t("Clear all drawings")}
         aria-label={t("Clear all drawings")}
-        onClick={() => void emit("snapvere:draw-clear")}
+        onClick={() => status?.sessionId && void emit("snapvere:draw-clear", { sessionId: status.sessionId })}
         className="grid h-8 w-8 shrink-0 place-items-center rounded-lg transition hover:bg-white/15"
       >
         <Eraser size={15} />

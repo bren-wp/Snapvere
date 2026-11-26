@@ -1618,13 +1618,14 @@ pub fn pause_recording(
     window: tauri::WebviewWindow,
     app: AppHandle,
     paused: bool,
+    session_id: String,
 ) -> Result<RecordStatus, String> {
     if paused {
         require_window_label(window.label(), &["recbar", "recdraw"])?;
     } else {
         require_window_label(window.label(), &["recbar"])?;
     }
-    record::set_paused(&app, paused)
+    record::set_paused_for_session(&app, paused, &session_id)
 }
 
 #[tauri::command]
@@ -1764,6 +1765,7 @@ pub fn set_draw_interactive(
 pub fn set_blur_regions(
     window: tauri::WebviewWindow,
     app: AppHandle,
+    session_id: String,
     rects: Vec<PixelRect>,
     viewport_width: u32,
     viewport_height: u32,
@@ -1773,6 +1775,7 @@ pub fn set_blur_regions(
     let scale = window.scale_factor().map_err(estr)?;
     record::set_blur_regions(
         &app,
+        &session_id,
         rects,
         (viewport_width, viewport_height),
         (size.width, size.height),

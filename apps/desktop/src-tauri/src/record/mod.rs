@@ -26,6 +26,7 @@ pub(crate) mod linux_audio;
 mod linux_mp4;
 mod pixels;
 pub(crate) mod preview;
+mod session_privacy;
 mod transport;
 #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
 pub(crate) mod wayland;
@@ -93,6 +94,7 @@ pub struct RecordTarget {
 
 /// Dijeljeno stanje između UI dretve i snimatelja. Samo atomici — bez zaključavanja.
 pub struct Ctl {
+    session_id: String,
     phase: AtomicU8,
     stop: AtomicBool,
     cancel: AtomicBool,
@@ -119,6 +121,7 @@ pub struct Ctl {
 impl Ctl {
     fn status(&self) -> RecordStatus {
         RecordStatus {
+            session_id: Some(self.session_id.clone()),
             phase: match self.phase.load(Ordering::Relaxed) {
                 PHASE_RECORDING => RecordPhase::Recording,
                 PHASE_PAUSED => RecordPhase::Paused,
@@ -275,6 +278,7 @@ pub fn start(
     let preview = portal_preview.then(|| Mutex::new(preview::Preview::new(ow, oh)));
 
     let ctl = Arc::new(Ctl {
+        session_id: uuid::Uuid::new_v4().simple().to_string(),
         phase: AtomicU8::new(PHASE_RECORDING),
         stop: AtomicBool::new(false),
         cancel: AtomicBool::new(false),
@@ -425,6 +429,7 @@ fn bounded_blur_rects(
 
 pub fn set_blur_regions(
     app: &AppHandle,
+    session_id: &str,
     rects: Vec<PixelRect>,
     viewport: (u32, u32),
     surface: (u32, u32),
@@ -435,14 +440,9 @@ pub fn set_blur_regions(
     let Some(session) = guard.as_ref() else {
         return Err("nema aktivnog snimanja".into());
     };
-    let ctl = &session.ctl;
-    if surface != (ctl.width, ctl.height) {
-        return Err("Redaction window does not match the recording dimensions".into());
-    }
-    let mapped = pixels::map_redaction_rects(&rects, viewport, surface, scale)?;
-    let bounded = bounded_blur_rects(&mapped, ctl.width, ctl.height)?;
-    *crate::state::lock(&ctl.blur) = bounded;
-    Ok(())
+    session
+        .ctl
+        .replace_blur(session_id, &rects, viewport, surface, scale)
 }
 
 // Preview windows are shown only after the worker acknowledges its pause.
@@ -568,10 +568,29 @@ pub fn resume_crop_preview(
 }
 
 pub fn set_paused(app: &AppHandle, paused: bool) -> Result<RecordStatus, String> {
+    set_paused_inner(app, paused, None)
+}
+
+pub fn set_paused_for_session(
+    app: &AppHandle,
+    paused: bool,
+    session_id: &str,
+) -> Result<RecordStatus, String> {
+    set_paused_inner(app, paused, Some(session_id))
+}
+
+fn set_paused_inner(
+    app: &AppHandle,
+    paused: bool,
+    session_id: Option<&str>,
+) -> Result<RecordStatus, String> {
     {
         let state = app.state::<AppState>();
         let slot = crate::state::lock(&state.recorder);
         let ctl = &slot.as_ref().ok_or("No active recording")?.ctl;
+        if let Some(expected) = session_id {
+            ctl.check_live_session(expected)?;
+        }
         let current = ctl.phase.load(Ordering::SeqCst);
         if paused && current == PHASE_RECORDING {
             ctl.pause_ack.store(false, Ordering::Release);
