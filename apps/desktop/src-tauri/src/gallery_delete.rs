@@ -99,34 +99,72 @@ fn validate_job(job: &PendingDeletion) -> Result<()> {
 }
 
 #[cfg(target_os = "linux")]
-fn rename_noreplace(source: &Path, destination: &Path) -> Result<()> {
+fn rename_verified_noreplace(source: &Path, destination: &Path, expected: &str) -> Result<()> {
     use rustix::fs::{renameat_with, RenameFlags, CWD};
+    // Linux has no identity-conditional rename; retain the post-rename
+    // verification at the caller and fail closed on detected conflicts.
+    verify_leaf(source, expected)?;
     renameat_with(CWD, source, CWD, destination, RenameFlags::NOREPLACE)?;
     Ok(())
 }
 
 #[cfg(windows)]
-fn rename_noreplace(source: &Path, destination: &Path) -> Result<()> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows::core::PCWSTR;
-    use windows::Win32::Storage::FileSystem::MoveFileW;
-
-    let wide = |path: &Path| -> Result<Vec<u16>> {
-        let mut value: Vec<u16> = path.as_os_str().encode_wide().collect();
-        ensure!(!value.contains(&0), "Invalid deletion path");
-        value.push(0);
-        Ok(value)
+fn rename_verified_noreplace(source: &Path, destination: &Path, expected: &str) -> Result<()> {
+    use std::mem::{align_of, offset_of, size_of};
+    use std::os::windows::{ffi::OsStrExt, io::AsRawHandle};
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::Storage::FileSystem::{
+        FileRenameInfo, SetFileInformationByHandle, FILE_RENAME_INFO,
     };
-    let source = wide(source)?;
-    let destination = wide(destination)?;
-    // SAFETY: both buffers are live, NUL-terminated UTF-16 strings.
-    // MoveFileW fails if the target exists.
-    unsafe { MoveFileW(PCWSTR(source.as_ptr()), PCWSTR(destination.as_ptr())) }?;
+
+    ensure!(
+        source.is_absolute()
+            && destination.is_absolute()
+            && source.parent() == destination.parent(),
+        "Gallery rename requires absolute sibling paths"
+    );
+    let (file, identity) = open_leaf(source, true)?;
+    ensure!(
+        expected != "missing" && identity == expected,
+        "Gallery media identity changed"
+    );
+
+    let mut name: Vec<u16> = destination.as_os_str().encode_wide().collect();
+    ensure!(
+        !name.is_empty() && name.len() < 32768 && !name.contains(&0),
+        "Invalid gallery rename destination"
+    );
+    let name_bytes = name.len() * size_of::<u16>();
+    name.push(0);
+    let offset = offset_of!(FILE_RENAME_INFO, FileName);
+    let bytes = size_of::<FILE_RENAME_INFO>().max(offset + name.len() * size_of::<u16>());
+    ensure!(
+        align_of::<FILE_RENAME_INFO>() <= align_of::<usize>(),
+        "Unsupported rename buffer alignment"
+    );
+    let mut buffer = vec![0usize; bytes.div_ceil(size_of::<usize>())];
+    let raw = buffer.as_mut_ptr().cast::<u8>();
+    let info = raw.cast::<FILE_RENAME_INFO>();
+    // SAFETY: the aligned, zero-initialized buffer covers the native header
+    // and complete UTF-16 destination including its terminator. Zero flags
+    // disable replacement; RootDirectory is null for an absolute path.
+    // The verified DELETE-capable File remains alive and denies competing
+    // write/delete handles until SetFileInformationByHandle returns.
+    unsafe {
+        std::ptr::addr_of_mut!((*info).FileNameLength).write(name_bytes as u32);
+        std::ptr::copy_nonoverlapping(name.as_ptr(), raw.add(offset).cast::<u16>(), name.len());
+        SetFileInformationByHandle(
+            HANDLE(file.as_raw_handle()),
+            FileRenameInfo,
+            raw.cast(),
+            bytes as u32,
+        )
+    }?;
     Ok(())
 }
 
 #[cfg(not(any(target_os = "linux", windows)))]
-fn rename_noreplace(_source: &Path, _destination: &Path) -> Result<()> {
+fn rename_verified_noreplace(_source: &Path, _destination: &Path, _expected: &str) -> Result<()> {
     bail!("Safe gallery rename is unsupported on this platform")
 }
 
@@ -261,8 +299,8 @@ fn stage_one(source: &str, staged: &str, identity: Option<&str>) -> Result<()> {
         );
         return Ok(());
     }
-    verify_leaf(&source, expected)?;
-    rename_noreplace(&source, &staged).context("Could not stage media for deletion")?;
+    rename_verified_noreplace(&source, &staged, expected)
+        .context("Could not stage media for deletion")?;
     verify_leaf(&staged, expected)
 }
 
@@ -281,8 +319,8 @@ fn restore_one(source: &str, staged: &str, identity: Option<&str>) -> Result<()>
         return Ok(());
     }
     if exists(&staged)? {
-        verify_leaf(&staged, expected)?;
-        rename_noreplace(&staged, &source).context("Could not restore staged gallery media")?;
+        rename_verified_noreplace(&staged, &source, expected)
+            .context("Could not restore staged gallery media")?;
     }
     verify_leaf(&source, expected)?;
     directory.sync_entries().map_err(anyhow::Error::msg)
@@ -616,9 +654,51 @@ mod tests {
         let target = folder.path().join("target.png");
         fs::write(&source, b"source")?;
         fs::write(&target, b"target")?;
-        assert!(rename_noreplace(&source, &target).is_err());
+        let identity = leaf_identity(&source)?;
+        assert!(rename_verified_noreplace(&source, &target, &identity).is_err());
         assert_eq!(fs::read(source)?, b"source");
         assert_eq!(fs::read(target)?, b"target");
+        Ok(())
+    }
+
+    #[test]
+    fn verified_rename_rejects_replaced_source_and_preserves_destination() -> Result<()> {
+        let folder = tempfile::tempdir()?;
+        let source = folder.path().join("source.png");
+        let target = folder.path().join("target.png");
+        let backup = folder.path().join("original.png");
+        fs::write(&source, b"original")?;
+        let identity = leaf_identity(&source)?;
+        fs::rename(&source, &backup)?;
+        fs::write(&source, b"replacement")?;
+        assert!(rename_verified_noreplace(&source, &target, &identity).is_err());
+        assert_eq!(fs::read(&source)?, b"replacement");
+        assert_eq!(fs::read(&backup)?, b"original");
+        assert!(!target.exists());
+        fs::remove_file(&source)?;
+        fs::rename(&backup, &source)?;
+        rename_verified_noreplace(&source, &target, &identity)?;
+        assert!(!source.exists());
+        assert_eq!(fs::read(&target)?, b"original");
+        assert_eq!(leaf_identity(&target)?, identity);
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn verified_rename_defers_while_source_is_locked() -> Result<()> {
+        let folder = tempfile::tempdir()?;
+        let source = folder.path().join("source.png");
+        let target = folder.path().join("target.png");
+        fs::write(&source, b"original")?;
+        let identity = leaf_identity(&source)?;
+        let (locked, _) = open_leaf(&source, false)?;
+        assert!(rename_verified_noreplace(&source, &target, &identity).is_err());
+        assert_eq!(fs::read(&source)?, b"original");
+        assert!(!target.exists());
+        drop(locked);
+        rename_verified_noreplace(&source, &target, &identity)?;
+        assert_eq!(fs::read(target)?, b"original");
         Ok(())
     }
 
