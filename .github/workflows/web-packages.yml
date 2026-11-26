@@ -7,6 +7,10 @@ on:
   workflow_dispatch:
   release:
     types: [published, released]
+  workflow_run:
+    workflows: [Snapvere Windows and Linux preview release]
+    types: [completed]
+    branches: [main]
 permissions:
   contents: read
 concurrency:
@@ -14,6 +18,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   package:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -34,6 +39,7 @@ jobs:
           python tools/test_update_site.py
           unzip -t web-packages/snpv.re-English.zip
           unzip -t web-packages/update.snapvere.com-English.zip
+          python tools/test_web_packages.py web-packages
       - uses: actions/upload-artifact@v4
         with:
           name: Snapvere-English-domain-root-packages
