@@ -60,8 +60,14 @@ export async function createShareServer({storage,key,now=Date.now}){
   try{
    const path=req.url;
    if(!path||!path.startsWith("/")||path.includes("?")||path.includes("#"))return unavailable(res);
-   if(path==="/api/v1/shares"&&req.method==="OPTIONS"&&origins.has(origin)){
-    res.writeHead(204,{"Access-Control-Allow-Methods":"POST","Access-Control-Allow-Headers":"authorization, content-type, x-share-ttl"});return res.end();
+   if(req.method==="OPTIONS"&&origins.has(origin)){
+    if(path==="/api/v1/shares"&&req.headers["access-control-request-method"]==="POST"){
+     res.writeHead(204,{"Access-Control-Allow-Methods":"POST","Access-Control-Allow-Headers":"authorization, content-type, x-share-ttl"});return res.end();
+    }
+    if(/^\/api\/v1\/shares\/[A-Za-z0-9_-]{43}$/.test(path)&&req.headers["access-control-request-method"]==="DELETE"){
+     res.writeHead(204,{"Access-Control-Allow-Methods":"DELETE","Access-Control-Allow-Headers":"authorization"});return res.end();
+    }
+    return unavailable(res);
    }
    if(req.method==="GET"&&assets.has(path)){const [file,type]=assets.get(path);const data=await readFile(file);res.writeHead(200,{"Content-Type":type});return res.end(data);}
    if(req.method==="GET"&&(path==="/"||tokenRE.test(path.slice(1)))){const data=await readFile(join(here,"index.html"));res.writeHead(200,{"Content-Type":"text/html; charset=utf-8"});return res.end(data);}
@@ -93,7 +99,7 @@ export async function createShareServer({storage,key,now=Date.now}){
    const meta=JSON.parse(await readFile(join(dir,"meta.json"),"utf8"));
    if(req.method==="DELETE"&&!media){
     const secret=req.headers.authorization?.slice(7)||"";
-    if(!req.headers.authorization?.startsWith("Bearer ")||!tokenRE.test(secret)||hash(secret)!==meta.revoke)return unavailable(res);
+    if(!req.headers.authorization?.startsWith("Bearer ")||!tokenRE.test(secret)||typeof meta.revoke!=="string"||! /^[0-9a-f]{64}$/.test(meta.revoke)||!timingSafeEqual(Buffer.from(hash(secret),"hex"),Buffer.from(meta.revoke,"hex")))return unavailable(res);
     await rm(dir,{recursive:true,force:true});res.writeHead(204);return res.end();
    }
    if(req.method!=="GET"||!Object.hasOwn(mime,meta.type)||!Number.isSafeInteger(meta.size)||meta.size<1||meta.size>limit||!Number.isSafeInteger(meta.expiresAt)||meta.expiresAt<=now())return unavailable(res);

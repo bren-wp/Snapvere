@@ -112,6 +112,7 @@ protected_ipc = {
     "open_media": ["home"],
     "reveal_media": ["home"],
     "copy_media_path": ["home"],
+    "read_share_media": ["home"],
     "copy_media_image": ["home"],
     "log_file_path": ["settings"],
     "open_capture_folder": ["home", "settings"],

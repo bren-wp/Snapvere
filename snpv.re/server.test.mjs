@@ -23,6 +23,10 @@ test("one-use upload, private retrieval, range, revocation and expiry",async()=>
   const meta=await (await fetch(endpoint)).json();assert.equal(meta.revoke,undefined);
   const media=await fetch(endpoint+"/media",{headers:{Range:"bytes=0-7"}});assert.equal(media.status,206);assert.deepEqual(Buffer.from(await media.arrayBuffer()),png.subarray(0,8));
   assert.equal(media.headers.get("cache-control"),"no-store");
+  const cors=await fetch(endpoint,{method:"OPTIONS",headers:{Origin:"http://tauri.localhost","Access-Control-Request-Method":"DELETE","Access-Control-Request-Headers":"authorization"}});
+  assert.equal(cors.status,204);assert.equal(cors.headers.get("access-control-allow-methods"),"DELETE");
+  const denied=await fetch(endpoint,{method:"OPTIONS",headers:{Origin:"https://other.invalid","Access-Control-Request-Method":"DELETE"}});
+  assert.equal(denied.status,404);assert.equal(denied.headers.get("access-control-allow-origin"),null);
   assert.equal((await fetch(endpoint,{method:"DELETE",headers:{Authorization:"Bearer invalid"}})).status,404);
   assert.equal((await fetch(endpoint,{method:"DELETE",headers:{Authorization:"Bearer "+share.revocation}})).status,204);
   assert.equal((await fetch(endpoint)).status,404);

@@ -3,7 +3,25 @@ const SHARE_ENDPOINT = "https://snpv.re/api/v1/shares";
 const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
 const grantPattern = /^\d{13}\.[A-Za-z0-9_-]{32}\.[A-Za-z0-9_-]{43}$/;
 const mime: Record<string, string> = { png:"image/png", jpg:"image/jpeg", jpeg:"image/jpeg", webp:"image/webp", gif:"image/gif", mp4:"video/mp4" };
-export function shareMime(format: string) { return mime[format.toLowerCase()]; }
+export function shareMime(format: string) {
+  const key = format.toLowerCase();
+  return Object.hasOwn(mime, key) ? mime[key] : undefined;
+}
+export function shareToken(url: string): string {
+  const link = new URL(url);
+  if (link.origin !== "https://snpv.re" || link.username || link.password || link.search || link.hash || !tokenPattern.test(link.pathname.slice(1))) throw new Error("Invalid share URL");
+  return link.pathname.slice(1);
+}
+export async function revokeCapture(url: string, secret: string, signal: AbortSignal) {
+  const token = shareToken(url);
+  if (!tokenPattern.test(secret)) throw new Error("Invalid revocation secret");
+  const response = await fetch(SHARE_ENDPOINT + "/" + token, {
+    method: "DELETE", credentials: "omit", redirect: "error", cache: "no-store",
+    referrerPolicy: "no-referrer", signal,
+    headers: { Authorization: "Bearer " + secret },
+  });
+  if (response.status !== 204) throw new Error("Revocation not confirmed");
+}
 export async function uploadCapture(bytes: ArrayBuffer, format: string, grant: string, ttl: number, signal: AbortSignal) {
   const type = shareMime(format);
   if (!type || bytes.byteLength < 1 || bytes.byteLength > 16 * 1024 * 1024 || !grantPattern.test(grant) || ![3600,86400,604800].includes(ttl)) throw new Error("Invalid share request");
@@ -16,9 +34,8 @@ export async function uploadCapture(bytes: ArrayBuffer, format: string, grant: s
   if (!response.ok) throw new Error("Share rejected");
   const data = await response.json() as { url?: unknown; expiresAt?: unknown; revocation?: unknown };
   if (typeof data.url !== "string" || typeof data.expiresAt !== "number" || !Number.isSafeInteger(data.expiresAt) || typeof data.revocation !== "string" || !tokenPattern.test(data.revocation)) throw new Error("Invalid share response");
-  const link = new URL(data.url);
-  if (link.origin !== "https://snpv.re" || link.username || link.password || link.search || link.hash || !tokenPattern.test(link.pathname.slice(1))) throw new Error("Invalid share URL");
-  return { url: link.href, expiresAt: data.expiresAt, revocation: data.revocation };
+  const token = shareToken(data.url);
+  return { url: "https://snpv.re/" + token, expiresAt: data.expiresAt, revocation: data.revocation };
 }
 const labels: Record<string, readonly string[]> = {
  en:["Share capture","One-time upload code","Expires after","Upload and create link","Close","Uploading…","Sharing failed. Check your code, connection and file size (16 MiB maximum).","Anyone with the link can view the original. Check sensitive content before uploading.","Share link","Revocation code — keep private","Copy link","Copied","1 hour","24 hours","7 days"],
@@ -37,4 +54,23 @@ const labels: Record<string, readonly string[]> = {
 export function shareCopy(language: string) {
  const [title,code,expiry,upload,close,busy,failed,warning,link,revoke,copy,copied,hour,day,week] = labels[language] ?? labels.en;
  return {title,code,expiry,upload,close,busy,failed,warning,link,revoke,copy,copied,hour,day,week};
+}
+
+const actionLabels: Record<string, readonly [string,string,string,string,string,string]> = {
+ en:["Cancel transfer","Revoke link","Revoke this link? Existing downloads cannot be recalled.","Link revoked","Could not confirm revocation. Keep your revocation code.","Transfer stopped. If the server already accepted it, the link may remain active until expiry."],
+ hr:["Otkaži prijenos","Opozovi poveznicu","Opozvati ovu poveznicu? Preuzete datoteke nije moguće povući.","Poveznica opozvana","Opoziv nije potvrđen. Sačuvajte kod za opoziv.","Prijenos zaustavljen. Ako ga je poslužitelj već prihvatio, poveznica može ostati aktivna do isteka."],
+ de:["Übertragung abbrechen","Link widerrufen","Link widerrufen? Bereits heruntergeladene Dateien bleiben erhalten.","Link widerrufen","Widerruf nicht bestätigt. Widerrufscode aufbewahren.","Übertragung beendet. Bereits akzeptierte Links können bis zum Ablauf aktiv bleiben."],
+ es:["Cancelar transferencia","Revocar enlace","¿Revocar enlace? Las descargas existentes no se pueden retirar.","Enlace revocado","Revocación no confirmada. Guarda el código.","Transferencia detenida. Un enlace ya aceptado puede seguir activo hasta caducar."],
+ fr:["Annuler le transfert","Révoquer le lien","Révoquer ce lien ? Les téléchargements existants restent accessibles.","Lien révoqué","Révocation non confirmée. Gardez le code.","Transfert arrêté. Un lien déjà accepté peut rester actif jusqu’à expiration."],
+ it:["Annulla trasferimento","Revoca link","Revocare il link? I download esistenti non possono essere ritirati.","Link revocato","Revoca non confermata. Conserva il codice.","Trasferimento interrotto. Un link già accettato può restare attivo fino alla scadenza."],
+ pt:["Cancelar transferência","Revogar ligação","Revogar esta ligação? Não é possível recuperar ficheiros já descarregados.","Ligação revogada","Revogação não confirmada. Guarde o código.","Transferência interrompida. Uma ligação já aceite pode permanecer ativa até expirar."],
+ nl:["Overdracht annuleren","Link intrekken","Link intrekken? Bestaande downloads kunnen niet worden teruggehaald.","Link ingetrokken","Intrekking niet bevestigd. Bewaar de code.","Overdracht gestopt. Een geaccepteerde link kan actief blijven tot de vervaldatum."],
+ pl:["Anuluj przesyłanie","Unieważnij link","Unieważnić link? Pobranych plików nie można wycofać.","Link unieważniony","Nie potwierdzono unieważnienia. Zachowaj kod.","Przesyłanie zatrzymane. Zaakceptowany link może działać do wygaśnięcia."],
+ cs:["Zrušit přenos","Zneplatnit odkaz","Zneplatnit odkaz? Stažené soubory nelze vzít zpět.","Odkaz zneplatněn","Zneplatnění nepotvrzeno. Uchovejte kód.","Přenos zastaven. Přijatý odkaz může zůstat aktivní do vypršení."],
+ sk:["Zrušiť prenos","Zneplatniť odkaz","Zneplatniť odkaz? Stiahnuté súbory nemožno vziať späť.","Odkaz zneplatnený","Zneplatnenie nepotvrdené. Uchovajte kód.","Prenos zastavený. Prijatý odkaz môže zostať aktívny do vypršania."],
+ sl:["Prekliči prenos","Prekliči povezavo","Preklic povezave? Prenesenih datotek ni mogoče priklicati nazaj.","Povezava preklicana","Preklic ni potrjen. Shranite kodo.","Prenos ustavljen. Sprejeta povezava lahko ostane aktivna do poteka."],
+};
+export function shareActionCopy(language: string) {
+  const [cancel,revoke,confirm,revoked,revokeFailed,cancelled] = actionLabels[language] ?? actionLabels.en;
+  return {cancel,revoke,confirm,revoked,revokeFailed,cancelled};
 }
