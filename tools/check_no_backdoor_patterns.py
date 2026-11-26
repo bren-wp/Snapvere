@@ -62,6 +62,7 @@ for path in CODE:
             and line.strip() in {
                 "const response = await fetch(SHARE_ENDPOINT, {",
                 'const response = await fetch(SHARE_ENDPOINT + "/" + token, {',
+                'const response = await fetch(SHARE_ENDPOINT + "/recover", {',
             }
         )
         if pattern.search(line) and not (official_feed or explicit_share):

@@ -39,6 +39,13 @@ function grantValid(key,grant,now){
  const [expiry,nonce,sig]=grant.split(".");
  return Number(expiry)>now && Number(expiry)<=now+86400000 && timingSafeEqual(Buffer.from(sig),Buffer.from(createHmac("sha256",key).update(expiry+"."+nonce).digest("base64url")));
 }
+// Domain-separated capabilities can be reconstructed only by the server
+// while an authenticated original grant is still valid. No plaintext token
+// or revocation secret is stored on disk.
+function grantCapabilities(key,grant){
+ const derive=purpose=>createHmac("sha256",key).update("snapvere-share-v1:"+purpose+":").update(grant).digest("base64url");
+ return {token:derive("view"),revocation:derive("revoke")};
+}
 function range(value,size){
  if(!value)return [0,size-1];
  const m=/^bytes=(\d*)-(\d*)$/.exec(value);
@@ -162,6 +169,9 @@ export async function createShareServer({storage,key,now=Date.now,quotaBytes=def
    const path=req.url;
    if(!path||!path.startsWith("/")||path.includes("?")||path.includes("#"))return unavailable(res);
    if(req.method==="OPTIONS"&&origins.has(origin)){
+    if(path==="/api/v1/shares/recover"&&req.headers["access-control-request-method"]==="POST"){
+     res.writeHead(204,{"Access-Control-Allow-Methods":"POST","Access-Control-Allow-Headers":"authorization"});return res.end();
+    }
     if(path==="/api/v1/shares"&&req.headers["access-control-request-method"]==="POST"){
      res.writeHead(204,{"Access-Control-Allow-Methods":"POST","Access-Control-Allow-Headers":"authorization, content-type, x-share-ttl"});return res.end();
     }
@@ -172,6 +182,18 @@ export async function createShareServer({storage,key,now=Date.now,quotaBytes=def
    }
    if(req.method==="GET"&&assets.has(path)){const [file,type]=assets.get(path);const data=await readFile(file);res.writeHead(200,{"Content-Type":type});return res.end(data);}
    if(req.method==="GET"&&(path==="/"||tokenRE.test(path.slice(1)))){const data=await readFile(join(here,"index.html"));res.writeHead(200,{"Content-Type":"text/html; charset=utf-8"});return res.end(data);}
+   if(req.method==="POST"&&path==="/api/v1/shares/recover"){
+    const grant=req.headers.authorization?.startsWith("Bearer ")?req.headers.authorization.slice(7):"";
+    if(!grantValid(key,grant,now()))return json(res,401,{error:"Valid upload code required"});
+    if(req.headers["transfer-encoding"]||Number(req.headers["content-length"]||0)!==0)return json(res,400,{error:"Unexpected body"});
+    const {token,revocation}=grantCapabilities(key,grant);
+    const dir=join(root,hash(token));
+    const meta=await verifiedMetadata(dir);
+    if(meta.expiresAt<=now()||meta.grant!==hash(grant)||!timingSafeEqual(Buffer.from(hash(revocation),"hex"),Buffer.from(meta.revoke,"hex")))return unavailable(res);
+    const media=await lstat(join(dir,"media"));
+    if(!media.isFile()||media.isSymbolicLink()||media.nlink!==1||media.size!==meta.size)return unavailable(res);
+    return json(res,200,{url:"https://snpv.re/"+token,expiresAt:meta.expiresAt,revocation});
+   }
    if(req.method==="POST"&&path==="/api/v1/shares"){
     const grant=req.headers.authorization?.startsWith("Bearer ")?req.headers.authorization.slice(7):"";
     if(!grantValid(key,grant,now()))return json(res,401,{error:"Valid upload code required"});
@@ -188,8 +210,8 @@ export async function createShareServer({storage,key,now=Date.now,quotaBytes=def
      if(res.destroyed)return;
      if(!grantValid(key,grant,now()))return json(res,401,{error:"Upload code expired"});
      try{await mkdir(join(used,hash(grant)),{mode:0o700});}catch(e){if(e.code==="EEXIST")return json(res,409,{error:"Upload code already used"});throw e;}
-     const token=randomBytes(32).toString("base64url"),revocation=randomBytes(32).toString("base64url"),expiresAt=now()+ttl*1000;
-     await writeFile(join(pending,"meta.json"),JSON.stringify({type,size,expiresAt,sha256,revoke:hash(revocation)}),{flag:"wx",mode:0o600,flush:true});
+     const {token,revocation}=grantCapabilities(key,grant),expiresAt=now()+ttl*1000;
+     await writeFile(join(pending,"meta.json"),JSON.stringify({type,size,expiresAt,sha256,grant:hash(grant),revoke:hash(revocation)}),{flag:"wx",mode:0o600,flush:true});
      await rename(pending,join(root,hash(token)));pending=null;
      return json(res,201,{url:"https://snpv.re/"+token,expiresAt,revocation});
     }finally{

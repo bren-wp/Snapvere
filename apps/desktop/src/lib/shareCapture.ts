@@ -31,7 +31,20 @@ export async function uploadCapture(bytes: ArrayBuffer, format: string, grant: s
     headers: { Authorization: "Bearer " + grant, "Content-Type": type, "X-Share-TTL": String(ttl) },
     body: bytes,
   });
-  if (!response.ok) throw new Error("Share rejected");
+  if (response.status !== 201) throw new Error("Share rejected");
+  return parseShareResponse(response);
+}
+export async function recoverCapture(grant: string, signal: AbortSignal) {
+  if (!grantPattern.test(grant)) throw new Error("Invalid upload code");
+  const response = await fetch(SHARE_ENDPOINT + "/recover", {
+    method: "POST", credentials: "omit", redirect: "error", cache: "no-store",
+    referrerPolicy: "no-referrer", signal,
+    headers: { Authorization: "Bearer " + grant },
+  });
+  if (response.status !== 200) throw new Error("No recoverable share");
+  return parseShareResponse(response);
+}
+async function parseShareResponse(response: Response) {
   const data = await response.json() as { url?: unknown; expiresAt?: unknown; revocation?: unknown };
   if (typeof data.url !== "string" || typeof data.expiresAt !== "number" || !Number.isSafeInteger(data.expiresAt) || typeof data.revocation !== "string" || !tokenPattern.test(data.revocation)) throw new Error("Invalid share response");
   const token = shareToken(data.url);
@@ -73,4 +86,23 @@ const actionLabels: Record<string, readonly [string,string,string,string,string,
 export function shareActionCopy(language: string) {
   const [cancel,revoke,confirm,revoked,revokeFailed,cancelled] = actionLabels[language] ?? actionLabels.en;
   return {cancel,revoke,confirm,revoked,revokeFailed,cancelled};
+}
+
+const recoveryLabels: Record<string, readonly [string,string,string]> = {
+ en:["Recover existing link","Recover the link previously created with this upload code. No file is sent.","No link recovered. Check the code and its expiry."],
+ hr:["Dohvati postojeću poveznicu","Dohvati poveznicu prethodno stvorenu ovim kodom. Datoteka se ne šalje.","Poveznica nije dohvaćena. Provjerite kod i njegov rok valjanosti."],
+ de:["Vorhandenen Link wiederherstellen","Den mit diesem Upload-Code erstellten Link abrufen. Es wird keine Datei gesendet.","Kein Link gefunden. Code und Ablauf prüfen."],
+ es:["Recuperar enlace existente","Recupera el enlace creado con este código. No se envía ningún archivo.","No se recuperó ningún enlace. Comprueba el código y su caducidad."],
+ fr:["Récupérer le lien existant","Récupérez le lien créé avec ce code. Aucun fichier n’est envoyé.","Aucun lien récupéré. Vérifiez le code et son expiration."],
+ it:["Recupera link esistente","Recupera il link creato con questo codice. Nessun file viene inviato.","Nessun link recuperato. Controlla il codice e la scadenza."],
+ pt:["Recuperar ligação existente","Recupere a ligação criada com este código. Nenhum ficheiro é enviado.","Nenhuma ligação recuperada. Verifique o código e a validade."],
+ nl:["Bestaande link herstellen","Haal de link op die met deze code is gemaakt. Er wordt geen bestand verzonden.","Geen link opgehaald. Controleer de code en vervaldatum."],
+ pl:["Odzyskaj istniejący link","Odzyskaj link utworzony za pomocą tego kodu. Plik nie jest wysyłany.","Nie odzyskano linku. Sprawdź kod i jego ważność."],
+ cs:["Obnovit existující odkaz","Obnovte odkaz vytvořený tímto kódem. Soubor se neodesílá.","Odkaz nebyl obnoven. Zkontrolujte kód a platnost."],
+ sk:["Obnoviť existujúci odkaz","Obnovte odkaz vytvorený týmto kódom. Súbor sa neodosiela.","Odkaz nebol obnovený. Skontrolujte kód a platnosť."],
+ sl:["Obnovi obstoječo povezavo","Pridobite povezavo, ustvarjeno s to kodo. Datoteka se ne pošlje.","Povezava ni bila obnovljena. Preverite kodo in veljavnost."],
+};
+export function shareRecoveryCopy(language:string){
+ const [recover,explanation,failed]=recoveryLabels[language]??recoveryLabels.en;
+ return {recover,explanation,failed};
 }
