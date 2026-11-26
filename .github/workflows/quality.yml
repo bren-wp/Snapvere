@@ -55,6 +55,11 @@ jobs:
         run: node --test snpv.re/server.test.mjs
       - name: Verify update website and all edition download routes
         run: python tools/test_update_site.py
+      - name: Lint PHP shared-host sharing service
+        run: |
+          php -l deploy/snpv.re/index.php
+          php -l deploy/snpv.re/service.php
+          php -l deploy/snpv.re/setup.php
       - name: Verify Snapvere by Brendigo source headers
         run: python tools/check_source_headers.py
       - name: Enforce reachable Rust modules (dead-code graph)

@@ -24,6 +24,10 @@ TAURI_PREVIEW = r"""
       return Promise.resolve(new Response(JSON.stringify({
         product: "snapvere-tauri-windows",
         version: scenario ? "999.0.0" : "0.0.0",
+        channel: "stable",
+        packages: ["Snapvere", "Snapvere-Pro"].flatMap(prefix =>
+          ["-Setup.exe", "-Setup.msi", "-Portable.exe", "-Linux-amd64.deb", "-Linux-x86_64.AppImage"]
+            .map(suffix => ({name:prefix+suffix,size:1500000,sha256:"a".repeat(64)}))),
         notes: scenario ? "Preview of the update-notification design" : ""
       }), { status: 200, headers: { "content-type": "application/json" } }));
     }
@@ -215,8 +219,8 @@ with sync_playwright() as p:
     update_preview.screenshot(path=str(OUTPUT / "home-update-available.png"))
     update_preview.close()
 
-    # Linux is rendered with the SAME components, but must not request the
-    # Windows-only update manifest or expose unsupported native recording.
+    # Linux shares the update catalog, but must remain offline by default
+    # and must not expose unsupported native recording features.
     linux_settings = app.new_page()
     linux_settings.goto(
         "http://127.0.0.1:1420/?previewLinux=1&previewUpdate=1#settings",
@@ -233,7 +237,7 @@ with sync_playwright() as p:
     assert linux_settings.get_by_role("switch", name="Include the mouse cursor").is_disabled()
     assert linux_settings.evaluate(
         "() => (window.__SNAPVERE_TEST_UPDATE_REQUESTS || 0) === 0"
-    ), "Linux preview must not request the Windows-only updater manifest"
+    ), "Linux preview must remain offline until explicit update opt-in"
     linux_settings.screenshot(path=str(OUTPUT / "settings-linux-preview.png"))
     linux_settings.close()
 
