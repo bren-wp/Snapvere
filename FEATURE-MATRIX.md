@@ -23,6 +23,6 @@ Evidence: [Snapvere baseline README](https://github.com/bren-wp/Snapvere/blob/b4
 | Configurable naming, post-capture actions, system theme, onboarding | PLANNED / unassessed | Unassessed | Free basic; Pro workflows |
 | Pro entitlement and signed distribution | Unassessed | MISSING / BLOCKED | Verified native gate, offline licenses, user data unaffected |
 | Linux full native recording | Unassessed | EXPERIMENTAL | Free core; real X11/Wayland/PipeWire acceptance |
-| macOS | Cross-platform roadmap | Outside current scope | No scope expansion without approval |
+| macOS | Cross-platform roadmap | PLANNED / native feasibility | Same Free/Pro core; [native parity gates](macOS/README.md); no public package yet |
 
 The owner confirms that Snapvere's first-party source is original. Competitor rows are functional references only, not implementation sources or a determination of code ownership. Complete source-level inventory, remaining roadmap review, versioned tests and rights review are required before promotion. Preserve existing Free features and avoid duplicate implementations. Do not market roadmap items as shipped.
