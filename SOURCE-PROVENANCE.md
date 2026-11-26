@@ -63,3 +63,24 @@ On prior exact revision 2bf117e, [Windows CI](https://github.com/bren-wp/Snapver
 ## Product identity and evidence boundary — cycle 7
 
 The [v0.2.37 frontend CI log](https://github.com/bren-wp/Snapvere/actions/runs/45900021011/job/140183298353) rejected historical competitor names in this evidence report and FEATURE-MATRIX.md. The product identity check now excludes only these two exact root-level evidence files from content scanning. All tracked paths, product source, public website, README, other documentation and original metadata assertions remain checked. Five regression tests verify the narrow boundary and fail-closed Git error handling. The exclusion is not a license grant, a provenance clearance, or permission to distribute affected code. Existing attribution evidence is preserved.
+
+## Extended pinned-baseline source screening — cycle 7
+
+Both baseline Git trees were enumerated without truncation (Snapvere tree 3a4eeaab03a4af52cf9d3fea0de0b76ca9ba791c; reference tree 2f0d357d0f26a41f92fa21dac437b4e25d669df1). Viewer.tsx was located at src/components/Viewer.tsx in both trees, correcting the earlier unsuccessful path lookup. The same retained-line and six-line-window screening was applied to the following complete pinned source blobs.
+
+| Path relative to apps/desktop | Snapvere retained lines | Reference retained lines | Matching lines | Matching 6-line windows | Status |
+|---|---:|---:|---:|---:|---|
+| src/components/Viewer.tsx | 193 | 452 | 116 | 44 | BLOCKED |
+| src-tauri/src/record/dxgi.rs | 182 | 162 | 124 | 76 | BLOCKED |
+| src-tauri/src/record/mp4.rs | 275 | 225 | 204 | 86 | BLOCKED |
+| src-tauri/src/record/gifenc.rs | 196 | 74 | 55 | 18 | BLOCKED |
+
+Blob pairs (Snapvere / reference):
+- Viewer.tsx: 72d7f7b37e3e77a1f6441686b26c4112bbdd74c7 / 122ca4ab84ba4d836002aa9f6682605cc54ae9a4
+- dxgi.rs: ca24d5356900d7d07b15146bf707c2b9c7304a7a / 5170f6b40057b2394fc9cc0edff0099b3b2ec287
+- mp4.rs: 8ca17ca50a7fe272a585df49bb900117a76dadf3 / 364035054d5f568af141e1e3817be5ec65ffeea5
+- gifenc.rs: bd1645f17771720e140ba5776deeaf9baadc59dc / 3ae5e01195767fc2703693238a2253ed998dca38
+
+This extends screening to thirteen baseline file pairs, not a complete semantic clone or rights audit. Shared APIs, common encoder idioms and independently acquired third-party code may account for some matches. The counts alone establish neither authorship nor infringement. The identical site/fonts/LICENSE.txt blob (9b2ca37b3ffc77391d8b2ebef4a974ef32bf46ea) is separately recorded as a third-party notice requiring asset/license inventory, not as evidence of unauthorized reuse. Historical provenance and independent review remain mandatory; no reference code was inserted into Snapvere.
+
+Local product-identity tests: 5 passed, 0 failed. Tested Git blob IDs verified against the prepared commit: afdda30d22045830c6e9f65bc97513396e50a13f (checker), 92f589f2b8f40758e771f82917fe01093559e1e2 (tests).
