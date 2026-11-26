@@ -2,6 +2,8 @@
 
 ## v0.2.36 — Shared media safety and documentation (preview candidate)
 
+- Retain uncommitted gallery recovery intents when neither the original nor staged file is present, including a replaced empty media directory. Add a restart/restore regression; retain current synchronous rollback behavior for already missing files. Apply the exact Rust formatting correction reported by both native CI jobs.
+
 - Share native bounded source opening between Free clipboard copy and Pro batch export. Decode clipboard images from the same bounded byte snapshot used for dimension checks; reject redirected or multiply linked sources, unsupported formats and oversized data. Add regression tests.
 - Refresh product specifications, download and acceptance guidance, documentation index, security audit register and seven-phase roadmap. No new network access or dependencies.
 

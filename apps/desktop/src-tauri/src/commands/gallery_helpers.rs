@@ -66,7 +66,9 @@ pub(super) fn decode_copy_image(path: &Path) -> Result<image::RgbaImage, String>
     let mut header = image::ImageReader::new(Cursor::new(bytes.as_slice()))
         .with_guessed_format()
         .map_err(estr)?;
-    let format = header.format().ok_or("Unsupported clipboard image format")?;
+    let format = header
+        .format()
+        .ok_or("Unsupported clipboard image format")?;
     if !matches!(
         format,
         image::ImageFormat::Png

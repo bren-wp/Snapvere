@@ -209,7 +209,7 @@ fn stage_one(source: &str, staged: &str) -> Result<()> {
     rename_noreplace(&source, &staged).context("Could not stage media for deletion")
 }
 
-fn restore_one(source: &str, staged: &str) -> Result<()> {
+fn restore_one(source: &str, staged: &str, require_original: bool) -> Result<()> {
     let source = Path::new(source);
     let staged = Path::new(staged);
     let directory = pin_parent(source)?;
@@ -218,6 +218,14 @@ fn restore_one(source: &str, staged: &str) -> Result<()> {
     if exists(&staged)? {
         ensure_regular(&staged)?;
         rename_noreplace(&staged, &source).context("Could not restore staged gallery media")?;
+    } else if require_original {
+        // A re-created empty directory or missing volume is not proof that
+        // rollback succeeded. Keep the journal until the media is found.
+        ensure!(
+            exists(&source)?,
+            "Neither original nor staged gallery media is available"
+        );
+        ensure_regular(&source)?;
     }
     Ok(())
 }
@@ -245,16 +253,20 @@ fn stage_files(job: &PendingDeletion) -> Result<()> {
     Ok(())
 }
 
-fn restore_files(job: &PendingDeletion) -> Result<()> {
+fn restore_files_with_policy(job: &PendingDeletion, require_original: bool) -> Result<()> {
     validate_job(job)?;
     // Try both paths even if the first restore failed; never overwrite a destination.
-    let main = restore_one(&job.file_path, &job.staged_file_path);
+    let main = restore_one(&job.file_path, &job.staged_file_path, require_original);
     let thumb = match (&job.thumb_path, &job.staged_thumb_path) {
-        (Some(source), Some(staged)) => restore_one(source, staged),
+        (Some(source), Some(staged)) => restore_one(source, staged, require_original),
         _ => Ok(()),
     };
     main?;
     thumb
+}
+
+fn restore_files(job: &PendingDeletion) -> Result<()> {
+    restore_files_with_policy(job, false)
 }
 
 fn cleanup_files(job: &PendingDeletion) -> Result<()> {
@@ -325,7 +337,8 @@ fn recover_job(db: &Db, job: &PendingDeletion) -> Result<()> {
             shot.file_path == job.file_path && shot.thumb_path == job.thumb_path,
             "Recovery journal does not match gallery media"
         );
-        restore_files(job).context("Could not restore interrupted gallery deletion")
+        restore_files_with_policy(job, true)
+            .context("Could not restore interrupted gallery deletion")
     }
 }
 
@@ -534,6 +547,35 @@ mod tests {
         assert!(db.get(&shot.id)?.is_none());
         assert!(!Path::new(&job.staged_file_path).exists());
         assert!(!Path::new(job.staged_thumb_path.as_deref().unwrap()).exists());
+        assert!(db.pending_deletions()?.is_empty());
+        drop(db);
+        fs::remove_dir_all(folder)?;
+        Ok(())
+    }
+
+    #[test]
+    fn recovery_retains_intent_when_media_directory_is_replaced() -> Result<()> {
+        let (folder, db, shot) = fixture()?;
+        let job = intent(&shot)?;
+        db.prepare_delete(&job)?;
+        stage_files(&job)?;
+        let media = folder.join("media");
+        let offline = folder.join("offline");
+        fs::rename(&media, &offline)?;
+        fs::create_dir(&media)?;
+        drop(db);
+
+        let db = Db::open(&folder.join("gallery.sqlite"))?;
+        assert!(db.get(&shot.id)?.is_some());
+        assert!(db.pending_delete(&shot.id)?.is_some());
+        assert!(!Path::new(&shot.file_path).exists());
+        drop(db);
+
+        fs::remove_dir(&media)?;
+        fs::rename(&offline, &media)?;
+        let db = Db::open(&folder.join("gallery.sqlite"))?;
+        assert_eq!(fs::read(&shot.file_path)?, b"original");
+        assert_eq!(fs::read(shot.thumb_path.as_deref().unwrap())?, b"thumbnail");
         assert!(db.pending_deletions()?.is_empty());
         drop(db);
         fs::remove_dir_all(folder)?;
