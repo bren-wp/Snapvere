@@ -5,7 +5,7 @@ const grantPattern = /^\d{13}\.[A-Za-z0-9_-]{32}\.[A-Za-z0-9_-]{43}$/;
 const mime: Record<string, string> = { png:"image/png", jpg:"image/jpeg", jpeg:"image/jpeg", webp:"image/webp", gif:"image/gif", mp4:"video/mp4" };
 export function shareMime(format: string) {
   const key = format.toLowerCase();
-  return Object.hasOwn(mime, key) ? mime[key] : undefined;
+  return Object.prototype.hasOwnProperty.call(mime, key) ? mime[key] : undefined;
 }
 export function shareToken(url: string): string {
   const link = new URL(url);

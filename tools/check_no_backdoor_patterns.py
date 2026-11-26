@@ -52,14 +52,17 @@ for path in CODE:
             raise AssertionError(
                 f"Native external endpoint requires review: {path}:{number}: {line.strip()}"
             )
-        # The reviewed update feed is the only allowed frontend network call.
+        # Only the reviewed update and explicit share operations may use the network.
         official_feed = (
             path == DESKTOP / "lib/updateFeed.ts"
             and line.strip().startswith("const response = await fetch(UPDATE_FEED_URL,")
         )
         explicit_share = (
             path == DESKTOP / "lib/shareCapture.ts"
-            and line.strip().startswith("const response = await fetch(SHARE_ENDPOINT,")
+            and line.strip() in {
+                "const response = await fetch(SHARE_ENDPOINT, {",
+                'const response = await fetch(SHARE_ENDPOINT + "/" + token, {',
+            }
         )
         if pattern.search(line) and not (official_feed or explicit_share):
             raise AssertionError(

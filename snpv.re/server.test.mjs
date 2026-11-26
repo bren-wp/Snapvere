@@ -1,10 +1,10 @@
 // Snapvere by Brendigo
 import test from "node:test";
 import assert from "node:assert/strict";
-import {mkdtemp,rm} from "node:fs/promises";
+import {mkdtemp,rm,mkdir,writeFile,readFile,stat} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
-import {createShareServer,createGrant} from "./server.mjs";
+import {createShareServer,createGrant,purgeExpired} from "./server.mjs";
 test("one-use upload, private retrieval, range, revocation and expiry",async()=>{
  const storage=await mkdtemp(join(tmpdir(),"snapvere-share-")),key="test-only-secret-12345678901234567890";let clock=1700000000000;
  const server=await createShareServer({storage,key,now:()=>clock});
@@ -31,6 +31,14 @@ test("one-use upload, private retrieval, range, revocation and expiry",async()=>
   assert.equal((await fetch(endpoint,{method:"DELETE",headers:{Authorization:"Bearer "+share.revocation}})).status,204);
   assert.equal((await fetch(endpoint)).status,404);
   const second=await (await upload(createGrant(key,clock+3600000))).json();
+  const malformed=join(storage,"f".repeat(64));
+  await mkdir(malformed);await writeFile(join(malformed,"media"),"preserve");
+  const unrelated=join(storage,"unrelated.txt");await writeFile(unrelated,"keep");
+  assert.deepEqual(await purgeExpired(storage,clock),{removed:0,preserved:1});
   clock+=3600001;assert.equal((await fetch(base+"/api/v1/shares/"+second.url.split("/").pop())).status,404);
+  assert.deepEqual(await purgeExpired(storage,clock),{removed:1,preserved:1});
+  assert.equal(await readFile(join(malformed,"media"),"utf8"),"preserve");
+  assert.equal(await readFile(unrelated,"utf8"),"keep");
+  assert.equal((await stat(malformed)).isDirectory(),true);
  }finally{server.closeAllConnections();await new Promise(r=>server.close(r));await rm(storage,{recursive:true,force:true});}
 });

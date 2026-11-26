@@ -1,7 +1,7 @@
 // Snapvere by Brendigo
 import { createServer } from "node:http";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { mkdir, mkdtemp, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pipeline } from "node:stream/promises";
@@ -45,13 +45,51 @@ function range(value,size){
  const end=m[1]&&m[2]?Math.min(Number(m[2]),size-1):size-1;
  return Number.isSafeInteger(start)&&Number.isSafeInteger(end)&&start>=0&&start<=end&&start<size?[start,end]:null;
 }
+async function storageRoot(storage){
+ if(!storage)throw Error("Private storage required");
+ const root=resolve(storage),repo=await realpath(resolve(here,".."));
+ await mkdir(root,{recursive:true,mode:0o700});
+ const actual=await realpath(root),info=await lstat(root);
+ if(!info.isDirectory()||info.isSymbolicLink()||actual===repo||actual.startsWith(repo+sep))throw Error("Storage must be a private directory outside the repository");
+ if(process.platform!=="win32"&&(info.mode&0o077))throw Error("Private storage permissions required");
+ return actual;
+}
+const shareDirRE=/^[0-9a-f]{64}$/;
+async function verifiedMetadata(dir){
+ const info=await lstat(dir);
+ if(!info.isDirectory()||info.isSymbolicLink())throw Error("Invalid share directory");
+ const metaPath=join(dir,"meta.json"),mi=await lstat(metaPath);
+ if(!mi.isFile()||mi.isSymbolicLink()||mi.size>4096)throw Error("Invalid share metadata");
+ const meta=JSON.parse(await readFile(metaPath,"utf8"));
+ if(!Object.hasOwn(mime,meta.type)||!Number.isSafeInteger(meta.size)||meta.size<1||meta.size>limit||!Number.isSafeInteger(meta.expiresAt)||typeof meta.revoke!=="string"||!shareDirRE.test(meta.revoke))throw Error("Invalid share metadata");
+ return meta;
+}
+// Only recognized, expired server-owned copies may be removed. Unknown,
+// incomplete or malformed records are preserved for explicit operator review.
+export async function purgeExpired(storage,now=Date.now()){
+ const root=await storageRoot(storage);let removed=0,preserved=0;
+ for(const entry of await readdir(root,{withFileTypes:true})){
+  if(!shareDirRE.test(entry.name))continue;
+  const dir=join(root,entry.name);
+  try{
+   if(!entry.isDirectory()||entry.isSymbolicLink())throw Error("Invalid directory");
+   const meta=await verifiedMetadata(dir);
+   if(meta.expiresAt>now)continue;
+   const files=await readdir(dir);
+   if(files.length!==2||!files.includes("media")||!files.includes("meta.json"))throw Error("Unexpected content");
+   const media=await lstat(join(dir,"media"));
+   if(!media.isFile()||media.isSymbolicLink()||media.size!==meta.size)throw Error("Invalid media");
+   await rm(dir,{recursive:true,force:false});removed++;
+  }catch{preserved++;}
+ }
+ return {removed,preserved};
+}
 export async function createShareServer({storage,key,now=Date.now}){
  if(!storage||!key||Buffer.byteLength(key)<32)throw Error("Private storage and signing secret required");
- const root=resolve(storage),repo=resolve(here,"..");
- if(root===repo||root.startsWith(repo+sep))throw Error("Storage must be outside repository");
- await mkdir(root,{recursive:true,mode:0o700});
- if(process.platform!=="win32"&&((await stat(root)).mode&0o077))throw Error("Private storage permissions required");
+ const root=await storageRoot(storage);
  const used=join(root,"used");await mkdir(used,{recursive:true,mode:0o700});
+ const usedInfo=await lstat(used);
+ if(!usedInfo.isDirectory()||usedInfo.isSymbolicLink()||(process.platform!=="win32"&&(usedInfo.mode&0o077)))throw Error("Invalid private grant storage");
  let uploads=0,reads=0;
  const server=createServer({requestTimeout:30000,headersTimeout:10000,maxHeaderSize:8192},async(req,res)=>{
   for(const [k,v] of Object.entries(security))res.setHeader(k,v);
@@ -96,7 +134,7 @@ export async function createShareServer({storage,key,now=Date.now}){
    const match=/^\/api\/v1\/shares\/([A-Za-z0-9_-]{43})(\/media)?$/.exec(path);
    if(!match)return unavailable(res);
    const [,token,media]=match,dir=join(root,hash(token));
-   const meta=JSON.parse(await readFile(join(dir,"meta.json"),"utf8"));
+   const meta=await verifiedMetadata(dir);
    if(req.method==="DELETE"&&!media){
     const secret=req.headers.authorization?.slice(7)||"";
     if(!req.headers.authorization?.startsWith("Bearer ")||!tokenRE.test(secret)||typeof meta.revoke!=="string"||! /^[0-9a-f]{64}$/.test(meta.revoke)||!timingSafeEqual(Buffer.from(hash(secret),"hex"),Buffer.from(meta.revoke,"hex")))return unavailable(res);
@@ -122,5 +160,7 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  const key=process.env.SNAPVERE_SHARE_KEY;
  if(!key||Buffer.byteLength(key)<32)throw Error("Strong signing secret required");
  if(process.argv[2]==="grant"){process.stdout.write(createGrant(key,Date.now()+3600000)+"\n");}
- else{const server=await createShareServer({storage:process.env.SNAPVERE_SHARE_STORAGE,key});server.listen(Number(process.env.PORT||8080),"127.0.0.1");}
+ else if(process.argv[2]==="purge-expired"){process.stdout.write(JSON.stringify(await purgeExpired(process.env.SNAPVERE_SHARE_STORAGE))+"\n");}
+ else if(!process.argv[2]){const server=await createShareServer({storage:process.env.SNAPVERE_SHARE_STORAGE,key});server.listen(Number(process.env.PORT||8080),"127.0.0.1");}
+ else throw Error("Unknown command");
 }
