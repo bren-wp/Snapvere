@@ -83,3 +83,56 @@ impl PinnedDirectory {
         }
     }
 }
+
+/// Open a registered local media file without following redirected ancestors or leaf links.
+pub(crate) fn open_bounded_source(source: &Path, max: u64) -> Result<(File, u64), String> {
+    let parent = PinnedDirectory::open(source.parent().ok_or("Missing source directory")?)?;
+    let name = source.file_name().ok_or("Missing source filename")?;
+    let source = parent.path.join(name);
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.share_mode(1).custom_flags(0x00200000);
+    }
+    let before = std::fs::symlink_metadata(&source).map_err(|error| error.to_string())?;
+    if !before.is_file() || before.file_type().is_symlink() {
+        return Err("Invalid or redirected gallery file".into());
+    }
+    let reader = options.open(&source).map_err(|error| error.to_string())?;
+    let metadata = reader.metadata().map_err(|error| error.to_string())?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        use std::os::windows::io::AsRawHandle;
+        use windows::Win32::Foundation::HANDLE;
+        use windows::Win32::Storage::FileSystem::{
+            GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+        };
+        let mut info = BY_HANDLE_FILE_INFORMATION::default();
+        // SAFETY: reader owns the live handle and info is valid writable storage.
+        unsafe { GetFileInformationByHandle(HANDLE(reader.as_raw_handle()), &mut info) }
+            .map_err(|error| error.to_string())?;
+        if metadata.file_attributes() & 0x400 != 0 || info.nNumberOfLinks != 1 {
+            return Err("Redirected or multiply linked gallery file".into());
+        }
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != metadata.dev() || before.ino() != metadata.ino() || metadata.nlink() != 1
+        {
+            return Err("Source changed or has multiple hard links".into());
+        }
+    }
+    if !metadata.is_file() || metadata.len() == 0 || metadata.len() > max {
+        return Err("Invalid or oversized gallery file".into());
+    }
+    Ok((reader, metadata.len()))
+}

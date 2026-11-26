@@ -2,9 +2,9 @@
 //! Native Pro-only, explicit local folder batch export.
 //! Never accept filesystem paths from the renderer or connect to cloud services.
 use super::*;
-use crate::pinned_directory::PinnedDirectory;
+use crate::pinned_directory::{open_bounded_source, PinnedDirectory};
 use std::collections::HashSet;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::{self, BufWriter, Cursor, Read};
 use tauri_plugin_dialog::DialogExt;
 
@@ -12,58 +12,6 @@ const MAX_BATCH: usize = 100;
 const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 const MAX_IMAGE_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_IMAGE_PIXELS: u64 = 24_000_000;
-
-fn open_bounded_source(source: &Path, max: u64) -> Result<(File, u64), String> {
-    let parent = PinnedDirectory::open(source.parent().ok_or("Missing source directory")?)?;
-    let name = source.file_name().ok_or("Missing source filename")?;
-    let source = parent.path.join(name);
-    let mut options = OpenOptions::new();
-    options.read(true);
-    #[cfg(target_os = "linux")]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::OpenOptionsExt;
-        options.share_mode(1).custom_flags(0x00200000);
-    }
-    let before = fs::symlink_metadata(&source).map_err(estr)?;
-    if !before.is_file() || before.file_type().is_symlink() {
-        return Err("Invalid or redirected gallery file".into());
-    }
-    let reader = options.open(&source).map_err(estr)?;
-    let metadata = reader.metadata().map_err(estr)?;
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::MetadataExt;
-        use std::os::windows::io::AsRawHandle;
-        use windows::Win32::Foundation::HANDLE;
-        use windows::Win32::Storage::FileSystem::{
-            GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
-        };
-        let mut info = BY_HANDLE_FILE_INFORMATION::default();
-        // SAFETY: reader owns the live handle and info is valid writable storage.
-        unsafe { GetFileInformationByHandle(HANDLE(reader.as_raw_handle()), &mut info) }
-            .map_err(estr)?;
-        if metadata.file_attributes() & 0x400 != 0 || info.nNumberOfLinks != 1 {
-            return Err("Redirected or multiply linked gallery file".into());
-        }
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        if before.dev() != metadata.dev() || before.ino() != metadata.ino() || metadata.nlink() != 1
-        {
-            return Err("Source changed or has multiple hard links".into());
-        }
-    }
-    if !metadata.is_file() || metadata.len() == 0 || metadata.len() > max {
-        return Err("Invalid or oversized gallery file".into());
-    }
-    Ok((reader, metadata.len()))
-}
 
 // Linux stages in an anonymous inode, not a pathname another process could
 // replace between writing and publishing. Link the exact opened inode after

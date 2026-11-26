@@ -29,10 +29,17 @@ assert 'require_window_label(window.label(), &["home"])?' in commands
 assert 'commands::pro_export_batch' in lib
 for required in ("blocking_pick_folder()", "persist_noclobber(destination)", "sync_all()",
                  "symlink_metadata", "validate_ids", "MAX_BATCH: usize = 100",
-                 "PinnedDirectory::open", "metadata.nlink() != 1",
-                 "info.nNumberOfLinks != 1", "tempfile_in(parent)",
+                 "PinnedDirectory::open", "open_bounded_source", "tempfile_in(parent)",
                  "OFlags::TMPFILE", "AtFlags::SYMLINK_FOLLOW", "linkat("):
     assert required in native, f"Missing secure Pro batch export guard: {required}"
+shared_media = read("apps/desktop/src-tauri/src/pinned_directory.rs")
+clipboard = read("apps/desktop/src-tauri/src/commands/gallery_helpers.rs")
+for required in ("metadata.nlink() != 1", "info.nNumberOfLinks != 1",
+                 "O_NOFOLLOW", "O_NONBLOCK", "GetFileInformationByHandle", "PinnedDirectory::open"):
+    assert required in shared_media, f"Missing shared source guard: {required}"
+assert "open_bounded_source(path, MAX_CLIPBOARD_FILE_BYTES)" in clipboard
+assert "file.read_exact(&mut bytes)" in clipboard and "reader.limits(limits)" in clipboard
+assert "validate_copy_image" not in commands and "decode_copy_image(&path)" in commands
 for forbidden in ("reqwest::", "TcpStream::", "HttpClient::", "std::net::",
                   "ftp::", "WebSocket::"):
     assert forbidden not in native, f"Unexpected network API in Pro local export: {forbidden}"

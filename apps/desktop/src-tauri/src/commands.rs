@@ -15,7 +15,7 @@ mod record_windows;
 
 use record_windows::{resolve_target, show_rec_draw, show_rec_frame, show_rec_hud};
 
-use gallery_helpers::{allow_media_dirs, media_path, validate_copy_image};
+use gallery_helpers::{allow_media_dirs, decode_copy_image, media_path};
 #[cfg(test)]
 use gallery_helpers::{can_copy_image, MAX_CLIPBOARD_FILE_BYTES};
 
@@ -1891,8 +1891,7 @@ pub async fn copy_media_image(
     require_window_label(window.label(), &["home"])?;
     let path = media_path(&app, &id)?;
     tauri::async_runtime::spawn_blocking(move || {
-        validate_copy_image(&path)?;
-        let img = image::open(&path).map_err(estr)?.to_rgba8();
+        let img = decode_copy_image(&path)?;
         copy_rgba_to_clipboard(&app, &img)
     })
     .await
