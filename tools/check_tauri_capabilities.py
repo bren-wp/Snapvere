@@ -107,6 +107,7 @@ protected_ipc = {
     "list_screenshots": ["home"],
     "search_screenshots": ["home"],
     "delete_screenshot": ["home"],
+    "restore_latest_quarantined_capture": ["home"],
     "add_tag": ["home"],
     "open_media": ["home"],
     "reveal_media": ["home"],

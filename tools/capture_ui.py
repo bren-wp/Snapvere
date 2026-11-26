@@ -71,6 +71,10 @@ TAURI_PREVIEW = r"""
       // Native capabilities were introduced with the Linux preview. The UI
       // must be tested against a realistic Windows contract rather than a
       // missing command that silently disables the Windows-only update feed.
+      if (command === "restore_latest_quarantined_capture") {
+        window.__SNAPVERE_TEST_RESTORE_ATTEMPTS = (window.__SNAPVERE_TEST_RESTORE_ATTEMPTS || 0) + 1;
+        return true;
+      }
       if (command === "get_platform_capabilities") {
         const linux = new URL(window.location.href).searchParams.has("previewLinux");
         return {
@@ -542,6 +546,13 @@ with sync_playwright() as p:
                     assert gallery.evaluate("() => window.__SNAPVERE_TEST_BATCH_ATTEMPTS[2]") == [
                         "parity-recording"
                     ], "Only the failed capture must be retried"
+                restore_button = gallery.get_by_role("button", name="Restore last removed capture", exact=True)
+                if platform == "linux":
+                    restore_button.click()
+                    gallery.wait_for_function("() => window.__SNAPVERE_TEST_RESTORE_ATTEMPTS === 1")
+                    gallery.get_by_text("Capture restored.", exact=True).wait_for()
+                else:
+                    assert restore_button.count() == 0
                 context.close()
             assert geometry[0] == geometry[1], (edition, theme, geometry)
             with Image.open(card_paths[0]) as first, Image.open(card_paths[1]) as second:

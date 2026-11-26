@@ -297,6 +297,25 @@ pub fn deletion_labels(language: &str) -> [&'static str; 5] {
     }
 }
 
+/// Linux removal hides the item but deliberately retains the media on disk.
+#[cfg(target_os = "linux")]
+pub fn quarantine_warning(language: &str) -> &'static str {
+    match language {
+        "hr" => "Stavka će biti uklonjena iz galerije. Datoteke ostaju na disku radi oporavka; prostor se neće osloboditi.",
+        "de" => "Das Element wird aus der Galerie entfernt. Die Dateien bleiben zur Wiederherstellung auf dem Datenträger; es wird kein Speicherplatz freigegeben.",
+        "es" => "El elemento se quitará de la galería. Los archivos se conservarán en el disco para su recuperación; no se liberará espacio.",
+        "fr" => "L’élément sera retiré de la galerie. Les fichiers restent sur le disque pour la récupération ; aucun espace ne sera libéré.",
+        "it" => "L’elemento verrà rimosso dalla galleria. I file resteranno sul disco per il recupero; lo spazio non verrà liberato.",
+        "pt" => "O item será removido da galeria. Os ficheiros permanecerão no disco para recuperação; não será libertado espaço.",
+        "nl" => "Het item wordt uit de galerij verwijderd. De bestanden blijven op de schijf voor herstel; er komt geen ruimte vrij.",
+        "pl" => "Element zostanie usunięty z galerii. Pliki pozostaną na dysku do odzyskania; miejsce nie zostanie zwolnione.",
+        "cs" => "Položka bude odebrána z galerie. Soubory zůstanou na disku pro obnovení; místo se neuvolní.",
+        "sk" => "Položka bude odstránená z galérie. Súbory zostanú na disku na obnovu; miesto sa neuvoľní.",
+        "sl" => "Element bo odstranjen iz galerije. Datoteke ostanejo na disku za obnovitev; prostor se ne sprosti.",
+        _ => "This item will be removed from the gallery. Files remain on disk for recovery; disk space will not be freed.",
+    }
+}
+
 #[cfg(test)]
 mod deletion_label_tests {
     use super::deletion_labels;
@@ -312,5 +331,23 @@ mod deletion_label_tests {
         }
         assert_eq!(deletion_labels("hr")[3], "Izbriši");
         assert_eq!(deletion_labels("unknown"), deletion_labels("en"));
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub fn quarantine_restore_title(language: &str) -> &'static str {
+    match language {
+        "hr" => "Vratiti posljednju uklonjenu snimku?",
+        "de" => "Zuletzt entfernte Aufnahme wiederherstellen?",
+        "es" => "¿Restaurar la última captura retirada?",
+        "fr" => "Restaurer la dernière capture retirée ?",
+        "it" => "Ripristinare l’ultima acquisizione rimossa?",
+        "pt" => "Restaurar a última captura removida?",
+        "nl" => "Laatst verwijderde opname herstellen?",
+        "pl" => "Przywrócić ostatnio usunięty zapis?",
+        "cs" => "Obnovit poslední odebraný snímek?",
+        "sk" => "Obnoviť poslednú odstránenú snímku?",
+        "sl" => "Obnovim zadnji odstranjeni posnetek?",
+        _ => "Restore the last removed capture?",
     }
 }

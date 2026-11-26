@@ -10,7 +10,7 @@ This document describes the **current codebase**, not an aspirational feature li
 
 ## Platform and edition scope
 
-Windows 10/11 x64 is primary. Linux x64 is a preview with shared interface, image capture/editor/gallery and silent GIF; public MP4/audio and cursor compositing remain gated. Free keeps core capture and editing; Pro adds eight recording presets, six local profiles, smart collections, export profiles, native batch export (100 items) and A/B playback review. No commercial entitlement, video rendering, OCR or live audio meter is implemented. Browser extensions were retired. See [roadmap](../ROADMAP.md) and [current verification](TASK-BREAKDOWN.md).
+Windows 10/11 x64 is primary. macOS is a separately gated [native feasibility track](../macOS/README.md), not a shipping target. Linux x64 is a preview with shared interface, image capture/editor/gallery and silent GIF; public MP4/audio and cursor compositing remain gated. Free keeps core capture and editing; Pro adds eight recording presets, six local profiles, smart collections, export profiles, native batch export (100 items) and A/B playback review. No commercial entitlement, video rendering, OCR or live audio meter is implemented. Browser extensions were retired. See [roadmap](../ROADMAP.md) and [current verification](TASK-BREAKDOWN.md).
 
 ## Product principles
 

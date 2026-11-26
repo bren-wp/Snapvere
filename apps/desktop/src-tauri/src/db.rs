@@ -64,10 +64,10 @@ impl Db {
             .conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))?;
         anyhow::ensure!(
-            (0..=2).contains(&version),
+            (0..=3).contains(&version),
             "Unsupported gallery schema version"
         );
-        if version == 2 {
+        if version >= 2 {
             return self.ensure_gallery_indexes();
         }
         // SQLite DDL participates in transactions: partial schema upgrades
@@ -135,6 +135,11 @@ impl Db {
                  ON screenshots(created_at DESC, id DESC);
              DROP INDEX IF EXISTS idx_screenshots_created;
              CREATE INDEX IF NOT EXISTS idx_screenshots_name ON screenshots(name);
+             CREATE TABLE IF NOT EXISTS quarantine_metadata (
+                 id TEXT PRIMARY KEY NOT NULL REFERENCES pending_deletions(id) ON DELETE RESTRICT,
+                 snapshot TEXT NOT NULL CHECK (json_valid(snapshot))
+             );
+             PRAGMA user_version = 3;
              COMMIT;",
         )?;
         Ok(())
@@ -258,9 +263,36 @@ impl Db {
         Ok(())
     }
 
-    /// Atomically remove the row and mark its staged media as safe to clean.
+    /// Atomically retire the active gallery row and commit its recovery intent.
     pub fn commit_delete(&mut self, id: &str) -> anyhow::Result<()> {
         let tx = self.conn.transaction()?;
+        #[cfg(target_os = "linux")]
+        {
+            // Preserve all record metadata and tag names in the same transaction
+            // before the gallery row and cascading tag relations are removed.
+            let archived = tx.execute(
+                "INSERT INTO quarantine_metadata (id, snapshot)
+                 SELECT s.id, json_object(
+                     'id', s.id, 'file_path', s.file_path, 'thumb_path', s.thumb_path,
+                     'name', s.name, 'format', s.format, 'width', s.width,
+                     'height', s.height, 'size_bytes', s.size_bytes,
+                     'source', s.source, 'created_at', s.created_at,
+                     'remote_id', s.remote_id, 'remote_slug', s.remote_slug,
+                     'remote_url', s.remote_url, 'remote_expires_at', s.remote_expires_at,
+                     'is_uploaded', s.is_uploaded,
+                     'tags', json((SELECT json_group_array(t.name)
+                         FROM screenshot_tags st JOIN tags t ON t.id = st.tag_id
+                         WHERE st.screenshot_id = s.id))
+                 )
+                 FROM screenshots s JOIN pending_deletions p ON p.id = s.id
+                 WHERE s.id = ?1 AND p.committed = 0",
+                params![id],
+            )?;
+            anyhow::ensure!(
+                archived == 1,
+                "Could not preserve gallery recovery metadata"
+            );
+        }
         let removed = tx.execute(
             "DELETE FROM screenshots WHERE id = ?1 AND EXISTS (
                 SELECT 1 FROM pending_deletions p
@@ -278,6 +310,102 @@ impl Db {
             params![id],
         )?;
         anyhow::ensure!(marked == 1, "Missing prepared gallery deletion");
+        tx.commit()?;
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn latest_quarantine(&self) -> anyhow::Result<Option<(String, String)>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT q.id, json_extract(q.snapshot, '$.name')
+             FROM quarantine_metadata q JOIN pending_deletions p ON p.id = q.id
+             WHERE p.committed = 1 ORDER BY q.rowid DESC LIMIT 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?)
+    }
+
+    /// Validate the complete archived row against the retained journal.
+    #[cfg(target_os = "linux")]
+    fn quarantine_snapshot(conn: &Connection, job: &PendingDeletion) -> anyhow::Result<String> {
+        conn.query_row(
+            "SELECT q.snapshot FROM quarantine_metadata q
+             JOIN pending_deletions p ON p.id = q.id
+             WHERE p.id = ?1 AND p.committed = 1
+               AND p.file_path = ?2 AND p.thumb_path IS ?3
+               AND p.staged_file_path = ?4 AND p.staged_thumb_path IS ?5
+               AND p.file_identity IS ?6 AND p.thumb_identity IS ?7
+               AND json_extract(q.snapshot, '$.id') = p.id
+               AND json_extract(q.snapshot, '$.file_path') = p.file_path
+               AND json_extract(q.snapshot, '$.thumb_path') IS p.thumb_path
+               AND json_type(q.snapshot, '$.tags') = 'array'
+               AND NOT EXISTS (
+                 SELECT 1 FROM screenshots s WHERE s.id = p.id
+                   OR s.file_path IN (p.file_path, p.thumb_path, p.staged_file_path, p.staged_thumb_path)
+                   OR s.thumb_path IN (p.file_path, p.thumb_path, p.staged_file_path, p.staged_thumb_path)
+               )",
+            params![job.id, job.file_path, job.thumb_path, job.staged_file_path,
+                job.staged_thumb_path, job.file_identity, job.thumb_identity],
+            |row| row.get(0),
+        ).optional()?.ok_or_else(|| anyhow::anyhow!("Quarantine metadata or destination conflicts"))
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn validate_quarantine_restore(&self, job: &PendingDeletion) -> anyhow::Result<()> {
+        Self::quarantine_snapshot(&self.conn, job)?;
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn commit_quarantine_restore(&mut self, job: &PendingDeletion) -> anyhow::Result<()> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let snapshot = Self::quarantine_snapshot(&tx, job)?;
+        let inserted = tx.execute(
+            "INSERT INTO screenshots
+             (id, file_path, thumb_path, name, format, width, height, size_bytes,
+              source, created_at, remote_id, remote_slug, remote_url, remote_expires_at, is_uploaded)
+             SELECT json_extract(?1, '$.id'), json_extract(?1, '$.file_path'),
+                    json_extract(?1, '$.thumb_path'), json_extract(?1, '$.name'),
+                    json_extract(?1, '$.format'), json_extract(?1, '$.width'),
+                    json_extract(?1, '$.height'), json_extract(?1, '$.size_bytes'),
+                    json_extract(?1, '$.source'), json_extract(?1, '$.created_at'),
+                    json_extract(?1, '$.remote_id'), json_extract(?1, '$.remote_slug'),
+                    json_extract(?1, '$.remote_url'), json_extract(?1, '$.remote_expires_at'),
+                    json_extract(?1, '$.is_uploaded')",
+            params![snapshot],
+        )?;
+        anyhow::ensure!(inserted == 1, "Missing restored record");
+        tx.execute(
+            "INSERT INTO tags(name)
+             SELECT DISTINCT value FROM json_each(?1, '$.tags')
+             WHERE 1 ON CONFLICT(name) DO NOTHING",
+            params![snapshot],
+        )?;
+        tx.execute(
+            "INSERT INTO screenshot_tags(screenshot_id, tag_id)
+             SELECT DISTINCT ?1, t.id FROM json_each(?2, '$.tags') j
+             JOIN tags t ON t.name = j.value",
+            params![job.id, snapshot],
+        )?;
+        anyhow::ensure!(
+            tx.execute(
+                "DELETE FROM quarantine_metadata WHERE id = ?1",
+                params![job.id]
+            )? == 1,
+            "Missing quarantine metadata"
+        );
+        anyhow::ensure!(
+            tx.execute(
+                "DELETE FROM pending_deletions WHERE id = ?1 AND committed = 1",
+                params![job.id]
+            )? == 1,
+            "Missing committed quarantine journal"
+        );
         tx.commit()?;
         Ok(())
     }
@@ -623,7 +751,7 @@ mod gallery_tests {
                 let version: i64 = upgraded
                     .conn
                     .query_row("PRAGMA user_version", [], |r| r.get(0))?;
-                assert_eq!(version, 2);
+                assert_eq!(version, 3);
                 let record = upgraded.get("saved-before-upgrade")?.expect("saved record");
                 assert_eq!(record.tags, vec!["keep-me"]);
                 assert_eq!(upgraded.gallery_page("", "all", 10, 0)?.len(), 1);
@@ -662,6 +790,39 @@ mod gallery_tests {
         assert_eq!(legacy.file_path, "original");
         db.migrate()?;
         assert!(db.pending_delete("legacy")?.is_some());
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_quarantine_preserves_metadata_and_prevents_forgetting_journal() -> anyhow::Result<()> {
+        let mut db = Db::open_in_memory()?;
+        db.insert(&shot("one", 100))?;
+        db.add_tag("one", "important")?;
+        db.conn.execute(
+            "UPDATE screenshots SET remote_id = 'legacy-id' WHERE id = 'one'",
+            [],
+        )?;
+        db.conn.execute(
+            "INSERT INTO pending_deletions
+             (id, file_path, staged_file_path, thumb_path, committed, file_identity, thumb_identity)
+             SELECT id, file_path, 'staged', thumb_path, 0, 'test-id', 'test-thumb'
+             FROM screenshots WHERE id = 'one'",
+            [],
+        )?;
+        db.commit_delete("one")?;
+        assert!(db.get("one")?.is_none());
+        let (tag, remote): (String, String) = db.conn.query_row(
+            "SELECT json_extract(snapshot, '$.tags[0]'),
+                    json_extract(snapshot, '$.remote_id')
+             FROM quarantine_metadata WHERE id = 'one'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        assert_eq!(tag, "important");
+        assert_eq!(remote, "legacy-id");
+        assert!(db.forget_delete("one").is_err());
+        assert!(db.pending_delete("one")?.unwrap().committed);
         Ok(())
     }
 
