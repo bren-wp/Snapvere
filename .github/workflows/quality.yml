@@ -51,6 +51,8 @@ jobs:
           NODE
       - name: Regression-test release orchestration (mock GitHub API)
         run: python tools/test_release_preflight.py
+      - name: Test private sharing service
+        run: node --test snpv.re/server.test.mjs
       - name: Verify Snapvere by Brendigo source headers
         run: python tools/check_source_headers.py
       - name: Enforce reachable Rust modules (dead-code graph)
