@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import test from "node:test";
 import assert from "node:assert/strict";
 import { annotationBounds, arrowGeometry, pixelationSize, validPoint } from "../src/lib/annotationGeometry.ts";
