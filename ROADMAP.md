@@ -1,6 +1,6 @@
 # Snapvere by Brendigo — product roadmap
 
-Baseline: v0.2.36 unsigned Windows/Linux Free and Pro preview. v0.2.37 is a candidate, not a delivered release. Windows 10/11 x64 is primary; Linux x64 is secondary. No browser extensions, Android, iOS or macOS. English-first, 12 languages, dark default with functional light theme. Free core capability stays intact.
+Baseline: v0.2.36 unsigned Windows/Linux Free and Pro preview. v0.2.37 is a candidate, not a delivered release. Windows 10/11 x64 is primary; Linux x64 is secondary. No browser extensions, Android or iOS. macOS is an optional native feasibility track, not a shipping platform; see [macOS development](macOS/README.md). English-first, 12 languages, dark default with functional light theme. Free core capability stays intact.
 
 | Phase | Scope | Exit evidence |
 |---|---|---|

@@ -1929,6 +1929,10 @@ pub async fn delete_screenshot(
             .ok_or("This capture is no longer in the gallery")?;
         let language = get_app_language(window.clone(), app.clone())?;
         let labels = crate::tray_locale::deletion_labels(&language);
+        #[cfg(target_os = "linux")]
+        let warning = crate::tray_locale::quarantine_warning(&language);
+        #[cfg(not(target_os = "linux"))]
+        let warning = labels[2];
         let title = if shot.source == "recording" || shot.format == "mp4" {
             labels[0]
         } else {
@@ -1942,7 +1946,7 @@ pub async fn delete_screenshot(
             .collect();
         let confirmed = app
             .dialog()
-            .message(format!("\"{name}\" — {}", labels[2]))
+            .message(format!("\"{name}\" — {warning}"))
             .title(title)
             .kind(MessageDialogKind::Warning)
             .buttons(MessageDialogButtons::OkCancelCustom(

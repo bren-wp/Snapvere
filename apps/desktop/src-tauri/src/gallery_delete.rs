@@ -4,7 +4,8 @@
 //! A durable SQLite intent is written before moving media within its own volume.
 //! An atomic SQLite commit then removes the gallery entry and marks the intent as
 //! committed. On startup an uncommitted intent is rolled back; committed intents
-//! finish deleting their staged files. No existing destination is overwritten.
+//! finish handle-bound cleanup on Windows. On Linux they retain staged media
+//! and metadata for non-destructive recovery. No destination is overwritten.
 
 use std::fs;
 use std::io::ErrorKind;
@@ -388,26 +389,7 @@ fn remove_verified(path: &Path, expected: &str) -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(windows))]
-fn remove_verified(path: &Path, expected: &str) -> Result<()> {
-    // Holding the verified file prevents reuse of its inode during cleanup.
-    // Unlink is still pathname-based: the postcheck detects a mismatch but
-    // cannot undo an unlink of a substituted pathname.
-    let (file, identity) = open_leaf(path, false)?;
-    ensure!(identity == expected, "Gallery media identity changed");
-    fs::remove_file(path).context("Could not clear committed deletion staging file")?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        ensure!(
-            file.metadata()?.nlink() == 0,
-            "Verified gallery media was not unlinked; recovery remains pending"
-        );
-    }
-    ensure!(!exists(path)?, "Gallery cleanup remains pending");
-    Ok(())
-}
-
+#[cfg(windows)]
 fn delete_one(staged: &str, identity: Option<&str>) -> Result<()> {
     let staged = Path::new(staged);
     let directory = pin_parent(staged)?;
@@ -419,8 +401,38 @@ fn delete_one(staged: &str, identity: Option<&str>) -> Result<()> {
     directory.sync_entries().map_err(anyhow::Error::msg)
 }
 
+/// Check both source/destination pairs before moving either member.
+/// Rechecks in stage_one still protect against changes after this preflight.
+fn preflight_stage(source: &str, staged: &str, identity: Option<&str>) -> Result<()> {
+    let source = Path::new(source);
+    let staged = Path::new(staged);
+    let directory = pin_parent(source)?;
+    let expected = checked_leaf(&directory, identity)?;
+    let source = pinned_path(&directory, source)?;
+    let staged = pinned_path(&directory, staged)?;
+    ensure!(!exists(&staged)?, "Unexpected staging file");
+    if expected == "missing" {
+        ensure!(
+            !exists(&source)?,
+            "Previously absent gallery media appeared"
+        );
+    } else {
+        verify_leaf(&source, expected)?;
+    }
+    Ok(())
+}
+
 fn stage_files(job: &PendingDeletion) -> Result<()> {
     validate_job(job)?;
+    preflight_stage(
+        &job.file_path,
+        &job.staged_file_path,
+        job.file_identity.as_deref(),
+    )?;
+    if let (Some(source), Some(staged)) = (&job.thumb_path, &job.staged_thumb_path) {
+        preflight_stage(source, staged, job.thumb_identity.as_deref())?;
+    }
+
     stage_one(
         &job.file_path,
         &job.staged_file_path,
@@ -527,13 +539,22 @@ fn cleanup_files(job: &PendingDeletion) -> Result<()> {
     if let Some(staged) = &job.staged_thumb_path {
         preflight(staged, job.thumb_identity.as_deref())?;
     }
-    // Each removal still rechecks its identity. Preflight is not an atomic
-    // compare-and-unlink across files or a guarantee against concurrent races.
-    delete_one(&job.staged_file_path, job.file_identity.as_deref())?;
-    if let Some(staged) = &job.staged_thumb_path {
-        delete_one(staged, job.thumb_identity.as_deref())?;
+    #[cfg(windows)]
+    {
+        // Each handle-bound removal still rechecks its identity.
+        delete_one(&job.staged_file_path, job.file_identity.as_deref())?;
+        if let Some(staged) = &job.staged_thumb_path {
+            delete_one(staged, job.thumb_identity.as_deref())?;
+        }
+        Ok(())
     }
-    Ok(())
+    #[cfg(not(windows))]
+    {
+        // Never unlink by name after a separate identity check. Retain the
+        // committed journal even if a member is absent. A future explicit
+        // reconciliation must not infer that the media was safely purged.
+        bail!("Committed gallery media retained for non-destructive recovery")
+    }
 }
 
 pub fn delete(db: &mut Db, id: &str) -> Result<()> {
@@ -751,6 +772,28 @@ mod tests {
     }
 
     #[test]
+    fn staging_thumbnail_conflict_preserves_both_original_paths() -> Result<()> {
+        let (folder, db, shot) = fixture()?;
+        let job = intent(&shot)?;
+        db.prepare_delete(&job)?;
+        let thumb = shot.thumb_path.as_deref().unwrap();
+        let backup = folder.join("original-thumbnail.webp");
+        fs::rename(thumb, &backup)?;
+        fs::write(thumb, b"unrelated thumbnail")?;
+        assert!(stage_files(&job).is_err());
+        assert_eq!(fs::read(&shot.file_path)?, b"original");
+        assert_eq!(fs::read(thumb)?, b"unrelated thumbnail");
+        assert_eq!(fs::read(&backup)?, b"thumbnail");
+        assert!(!Path::new(&job.staged_file_path).exists());
+        assert!(!Path::new(job.staged_thumb_path.as_deref().unwrap()).exists());
+        assert!(db.get(&shot.id)?.is_some());
+        assert!(db.pending_delete(&shot.id)?.is_some());
+        drop(db);
+        fs::remove_dir_all(folder)?;
+        Ok(())
+    }
+
+    #[test]
     fn changed_content_on_same_file_identity_blocks_staging() -> Result<()> {
         let (folder, db, shot) = fixture()?;
         let job = intent(&shot)?;
@@ -813,15 +856,40 @@ mod tests {
         Ok(())
     }
 
+    fn assert_committed_retention_policy(db: &Db, job: &PendingDeletion) -> Result<()> {
+        #[cfg(windows)]
+        {
+            assert!(db.pending_delete(&job.id)?.is_none());
+            assert!(!Path::new(&job.staged_file_path).exists());
+            assert!(!Path::new(job.staged_thumb_path.as_deref().unwrap()).exists());
+        }
+        #[cfg(not(windows))]
+        {
+            assert!(db.pending_delete(&job.id)?.unwrap().committed);
+            assert_eq!(fs::read(&job.staged_file_path)?, b"original");
+            assert_eq!(
+                fs::read(job.staged_thumb_path.as_deref().unwrap())?,
+                b"thumbnail"
+            );
+        }
+        Ok(())
+    }
+
     #[test]
-    fn deletion_removes_both_files_and_index_without_pending_journal() -> Result<()> {
+    fn deletion_respects_platform_retention_policy() -> Result<()> {
         let (folder, mut db, shot) = fixture()?;
         db.add_tag(&shot.id, "important")?;
         delete(&mut db, &shot.id)?;
         assert!(db.get(&shot.id)?.is_none());
         assert!(!Path::new(&shot.file_path).exists());
         assert!(!Path::new(shot.thumb_path.as_deref().unwrap()).exists());
+        #[cfg(windows)]
         assert!(db.pending_deletions()?.is_empty());
+        #[cfg(not(windows))]
+        {
+            let job = db.pending_delete(&shot.id)?.expect("retained journal");
+            assert_committed_retention_policy(&db, &job)?;
+        }
         drop(db);
         fs::remove_dir_all(folder)?;
         Ok(())
@@ -910,7 +978,7 @@ mod tests {
     }
 
     #[test]
-    fn interrupted_postcommit_deletion_clears_staged_files_on_restart() -> Result<()> {
+    fn interrupted_postcommit_deletion_respects_retention_on_restart() -> Result<()> {
         let (folder, mut db, shot) = fixture()?;
         let job = intent(&shot)?;
         db.prepare_delete(&job)?;
@@ -920,9 +988,7 @@ mod tests {
         drop(db);
         let db = Db::open(&folder.join("gallery.sqlite"))?;
         assert!(db.get(&shot.id)?.is_none());
-        assert!(!Path::new(&job.staged_file_path).exists());
-        assert!(!Path::new(job.staged_thumb_path.as_deref().unwrap()).exists());
-        assert!(db.pending_deletions()?.is_empty());
+        assert_committed_retention_policy(&db, &job)?;
         drop(db);
         fs::remove_dir_all(folder)?;
         Ok(())
@@ -1024,7 +1090,7 @@ mod tests {
         fs::remove_file(&job.staged_file_path)?;
         fs::rename(&backup, &job.staged_file_path)?;
         let db = Db::open(&folder.join("gallery.sqlite"))?;
-        assert!(db.pending_deletions()?.is_empty());
+        assert_committed_retention_policy(&db, &job)?;
         drop(db);
         fs::remove_dir_all(folder)?;
         Ok(())
@@ -1053,9 +1119,7 @@ mod tests {
         fs::remove_file(staged_thumb)?;
         fs::rename(&backup, staged_thumb)?;
         let db = Db::open(&folder.join("gallery.sqlite"))?;
-        assert!(db.pending_deletions()?.is_empty());
-        assert!(!Path::new(&job.staged_file_path).exists());
-        assert!(!Path::new(staged_thumb).exists());
+        assert_committed_retention_policy(&db, &job)?;
         drop(db);
         fs::remove_dir_all(folder)?;
         Ok(())
@@ -1099,8 +1163,7 @@ mod tests {
         fs::remove_dir(&blocked)?;
         fs::rename(&backup, &blocked)?;
         let db = Db::open(&folder.join("gallery.sqlite"))?;
-        assert!(!blocked.exists());
-        assert!(db.pending_deletions()?.is_empty());
+        assert_committed_retention_policy(&db, &job)?;
         drop(db);
         fs::remove_dir_all(folder)?;
         Ok(())
