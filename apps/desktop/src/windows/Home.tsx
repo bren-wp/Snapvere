@@ -402,7 +402,7 @@ export default function Home() {
       setToast(t("Cannot open capture folder:"));
     }
   };
-  const openSettings = async (tab: "capture" | "recording" = "capture") => {
+  const openSettings = async (tab: "capture" | "recording" | "about" = "capture") => {
     try {
       const existing = await WebviewWindow.getByLabel("settings");
       if (existing) {

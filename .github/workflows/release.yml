@@ -425,7 +425,7 @@ jobs:
           python tools/generate_sbom.py --output "dist-installers/Snapvere-SBOM.cdx.json"
           if ($LASTEXITCODE -ne 0) { throw "Could not generate supply-chain SBOM" }
           python tools/generate_update_manifest.py --version "${{ steps.version.outputs.value }}" --out "dist-installers/Snapvere-update-stable.json" --packages-dir "dist-installers"
-          if ($LASTEXITCODE -ne 0) { throw "Could not generate the version-only update manifest" }
+          if ($LASTEXITCODE -ne 0) { throw "Could not generate the informational release catalog" }
           $feed = Get-Content (Join-Path $dist 'Snapvere-update-stable.json') -Raw | ConvertFrom-Json
           if ($feed.product -ne 'snapvere-tauri-windows' -or
               $feed.version -ne "${{ steps.version.outputs.value }}" -or

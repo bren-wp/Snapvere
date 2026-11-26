@@ -1,9 +1,10 @@
 // Snapvere by Brendigo
 /**
  * Public, privacy-preserving update *notification* for the Tauri/Rust edition.
- * No installers are downloaded or executed by the WebView. The only permitted
- * network request is a user-triggered or explicitly opted-in GET for a version
- * manifest at update.snapvere.com; startup is offline by default.
+ * No installers are downloaded or executed by the WebView. The only update
+ * request is a user-triggered or explicitly opted-in GET for the release
+ * catalog at update.snapvere.com; startup is offline by default. Manual
+ * downloads are opened by Settings in the default browser.
  */
 export const UPDATE_FEED_URL = "https://update.snapvere.com/stable.json";
 export const OFFICIAL_DOWNLOAD_URL = "https://snapvere.com/download/tauri/";
@@ -60,7 +61,7 @@ export function parseUpdateManifest(raw: unknown, currentVersion: string, target
   const record = raw as Record<string, unknown>;
   if (record.product !== UPDATE_PRODUCT || typeof record.version !== "string" ||
       !parseVersion(record.version)) {
-    throw new Error("Update manifest does not describe the official Windows edition");
+    throw new Error("Update manifest does not describe the official release channel");
   }
   if (record.download_url !== undefined && record.download_url !== OFFICIAL_DOWNLOAD_URL) {
     throw new Error("Update manifest contains a nonofficial download address");

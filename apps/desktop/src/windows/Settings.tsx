@@ -55,7 +55,7 @@ export default function Settings() {
   const { language, changeLanguage, t } = useLanguage();
   const [tab, setTab] = useState<Tab>(() => {
     const requested = new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("tab");
-    return requested === "recording" ? "recording" : "capture";
+    return requested === "recording" || requested === "about" ? requested : "capture";
   });
   const [s, setS] = useState<AppSettings>(DEFAULTS);
   const [store, setStore] = useState<Store | null>(null);
@@ -76,8 +76,8 @@ export default function Settings() {
   useEffect(() => {
     let disposed = false;
     let unlisten: (() => void) | undefined;
-    void listen<"capture" | "recording">("snapvere:settings-tab", ({ payload }) => {
-      if (payload === "capture" || payload === "recording") setTab(payload);
+    void listen<"capture" | "recording" | "about">("snapvere:settings-tab", ({ payload }) => {
+      if (payload === "capture" || payload === "recording" || payload === "about") setTab(payload);
     }).then((stop) => {
       if (disposed) stop(); else unlisten = stop;
     }).catch((error) => console.error("Could not navigate to settings tab", error));

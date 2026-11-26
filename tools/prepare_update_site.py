@@ -3,6 +3,7 @@
 """Stage update website using the canonical site assets and a published manifest."""
 import argparse
 import json
+import re
 import shutil
 from pathlib import Path
 from generate_update_manifest import PACKAGE_NAMES, SEMVER
@@ -16,7 +17,13 @@ def prepare(manifest: Path, out: Path) -> None:
     version = data.get("version", "")
     if (data.get("channel") != "stable" or data.get("product") != "snapvere-tauri-windows"
             or not isinstance(version, str) or not SEMVER.fullmatch(version)
-            or len(packages) != 10 or {p["name"] for p in packages} != set(PACKAGE_NAMES)):
+            or any(int(part) > 999999 for part in version.split("."))
+            or not isinstance(packages, list) or len(packages) != 10
+            or any(not isinstance(p, dict) or type(p.get("size")) is not int or p["size"] < 1000000
+                   or not isinstance(p.get("name"), str)
+                   or not isinstance(p.get("sha256"), str)
+                   or not re.fullmatch(r"[0-9a-f]{64}", p["sha256"]) for p in packages)
+            or {p["name"] for p in packages} != set(PACKAGE_NAMES)):
         raise ValueError("Expected complete stable release catalog")
     if out.exists():
         raise ValueError("Choose a new staging directory; never overwrite the deployed site")

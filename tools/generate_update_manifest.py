@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # Snapvere by Brendigo
-"""Generate a *version-only* manifest to be uploaded manually to the official server.
+"""Generate the informational release catalog for the official update server.
 
-This file is NOT a signed Tauri updater payload, remote executable URL or
-proof that update.snapvere.com has already been deployed.
+With --packages-dir, include all ten exact package sizes and SHA-256 digests.
+Without packages, generate a legacy version-only rehearsal notice.
+Neither form is a signed updater payload or proof of deployment.
 """
 import argparse
 import hashlib
@@ -49,7 +50,7 @@ def write_manifest(version: str, target: Path, packages_dir: Path | None = None)
         raise ValueError("Version-only manifest exceeds desktop safety bound")
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(encoded)
-    print(f"Unsigned version notice manifest generated: {target} ({len(encoded)} bytes)")
+    print(f"Informational update manifest generated: {target} ({len(encoded)} bytes)")
 
 
 if __name__ == "__main__":

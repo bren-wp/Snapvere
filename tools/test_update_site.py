@@ -22,7 +22,7 @@ with tempfile.TemporaryDirectory() as temp:
     assert (out / "stable.json").read_bytes() == manifest.read_bytes()
     for name in ("catalog.php", "index.php", "download.php"):
         subprocess.run(["php", "-l", str(out / name)], check=True)
-    result = subprocess.run(["php", "-r", """
+    subprocess.run(["php", "-r", """
 require $argv[1];
 $d=update_catalog($argv[2]);
 if (!$d || count($d['packages'])!==10) exit(1);
