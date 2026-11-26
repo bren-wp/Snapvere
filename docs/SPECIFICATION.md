@@ -3,7 +3,7 @@
 **Product:** SNAPVERE  
 **Publisher / maintainer:** BRENDIGO · https://brendigo.com  
 **Official product domain:** https://snapvere.com  
-**Current published desktop package:** v0.2.35 (unsigned preview; v0.2.36 candidate)  
+**Current published desktop package:** v0.2.36 (unsigned preview; v0.2.37 candidate)  
 **Current source implementation:** Tauri 2 + Rust + React/TypeScript; this is not the separate WinUI implementation presently displayed on the public domain.
 
 This document describes the **current codebase**, not an aspirational feature list. Availability must be checked against actual source, native tests and Windows release artifacts.
@@ -87,7 +87,7 @@ Active-window screenshot capture, remote storage, password-protected share links
 **Brand and legal:** The app and marketing identity must show SNAPVERE and BRENDIGO exclusively as the product/publisher identities. Copyright and licence notices associated with third-party materials may not be falsely reassigned or suppressed.
 
 
-## Gallery schema evolution (v0.2.36 candidate)
+## Gallery schema evolution (v0.2.36 and later)
 
 SQLite schema v2 adds nullable `file_identity` and `thumb_identity` to `pending_deletions` in a transaction. New intents store native directory and media identifiers; legacy NULL values require conservative deferred recovery. Linux uses device/inode and Windows volume/file-index. These identifiers are not content hashes or proof against reuse; the final pathname operations still require race-hardening. No destructive schema changes or automatic deletion of legacy media. Do not downgrade across the schema migration.
 

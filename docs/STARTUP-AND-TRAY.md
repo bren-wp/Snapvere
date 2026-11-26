@@ -63,4 +63,4 @@ the login sequence. Restart Snapvere manually if its process failed.
 - A system with disabled or reserved PrintScreen shortcuts may require a
   different key binding under Settings → Hotkeys.
 
-See the [acceptance and regression checklist](AUDIT-v0.2.22-startup.md).
+See the [acceptance and regression checklist](https://github.com/bren-wp/Snapvere/blob/11a88c8278f60dea53edba53b3a21283998ff9ad/docs/AUDIT-v0.2.22-startup.md).

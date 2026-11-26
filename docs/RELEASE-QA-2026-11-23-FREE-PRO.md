@@ -1,6 +1,6 @@
 # SNAPVERE Free + Pro — release and security acceptance
 
-**Updated acceptance baseline:** v0.2.35 is published as unsigned preview; v0.2.36 is a candidate. The original v0.2.28 checklist is retained below with current scope. Exact-commit CI is mandatory before merge.
+**Updated acceptance baseline:** v0.2.36 is published as unsigned preview; v0.2.37 is a candidate. The original v0.2.28 checklist is retained below with current scope. Exact-commit CI is mandatory before merge.
 
 ## Changes implemented in source
 

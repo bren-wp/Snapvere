@@ -18,7 +18,7 @@ License identifier: LicenseRef-Brendigo-BSP-1.0.
 ## Adoption gates
 
 - Confirm actual licensor identity and documented rights per component, including contributor and upstream history.
-- Resolve every BLOCKED item in SOURCE-PROVENANCE.md and review dependencies and assets.
+- Record the owner's original-code declaration in SOURCE-PROVENANCE.md; review any specifically evidenced rights issue, dependencies, contributors and assets. Similarity screening alone is not a finding of unauthorized reuse.
 - Legal approval of final BSP, Free/Pro EULAs, commercial redistribution terms, privacy policy and trademark policy.
 - Confirm installer acceptance and public/private repository strategy with owner; no destructive history changes.
 - Update package manifests, installer terms, about, website, README, SBOM and release metadata together only after approval.

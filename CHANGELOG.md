@@ -1,6 +1,12 @@
 # Snapvere by Brendigo — Release history
 
-## v0.2.36 — Shared media safety and documentation (preview candidate)
+## v0.2.37 — Recording privacy and gallery recovery (candidate)
+
+- Bind recording redaction and pause IPC to a session ID and track mask revisions accepted by the encoder. Native frame-level privacy and physical acceptance remain open.
+- Preflight staged media and thumbnail identities before destructive recovery cleanup; retain the journal on conflicts.
+- Consolidate historical reports, record the owner's original-code statement, and update the documentation index. No change to active license terms or release status.
+
+## v0.2.36 — Shared media safety and documentation (preview)
 
 - Restore idempotent gallery-index maintenance for already migrated schema-v2 databases without repeating ALTER TABLE. Preserve the existing index-upgrade regression and all user records.
 
@@ -296,7 +302,7 @@ SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO
 - Synchronize Settings theme changes between open Tauri WebViews via storage and native event notifications.
 - Expand Playwright visual state captures for light/dark, hover, focus, disabled GIF audio, recording palette and Stop error; require fail-closed PNG reference comparisons.
 - Fix native recording HUD popup/error clipping: dynamically expand a caller-restricted 58px-to-216px WebView window, anchor toolbar bottom and correct mixed-DPI centering; assert popup bounds in screenshot tests.
-- Track all unverified native WebView2/DPI cases in `docs/VISUAL-CORRECTIONS-v0.2.18.md` without claiming 1:1 parity.
+- Track all unverified native WebView2/DPI cases in [VISUAL-CORRECTIONS-v0.2.18.md](https://github.com/bren-wp/Snapvere/blob/11a88c8278f60dea53edba53b3a21283998ff9ad/docs/VISUAL-CORRECTIONS-v0.2.18.md) without claiming 1:1 parity.
 - Verify/correct GitHub Release prerelease metadata during publication until physical Windows QA is documented.
 - Correct README release status, document GitHub's 2026-11-18 withdrawal of GHSA-fc5q-39xc-vjpf without treating it as a patched version, and retain fork tests and strict npm audits.
 - Update compatible npm packages: Tauri API 2.12.5, Tauri CLI 2.12.6 and Lucide 1.75.0, together with a regenerated lockfile; audit remaining Cargo-compatible upgrades on Windows.
@@ -304,7 +310,7 @@ SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO
 - Add synthetic 100/125/150/200% DPI snapshots for both themes and local-only PowerShell evidence collector for actual Win10/11 WebView2 windows.
 - Replace stale write-enabled dependency refresh workflow with read-only freshness reports; expand Dependabot review policies, CI policy guards and npm/Cargo CycloneDX SBOM.
 - Add release SBOM checksums; documentation: `docs/SECURITY-STABILITY-v0.2.18.md` and `docs/NATIVE-WINDOWS-QA-v0.2.18.md`.
-- See `docs/AUDIT-v0.2.18-P1-com-release.md`. Native Windows acceptance remains pending.
+- See [AUDIT-v0.2.18-P1-com-release.md](https://github.com/bren-wp/Snapvere/blob/11a88c8278f60dea53edba53b3a21283998ff9ad/docs/AUDIT-v0.2.18-P1-com-release.md). Native Windows acceptance remains pending.
 
 ## v0.2.17 — P1 bounded audio buffering and safe PCM decoding (published 2026-11-17, hardware QA pending)
 
@@ -316,7 +322,7 @@ SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO
 - Preserve center-channel speech and side/rear surround from 5.1/7.1 Windows audio using speaker-mask-aware normalized stereo downmix; reject malformed speaker masks.
 - Pin a temporarily patched, independently published `@ryotsu/picomatch@4.0.7-a` alias for build tooling to address upstream `CVE-2026-112366`; add source/provenance assertions and timed ReDoS regression tests. Replace with an official fixed release once available.
 - Keep saved settings, 12-language interface, window-scoped Tauri IPC, crash-recoverable SQLite gallery and existing recording formats unchanged.
-- Full physical Windows capture/audio/DPI/installer QA remains an explicit prerelease gate; see `docs/AUDIT-v0.2.17-P1-audio-memory.md`.
+- Full physical Windows capture/audio/DPI/installer QA remains an explicit prerelease gate; see [AUDIT-v0.2.17-P1-audio-memory.md](https://github.com/bren-wp/Snapvere/blob/11a88c8278f60dea53edba53b3a21283998ff9ad/docs/AUDIT-v0.2.17-P1-audio-memory.md).
 
 ## v0.2.16 — P1 WASAPI runtime failure propagation (published 2026-11-16)
 
@@ -328,7 +334,7 @@ SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO
 - Add hardware-independent Rust regression tests for the worker-health error state.
 - Preserve 12-language localization, crash-recoverable gallery deletion, window-scoped IPC, SHA256 release checks and version identity.
 - Physical Windows 10/11 audio/device-change and 1:1 visual acceptance remain unverified and mandatory for production claims.
-- See `docs/AUDIT-v0.2.16-P1-audio-runtime.md`.
+- See [AUDIT-v0.2.16-P1-audio-runtime.md](https://github.com/bren-wp/Snapvere/blob/11a88c8278f60dea53edba53b3a21283998ff9ad/docs/AUDIT-v0.2.16-P1-audio-runtime.md).
 
 ## v0.2.15 — P1 WASAPI format validation (published 2026-11-15, prerelease)
 
@@ -338,7 +344,7 @@ SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO
 - Add hardware-independent Windows format parser regression tests.
 - Retain all 12 UI languages, the SQLite crash-recovery journal and scoped Tauri IPC without weakening their checks.
 - Acceptance pending: native Windows CI, installation QA, audio hardware tests, and measured pixel-accurate screenshots.
-- Details: `docs/AUDIT-v0.2.15-P1-WASAPI.md`.
+- Details: [AUDIT-v0.2.15-P1-WASAPI.md](https://github.com/bren-wp/Snapvere/blob/11a88c8278f60dea53edba53b3a21283998ff9ad/docs/AUDIT-v0.2.15-P1-WASAPI.md).
 
 ## v0.2.14 — P1 integrity and IPC hardening (published 2026-11-15)
 
@@ -358,7 +364,7 @@ SNAPVERE is a Windows screenshot and recording workspace published by **BRENDIGO
   microphone/system audio is unavailable instead of silently losing audio.
 - Add failure-injection and crash-window Rust tests and version metadata for a
   future verified **prerelease**, without claiming physical Windows QA.
-- See `docs/AUDIT-v0.2.14-P1-integrity-ipc.md` for acceptance gaps.
+- See [AUDIT-v0.2.14-P1-integrity-ipc.md](https://github.com/bren-wp/Snapvere/blob/11a88c8278f60dea53edba53b3a21283998ff9ad/docs/AUDIT-v0.2.14-P1-integrity-ipc.md) for acceptance gaps.
 
 ## v0.2.13 — recording HUD recovery and localized gallery (development candidate)
 
