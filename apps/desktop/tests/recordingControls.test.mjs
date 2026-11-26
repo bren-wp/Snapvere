@@ -39,3 +39,17 @@ test("synchronous action exceptions also permit a retry", async () => {
   );
   assert.equal(lock.current, false);
 });
+
+test("a previous session's rejected action does not release a new session lock", async () => {
+  const previous = { current: false };
+  let rejectOld;
+  const oldAction = runRecordingAction(previous, () =>
+    new Promise((_, reject) => { rejectOld = reject; }),
+  );
+  const current = { current: false };
+  assert.equal(await runRecordingAction(current, async () => {}), true);
+  rejectOld(new Error("Previous session ended"));
+  await assert.rejects(oldAction, /Previous session ended/);
+  assert.equal(previous.current, false);
+  assert.equal(current.current, true);
+});

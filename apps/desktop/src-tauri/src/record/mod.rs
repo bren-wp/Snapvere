@@ -397,11 +397,7 @@ pub fn cancel(app: &AppHandle, session_id: &str) -> Result<(), String> {
     finish_request(app, Some(session_id), true)
 }
 
-fn finish_request(
-    app: &AppHandle,
-    session_id: Option<&str>,
-    discard: bool,
-) -> Result<(), String> {
+fn finish_request(app: &AppHandle, session_id: Option<&str>, discard: bool) -> Result<(), String> {
     {
         let state = app.state::<AppState>();
         let slot = crate::state::lock(&state.recorder);
