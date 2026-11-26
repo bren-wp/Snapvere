@@ -41,6 +41,8 @@ function metadata(string $dir): ?array {
     if (is_link($dir)||!is_dir($dir)) return null;
     $p=$dir.'/meta.json'; $media=$dir.'/media';
     if (is_link($p)||is_link($media)||!is_file($p)||!is_file($media)||filesize($p)>4096) return null;
+    $pi=lstat($p); $mi=lstat($media);
+    if (!$pi||!$mi||$pi['nlink']!==1||$mi['nlink']!==1) return null;
     $m=json_decode((string)file_get_contents($p,false,null,0,4097),true,8);
     if (!is_array($m)||!is_string($m['type']??null)||!isset(share_types()[$m['type']])||!is_int($m['size']??null)||$m['size']<1||$m['size']>MAX_SHARE||filesize($media)!==$m['size']||!is_int($m['expiresAt']??null)) return null;
     foreach (['sha256','grant','revoke'] as $k) if (!is_string($m[$k]??null)||!preg_match('/\A[0-9a-f]{64}\z/',$m[$k])) return null;
@@ -55,7 +57,8 @@ function storage_bytes(string $root): int {
 function remove_pending(string $dir): void {
     if (is_link($dir)||!is_dir($dir)) return;
     foreach (scandir($dir)?:[] as $name) if (!in_array($name,['.','..','media','meta.json'],true)) return;
-    foreach (['media','meta.json'] as $name) { $p=$dir.'/'.$name; if (is_link($p)) return; if (is_file($p)) unlink($p); }
+    foreach (['media','meta.json'] as $name) { $p=$dir.'/'.$name; if (is_link($p)|| (file_exists($p)&&!is_file($p))) return; }
+    foreach (['media','meta.json'] as $name) { $p=$dir.'/'.$name; if (is_file($p)) unlink($p); }
     rmdir($dir);
 }
 function stage_media(string $path,int $size,string $type): ?string {

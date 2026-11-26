@@ -9,6 +9,6 @@ Options -Indexes
   </Files>
 </IfModule>
 AddType application/json .json
-<FilesMatch "^(catalog\.php|stable\.example\.json|README\.md)$">
+<FilesMatch "^(catalog\.php|stable\.example\.json|README\.md|README\.txt)$">
   Require all denied
 </FilesMatch>

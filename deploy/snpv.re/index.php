@@ -1,6 +1,8 @@
 <?php
 // Snapvere by Brendigo
 declare(strict_types=1);
+ini_set('display_errors','0');
+umask(0077);
 require __DIR__.'/service.php';
 share_headers();
 $path=parse_url($_SERVER['REQUEST_URI']??'/',PHP_URL_PATH);
