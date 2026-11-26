@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 import type { Point } from "./types";
 
 export function validPoint(point: Point | undefined): point is Point {
