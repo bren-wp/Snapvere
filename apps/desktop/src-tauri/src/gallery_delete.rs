@@ -391,14 +391,29 @@ fn restore_files(job: &PendingDeletion) -> Result<()> {
 
 fn cleanup_files(job: &PendingDeletion) -> Result<()> {
     validate_job(job)?;
-    // Attempt both cleanups; a failure keeps the durable journal entry.
-    let main = delete_one(&job.staged_file_path, job.file_identity.as_deref());
-    let thumb = match &job.staged_thumb_path {
-        Some(staged) => delete_one(staged, job.thumb_identity.as_deref()),
-        None => Ok(()),
+    // Validate the entire staged set before removing either member. A conflict
+    // must preserve the remaining media and its durable journal for review.
+    let preflight = |staged: &str, identity: Option<&str>| -> Result<()> {
+        let staged = Path::new(staged);
+        let directory = pin_parent(staged)?;
+        let expected = checked_leaf(&directory, identity)?;
+        let staged = pinned_path(&directory, staged)?;
+        if exists(&staged)? {
+            verify_leaf(&staged, expected)?;
+        }
+        Ok(())
     };
-    main?;
-    thumb
+    preflight(&job.staged_file_path, job.file_identity.as_deref())?;
+    if let Some(staged) = &job.staged_thumb_path {
+        preflight(staged, job.thumb_identity.as_deref())?;
+    }
+    // Each removal still rechecks its identity. Preflight is not an atomic
+    // compare-and-unlink across files or a guarantee against concurrent races.
+    delete_one(&job.staged_file_path, job.file_identity.as_deref())?;
+    if let Some(staged) = &job.staged_thumb_path {
+        delete_one(staged, job.thumb_identity.as_deref())?;
+    }
+    Ok(())
 }
 
 pub fn delete(db: &mut Db, id: &str) -> Result<()> {
@@ -769,6 +784,37 @@ mod tests {
         fs::rename(&backup, &job.staged_file_path)?;
         let db = Db::open(&folder.join("gallery.sqlite"))?;
         assert!(db.pending_deletions()?.is_empty());
+        drop(db);
+        fs::remove_dir_all(folder)?;
+        Ok(())
+    }
+
+    #[test]
+    fn committed_thumbnail_conflict_preserves_staged_media() -> Result<()> {
+        let (folder, mut db, shot) = fixture()?;
+        let job = intent(&shot)?;
+        db.prepare_delete(&job)?;
+        stage_files(&job)?;
+        db.commit_delete(&shot.id)?;
+        let staged_thumb = job.staged_thumb_path.as_deref().unwrap();
+        let backup = folder.join("original-staged-thumb.webp");
+        fs::rename(staged_thumb, &backup)?;
+        fs::write(staged_thumb, b"unrelated")?;
+        drop(db);
+
+        let db = Db::open(&folder.join("gallery.sqlite"))?;
+        assert_eq!(fs::read(&job.staged_file_path)?, b"original");
+        assert_eq!(fs::read(staged_thumb)?, b"unrelated");
+        assert_eq!(fs::read(&backup)?, b"thumbnail");
+        assert!(db.pending_delete(&shot.id)?.is_some());
+        drop(db);
+
+        fs::remove_file(staged_thumb)?;
+        fs::rename(&backup, staged_thumb)?;
+        let db = Db::open(&folder.join("gallery.sqlite"))?;
+        assert!(db.pending_deletions()?.is_empty());
+        assert!(!Path::new(&job.staged_file_path).exists());
+        assert!(!Path::new(staged_thumb).exists());
         drop(db);
         fs::remove_dir_all(folder)?;
         Ok(())
