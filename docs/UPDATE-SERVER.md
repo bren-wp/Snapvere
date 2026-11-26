@@ -99,3 +99,8 @@ relay `storage` to another Tauri window consistently. When the user opts out
 in Settings, Home aborts an in-flight check and clears stale notification data
 when it regains focus. Re-enabling checks triggers exactly one immediate request
 via the existing effect. The version dismissal is also reconciled on focus.
+
+
+## Current preview policy
+
+v0.2.35 is an unsigned preview. The version-only sample manifest is not authorization to publish a production stable feed. The client rejects non-JSON media types, invalid content lengths and malformed versions, caps streaming storage at 8192 bytes, and aborts on completion or rejection. A GitHub release label is not proof of publisher authenticity.

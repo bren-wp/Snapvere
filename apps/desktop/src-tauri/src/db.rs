@@ -23,6 +23,8 @@ pub struct PendingDeletion {
     pub thumb_path: Option<String>,
     pub staged_thumb_path: Option<String>,
     pub committed: bool,
+    pub file_identity: Option<String>,
+    pub thumb_identity: Option<String>,
 }
 
 impl Db {
@@ -58,6 +60,16 @@ impl Db {
     }
 
     fn migrate(&self) -> anyhow::Result<()> {
+        let version: i64 = self
+            .conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))?;
+        anyhow::ensure!(
+            (0..=2).contains(&version),
+            "Unsupported gallery schema version"
+        );
+        if version == 2 {
+            return self.ensure_gallery_indexes();
+        }
         // SQLite DDL participates in transactions: partial schema upgrades
         // must not leave a database that looks successfully migrated.
         self.conn.execute_batch(
@@ -80,11 +92,6 @@ impl Db {
                 remote_expires_at INTEGER,
                 is_uploaded   INTEGER NOT NULL DEFAULT 0
             );
-            -- Match deterministic gallery ORDER BY created_at DESC, id DESC.
-            CREATE INDEX IF NOT EXISTS idx_screenshots_order ON screenshots(created_at DESC, id DESC);
-            DROP INDEX IF EXISTS idx_screenshots_created;
-            CREATE INDEX IF NOT EXISTS idx_screenshots_name ON screenshots(name);
-
             CREATE TABLE IF NOT EXISTS tags (
                 id   INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE
@@ -108,6 +115,27 @@ impl Db {
             PRAGMA user_version = 1;
             COMMIT;
             "#,
+        )?;
+        self.conn.execute_batch(
+            "BEGIN IMMEDIATE;
+             ALTER TABLE pending_deletions ADD COLUMN file_identity TEXT;
+             ALTER TABLE pending_deletions ADD COLUMN thumb_identity TEXT;
+             PRAGMA user_version = 2;
+             COMMIT;",
+        )?;
+        self.ensure_gallery_indexes()
+    }
+
+    // Idempotent index maintenance also runs for already migrated galleries.
+    // Never replay the ALTER TABLE statements for a schema-v2 database.
+    fn ensure_gallery_indexes(&self) -> anyhow::Result<()> {
+        self.conn.execute_batch(
+            "BEGIN IMMEDIATE;
+             CREATE INDEX IF NOT EXISTS idx_screenshots_order
+                 ON screenshots(created_at DESC, id DESC);
+             DROP INDEX IF EXISTS idx_screenshots_created;
+             CREATE INDEX IF NOT EXISTS idx_screenshots_name ON screenshots(name);
+             COMMIT;",
         )?;
         Ok(())
     }
@@ -212,15 +240,18 @@ impl Db {
     pub fn prepare_delete(&self, job: &PendingDeletion) -> anyhow::Result<()> {
         let changed = self.conn.execute(
             "INSERT INTO pending_deletions
-             (id, file_path, staged_file_path, thumb_path, staged_thumb_path, committed)
-             SELECT ?1, ?2, ?3, ?4, ?5, 0
+             (id, file_path, staged_file_path, thumb_path, staged_thumb_path, committed,
+              file_identity, thumb_identity)
+             SELECT ?1, ?2, ?3, ?4, ?5, 0, ?6, ?7
              FROM screenshots WHERE id = ?1 AND file_path = ?2 AND thumb_path IS ?4",
             params![
                 job.id,
                 job.file_path,
                 job.staged_file_path,
                 job.thumb_path,
-                job.staged_thumb_path
+                job.staged_thumb_path,
+                job.file_identity,
+                job.thumb_identity
             ],
         )?;
         anyhow::ensure!(changed == 1, "Gallery item disappeared before delete");
@@ -236,6 +267,8 @@ impl Db {
                 WHERE p.id = screenshots.id AND p.committed = 0
                   AND p.file_path = screenshots.file_path
                   AND p.thumb_path IS screenshots.thumb_path
+                  AND p.file_identity IS NOT NULL
+                  AND (p.thumb_path IS NULL OR p.thumb_identity IS NOT NULL)
             )",
             params![id],
         )?;
@@ -259,7 +292,8 @@ impl Db {
         Ok(self
             .conn
             .query_row(
-                "SELECT id, file_path, staged_file_path, thumb_path, staged_thumb_path, committed
+                "SELECT id, file_path, staged_file_path, thumb_path, staged_thumb_path, committed,
+                        file_identity, thumb_identity
                  FROM pending_deletions WHERE id = ?1",
                 params![id],
                 Self::map_pending,
@@ -269,7 +303,8 @@ impl Db {
 
     pub fn pending_deletions(&self) -> anyhow::Result<Vec<PendingDeletion>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, file_path, staged_file_path, thumb_path, staged_thumb_path, committed
+            "SELECT id, file_path, staged_file_path, thumb_path, staged_thumb_path, committed,
+                        file_identity, thumb_identity
              FROM pending_deletions ORDER BY id",
         )?;
         let rows = stmt.query_map([], Self::map_pending)?;
@@ -285,6 +320,8 @@ impl Db {
             thumb_path: row.get(3)?,
             staged_thumb_path: row.get(4)?,
             committed: row.get::<_, i32>(5)? != 0,
+            file_identity: row.get(6)?,
+            thumb_identity: row.get(7)?,
         })
     }
 
@@ -586,7 +623,7 @@ mod gallery_tests {
                 let version: i64 = upgraded
                     .conn
                     .query_row("PRAGMA user_version", [], |r| r.get(0))?;
-                assert_eq!(version, 1);
+                assert_eq!(version, 2);
                 let record = upgraded.get("saved-before-upgrade")?.expect("saved record");
                 assert_eq!(record.tags, vec!["keep-me"]);
                 assert_eq!(upgraded.gallery_page("", "all", 10, 0)?.len(), 1);
@@ -605,6 +642,27 @@ mod gallery_tests {
         // connections, leaving no real user data touched.
         let _ = std::fs::remove_dir_all(folder);
         result
+    }
+
+    #[test]
+    fn schema_v1_upgrade_preserves_legacy_pending_rows() -> anyhow::Result<()> {
+        let db = Db::open_in_memory()?;
+        db.conn.execute_batch(
+            "ALTER TABLE pending_deletions DROP COLUMN file_identity;
+             ALTER TABLE pending_deletions DROP COLUMN thumb_identity;
+             PRAGMA user_version = 1;
+             INSERT INTO pending_deletions
+                (id, file_path, staged_file_path, committed)
+             VALUES ('legacy', 'original', 'staged', 0);",
+        )?;
+        db.migrate()?;
+        let legacy = db.pending_delete("legacy")?.expect("legacy journal");
+        assert!(legacy.file_identity.is_none());
+        assert!(legacy.thumb_identity.is_none());
+        assert_eq!(legacy.file_path, "original");
+        db.migrate()?;
+        assert!(db.pending_delete("legacy")?.is_some());
+        Ok(())
     }
 
     #[test]

@@ -1,5 +1,21 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.36 — Shared media safety and documentation (preview candidate)
+
+- Restore idempotent gallery-index maintenance for already migrated schema-v2 databases without repeating ALTER TABLE. Preserve the existing index-upgrade regression and all user records.
+
+- Apply the exact Windows/Linux rustfmt correction for the missing-original identity guard; no behavior changes. Recheck isolated SQLite migration and commit predicates (5/5); native acceptance still pending.
+
+- Use DELETE-capable verified Windows file handles for committed gallery cleanup with SetFileInformationByHandle; do not reopen a pathname for removal. Defer locked files and identity mismatches. Sync pinned Linux directory entries before SQLite commit and after restore/cleanup. Linux pathname unlink and both platforms' rename races remain open; Windows durability and native CI must be verified.
+
+- Add SQLite schema v2 with persistent native directory/file identifiers for deletion intents. Reject mismatched or legacy unverifiable identities during staging, rollback and cleanup; add replacement and legacy-journal tests. A same-user leaf race remains because rename/unlink are pathname based.
+- Wait for bounded Sway IPC/output readiness before native Wayland acceptance; preserve all three real capture sessions and strict output assertions.
+
+- Retain uncommitted gallery recovery intents when neither the original nor staged file is present, including a replaced empty media directory. Add a restart/restore regression; retain current synchronous rollback behavior for already missing files. Apply the exact Rust formatting correction reported by both native CI jobs.
+
+- Share native bounded source opening between Free clipboard copy and Pro batch export. Decode clipboard images from the same bounded byte snapshot used for dimension checks; reject redirected or multiply linked sources, unsupported formats and oversized data. Add regression tests.
+- Refresh product specifications, download and acceptance guidance, documentation index, security audit register and seven-phase roadmap. No new network access or dependencies.
+
 ## v0.2.35 — Update notification and IPC hardening (preview)
 
 - Reject multiply linked Windows gallery media using native file-handle metadata and add a cross-platform hard-link regression. Remove the unused Home import detected by strict TypeScript CI.
@@ -10,7 +26,7 @@
 
 - Restrict global shortcut changes to Settings and require explicit caller identity for all registered native IPC commands. Audit all 50 handlers, including specialized export validation.
 - Reject mismatched frozen monitor IDs rather than substituting another screen.
-- Validate recovery intent paths and tokens, reject redirected ancestors and use OS no-replace rename for gallery staging and restoration. Directory-handle pinning and native acceptance remain outstanding.
+- Validate recovery intent paths and tokens, reject redirected ancestors and use OS no-replace rename for gallery staging and restoration. Directory-handle pinning was subsequently implemented in this release; physical acceptance and leaf identity races remain outstanding.
 
 - Strictly validate JSON media type, declared byte length and version strings in the opt-in update notification feed. Bound streaming storage to a fixed 8 KiB allocation and abort the request on completion or rejection.
 - Add regression tests for malformed headers, fragmented responses at the byte limit and invalid version strings.
