@@ -2,6 +2,8 @@
 
 ## v0.2.36 — Shared media safety and documentation (preview candidate)
 
+- Restore idempotent gallery-index maintenance for already migrated schema-v2 databases without repeating ALTER TABLE. Preserve the existing index-upgrade regression and all user records.
+
 - Apply the exact Windows/Linux rustfmt correction for the missing-original identity guard; no behavior changes. Recheck isolated SQLite migration and commit predicates (5/5); native acceptance still pending.
 
 - Use DELETE-capable verified Windows file handles for committed gallery cleanup with SetFileInformationByHandle; do not reopen a pathname for removal. Defer locked files and identity mismatches. Sync pinned Linux directory entries before SQLite commit and after restore/cleanup. Linux pathname unlink and both platforms' rename races remain open; Windows durability and native CI must be verified.

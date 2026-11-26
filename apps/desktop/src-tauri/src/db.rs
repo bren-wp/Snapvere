@@ -68,7 +68,7 @@ impl Db {
             "Unsupported gallery schema version"
         );
         if version == 2 {
-            return Ok(());
+            return self.ensure_gallery_indexes();
         }
         // SQLite DDL participates in transactions: partial schema upgrades
         // must not leave a database that looks successfully migrated.
@@ -92,11 +92,6 @@ impl Db {
                 remote_expires_at INTEGER,
                 is_uploaded   INTEGER NOT NULL DEFAULT 0
             );
-            -- Match deterministic gallery ORDER BY created_at DESC, id DESC.
-            CREATE INDEX IF NOT EXISTS idx_screenshots_order ON screenshots(created_at DESC, id DESC);
-            DROP INDEX IF EXISTS idx_screenshots_created;
-            CREATE INDEX IF NOT EXISTS idx_screenshots_name ON screenshots(name);
-
             CREATE TABLE IF NOT EXISTS tags (
                 id   INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE
@@ -126,6 +121,20 @@ impl Db {
              ALTER TABLE pending_deletions ADD COLUMN file_identity TEXT;
              ALTER TABLE pending_deletions ADD COLUMN thumb_identity TEXT;
              PRAGMA user_version = 2;
+             COMMIT;",
+        )?;
+        self.ensure_gallery_indexes()
+    }
+
+    // Idempotent index maintenance also runs for already migrated galleries.
+    // Never replay the ALTER TABLE statements for a schema-v2 database.
+    fn ensure_gallery_indexes(&self) -> anyhow::Result<()> {
+        self.conn.execute_batch(
+            "BEGIN IMMEDIATE;
+             CREATE INDEX IF NOT EXISTS idx_screenshots_order
+                 ON screenshots(created_at DESC, id DESC);
+             DROP INDEX IF EXISTS idx_screenshots_created;
+             CREATE INDEX IF NOT EXISTS idx_screenshots_name ON screenshots(name);
              COMMIT;",
         )?;
         Ok(())
