@@ -1,3 +1,4 @@
+// Snapvere by Brendigo
 // Snapvere annotation rendering. Coordinates are logical canvas pixels.
 import type { Annotation, Point } from "./types";
 import { annotationBounds, arrowGeometry, pixelationSize, validPoint } from "./annotationGeometry.ts";
