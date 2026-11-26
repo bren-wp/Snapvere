@@ -117,6 +117,7 @@ export interface RecordStatus {
 
 /** Payload eventa `snapvere:rec-done`. */
 export interface RecordDone {
+  sessionId: string;
   screenshot: Screenshot | null;
   error: string | null;
   cancelled: boolean;

@@ -1791,21 +1791,25 @@ pub fn set_blur_regions(
     )
 }
 
-/// Sakrij UI snimanja (HUD + sloj za crtanje). Zove ga frontend kad snimanje završi.
+/// Close the completed recording's HUD and overlays, never a newer session.
 #[tauri::command]
-pub fn close_rec_hud(window: tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
+pub fn close_rec_hud(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    session_id: String,
+) -> Result<(), String> {
     require_window_label(window.label(), &["recbar"])?;
-    for label in ["recbar", "recdraw", "recframe"] {
-        if let Some(win) = app.get_webview_window(label) {
-            let _ = win.hide();
+    record::with_terminal_hud_session(&app, &session_id, || {
+        for label in ["recbar", "recdraw", "recframe"] {
+            if let Some(win) = app.get_webview_window(label) {
+                let _ = win.hide();
+            }
         }
-    }
-    *lock(&app.state::<AppState>().rec_frame) = None;
-    // Sljedeće snimanje kreće s čistim slojem.
-    if let Some(win) = app.get_webview_window("recdraw") {
-        let _ = win.set_ignore_cursor_events(true);
-    }
-    Ok(())
+        *lock(&app.state::<AppState>().rec_frame) = None;
+        if let Some(win) = app.get_webview_window("recdraw") {
+            let _ = win.set_ignore_cursor_events(true);
+        }
+    })
 }
 
 // ──────────────────────────────── galerija ────────────────────────────────

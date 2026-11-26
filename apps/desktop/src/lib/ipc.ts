@@ -106,7 +106,7 @@ export const ipc = {
     invoke<number>("acknowledge_crop_preview", { session, frameId }),
   resumeCropPreview: (session: string, marks: PreviewMark[], historyDelta: number) =>
     invoke<RecordStatus>("resume_crop_preview", { session, marks, historyDelta }),
-  closeRecHud: () => invoke<void>("close_rec_hud"),
+  closeRecHud: (sessionId: string) => invoke<void>("close_rec_hud", { sessionId }),
   /** Expand the native HUD viewport to show its palette/error, then shrink. */
   setRecHudExpanded: (expanded: boolean) =>
     invoke<void>("set_rec_hud_expanded", { expanded }),

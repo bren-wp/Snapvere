@@ -18,3 +18,11 @@ export async function runRecordingAction(
     throw error;
   }
 }
+
+/** Missing or stale terminal event identifiers must never mutate the current HUD. */
+export function matchesRecordingSession(
+  current: string | null,
+  requested: string | null | undefined,
+): boolean {
+  return Boolean(current && requested && current === requested);
+}
