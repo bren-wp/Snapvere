@@ -1,9 +1,7 @@
 // Snapvere by Brendigo
 //! Recorder worker loop. The worker owns frame capture and encoder finalization.
 
-use super::pixels::{
-    allocate_bgra, bgra_to_rgba_image, crop_bgra, validate_source_geometry,
-};
+use super::pixels::{allocate_bgra, bgra_to_rgba_image, crop_bgra, validate_source_geometry};
 use super::transport::Source;
 use super::*;
 
