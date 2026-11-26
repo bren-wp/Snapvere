@@ -25,7 +25,7 @@ esac
 printf 'Checking shared Snapvere source on %s\n' "$host"
 
 cd "$root/apps/desktop"
-npm ci
+npm ci --ignore-scripts --no-audit --no-fund
 npm run build
 npm run test:unit
 cd src-tauri

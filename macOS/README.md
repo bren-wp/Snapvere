@@ -12,7 +12,7 @@ On a Mac with Xcode command-line tools, Node.js 24+ and the repository's Rust to
 bash macOS/check-native.sh
 ```
 
-This checks the shared frontend and unit suite, and compiles both editions (including test targets) for the actual Apple Silicon or Intel Rust host using the existing lockfiles. It fails on non-macOS hosts. It does not execute native Rust tests, build an installer, sign code or certify functional parity. Run on both architectures before making a compatibility claim.
+This checks the shared frontend and unit suite, and compiles both editions (including test targets) for the actual Apple Silicon or Intel Rust host using the existing lockfiles. It fails on non-macOS hosts. It does not execute native Rust tests, build an installer, sign code or certify functional parity. The separate experimental [macOS CI workflow](../.github/workflows/macos-native.yml) runs this command on Apple Silicon and Intel for relevant pull-request changes. It has no publishing permissions and does not change the required Windows/Linux release inventory. Run on both architectures before making a compatibility claim.
 
 ## Parity acceptance
 
