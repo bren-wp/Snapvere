@@ -13,10 +13,14 @@ This file replaces the outdated initial-project scaffolding task list. It docume
 | App and web visual tokens | Implemented | `tools/check_brand_tokens.py` |
 | Brand identity in tracked paths/content | Implemented | CI search and `tools/check_capture_pipeline.py` |
 | Home, Settings, Editor, website previews | Implemented | Playwright-generated images in `docs/screenshots` |
-| Screenshot frozen-frame binary transfer | Implemented in development PR | Tauri IPC, header/pixel validation and PNG memory fallback |
-| Black-overlay error handling | Implemented in development PR | Cancel and report failure rather than display an empty canvas |
-| Windows package build | v0.2.16 published; v0.2.17 candidate | Native build workflow; three binaries, checksum manifest and physical Windows QA still required |
+| Screenshot frozen-frame binary transfer | Implemented | Tauri IPC, header/pixel validation and PNG memory fallback |
+| Black-overlay error handling | Implemented | Cancel and report failure rather than display an empty canvas |
+| Windows package build | v0.2.35 published; v0.2.36 candidate | Native build workflow; six Windows and four Linux packages, SBOM, notice and checksum manifest and physical Windows QA still required |
 | Recording subsystem and HUD | Implemented | Rust/React source, release tests; live Windows device QA still required |
+
+## Current release evidence
+
+Main commit `3c6846255422d314f48c13a7c269fd5644df7d1f`: [quality](https://github.com/bren-wp/Snapvere/actions/runs/45723826076), [visual](https://github.com/bren-wp/Snapvere/actions/runs/45723826041) and [release](https://github.com/bren-wp/Snapvere/actions/runs/45723825969) passed. These are automated checks, not physical-device certification. The v0.2.36 candidate requires a fresh full cycle. See [audit register](AUDIT-2026-11-26.md).
 
 ## Acceptance tests still requiring real Windows hardware
 

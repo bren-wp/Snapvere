@@ -5,7 +5,7 @@
 # SNAPVERE
 ### Capture. Edit. Share your work — on your terms.
 
-**Screenshots, screen recordings and clear visual explanations in one Windows application.**
+**Capture, annotate and organize your screen — privately, on Windows and Linux.**
 
 A product by **[Brendigo](https://brendigo.com)**.
 
@@ -33,7 +33,7 @@ Snapvere gives you a simple sequence: **capture → annotate → save or copy**.
 | 🎬 | **Screen recording** | Record an area or display to MP4 or silent GIF; choose cursor and audio preferences |
 | ⏸️ | **Pause and resume** | Control an active recording from its toolbar or the Windows notification-area menu |
 | 📋 | **Clipboard and export** | Copy a captured image or save a result in PNG, JPEG or WebP |
-| 🗂️ | **Local library** | Find all captures and recordings with server-side category filters and tag search, or open the capture folder directly, without an online account |
+| 🗂️ | **Local library** | Find all captures and recordings with local category filters and tag search, or open the capture folder directly, without an online account |
 | 🖥️ | **Ready when you are** | Launch quietly at Windows sign-in; capture from the icon beside the clock |
 | 🔒 | **Privacy by design** | No automatic capture upload; locally stored captures and gallery data |
 
@@ -117,7 +117,7 @@ The Windows notification-area menu follows the selected language.
 
 ## Available native packages and privacy
 
-Versioned unsigned Free and Pro preview releases include Windows x86_64
+[Version 0.2.35](https://github.com/bren-wp/Snapvere/releases/tag/v0.2.35) is available as an unsigned preview. Free and Pro downloads include Windows x86_64
 Portable/Setup/MSI and Linux x86_64 DEB/AppImage packages. Experimental Fedora/RPM packaging is
 under QA in the development branch and is not a supported download yet.
 The app's default mode keeps captures local, without automatic cloud uploads.
@@ -188,7 +188,8 @@ For setup tips and product information:
 [Changelog](CHANGELOG.md) ·
 [Language guide](docs/LOCALIZATION.md) ·
 [Technical specifications](docs/SPECIFICATION.md) ·
-[Security and quality review](docs/AUDIT-v0.2.22-startup.md)
+[Security and quality review](docs/AUDIT-2026-11-26.md) ·
+[Documentation](docs/README.md) · [Roadmap](ROADMAP.md)
 
 ---
 

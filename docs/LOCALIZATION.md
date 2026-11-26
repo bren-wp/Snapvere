@@ -2,7 +2,7 @@
 
 ## Scope
 
-The Tauri/Rust Windows desktop application defaults to **English (en)**. The
+The shared Tauri/Rust Windows and Linux desktop application defaults to **English (en)**. The
 user can switch languages in **Settings → General → Language**. Supported codes:
 
 | Code | Language |
@@ -69,3 +69,6 @@ testing of capture, audio, multi-monitor screen geometry, hardware recorder
 recovery, regional font rendering, screen-reader behavior and actual
 pixel-by-pixel comparison against approved reference screenshots. Windows
 installation, EULA and OS-provided dialogs require separate validation.
+
+
+Native gallery deletion confirmation uses the selected language, with all twelve locales copied from the existing UI catalog. Rust unit tests cover presence, button distinction and English fallback. Physical native dialog presentation and translation proofreading remain acceptance tasks.

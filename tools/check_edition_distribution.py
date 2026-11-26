@@ -28,13 +28,13 @@ assert '#[cfg(not(feature = "pro"))]' in commands
 assert 'require_window_label(window.label(), &["home"])?' in commands
 assert 'commands::pro_export_batch' in lib
 for required in ("blocking_pick_folder()", "persist_noclobber(destination)", "sync_all()",
-                 "symlink_metadata", "validate_ids", "MAX_BATCH: usize = 100",
+                 "validate_ids", "MAX_BATCH: usize = 100",
                  "PinnedDirectory::open", "open_bounded_source", "tempfile_in(parent)",
                  "OFlags::TMPFILE", "AtFlags::SYMLINK_FOLLOW", "linkat("):
     assert required in native, f"Missing secure Pro batch export guard: {required}"
 shared_media = read("apps/desktop/src-tauri/src/pinned_directory.rs")
 clipboard = read("apps/desktop/src-tauri/src/commands/gallery_helpers.rs")
-for required in ("metadata.nlink() != 1", "info.nNumberOfLinks != 1",
+for required in ("symlink_metadata", "metadata.nlink() != 1", "info.nNumberOfLinks != 1",
                  "O_NOFOLLOW", "O_NONBLOCK", "GetFileInformationByHandle", "PinnedDirectory::open"):
     assert required in shared_media, f"Missing shared source guard: {required}"
 assert "open_bounded_source(path, MAX_CLIPBOARD_FILE_BYTES)" in clipboard

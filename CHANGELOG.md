@@ -1,5 +1,10 @@
 # Snapvere by Brendigo — Release history
 
+## v0.2.36 — Shared media safety and documentation (preview candidate)
+
+- Share native bounded source opening between Free clipboard copy and Pro batch export. Decode clipboard images from the same bounded byte snapshot used for dimension checks; reject redirected or multiply linked sources, unsupported formats and oversized data. Add regression tests.
+- Refresh product specifications, download and acceptance guidance, documentation index, security audit register and seven-phase roadmap. No new network access or dependencies.
+
 ## v0.2.35 — Update notification and IPC hardening (preview)
 
 - Reject multiply linked Windows gallery media using native file-handle metadata and add a cross-platform hard-link regression. Remove the unused Home import detected by strict TypeScript CI.
@@ -10,7 +15,7 @@
 
 - Restrict global shortcut changes to Settings and require explicit caller identity for all registered native IPC commands. Audit all 50 handlers, including specialized export validation.
 - Reject mismatched frozen monitor IDs rather than substituting another screen.
-- Validate recovery intent paths and tokens, reject redirected ancestors and use OS no-replace rename for gallery staging and restoration. Directory-handle pinning and native acceptance remain outstanding.
+- Validate recovery intent paths and tokens, reject redirected ancestors and use OS no-replace rename for gallery staging and restoration. Directory-handle pinning was subsequently implemented in this release; physical acceptance and leaf identity races remain outstanding.
 
 - Strictly validate JSON media type, declared byte length and version strings in the opt-in update notification feed. Bound streaming storage to a fixed 8 KiB allocation and abort the request on completion or rejection.
 - Add regression tests for malformed headers, fragmented responses at the byte limit and invalid version strings.

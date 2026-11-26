@@ -1,7 +1,6 @@
 # SNAPVERE Free + Pro — release and security acceptance
 
-**Target:** 0.2.28 · current implementation is a draft PR, not a published
-signed/stable release. An actual passing CI run is required before any merge.
+**Updated acceptance baseline:** v0.2.35 is published as unsigned preview; v0.2.36 is a candidate. The original v0.2.28 checklist is retained below with current scope. Exact-commit CI is mandatory before merge.
 
 ## Changes implemented in source
 
@@ -9,7 +8,7 @@ signed/stable release. An actual passing CI run is required before any merge.
   screenshot/GIF/Windows-video recorder. No existing capture option has been
   intentionally moved behind a paywall.
 - Pro uses a distinct Tauri application ID and app-data path, with professional
-  recording presets, three private user profiles and a native-only multi-select
+  recording presets, six private user profiles and a native-only multi-select
   gallery export to an explicitly selected local folder.
 - Export batches accept 1–100 gallery UUIDs, open the native OS folder picker,
   reject symlinked sources and unsupported formats, use exclusive new output
@@ -39,8 +38,8 @@ signed/stable release. An actual passing CI run is required before any merge.
 | Authenticode, repo release signing | missing | missing |
 
 The release workflow **must refuse to publish** until the Draft has exactly
-six distinct Windows and four Linux packages plus all seven extension ZIPs,
-SBOM, Free version-only update manifest and integrity hash manifest. The
+six distinct Windows and four Linux packages, SBOM, Free version-only
+update manifest and integrity hash manifest (13 assets). Browser extensions are retired. The
 release may then be made public only as an unsigned prerelease. The Pro edition
 is a **feature preview without entitlement enforcement**; it is not a secure
 paid-license product yet.

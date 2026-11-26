@@ -4,9 +4,9 @@
 
 | Target | Release artifact | Actual status |
 |---|---|---|
-| Windows x86_64 (64-bit) | Portable EXE, NSIS Setup EXE, WiX MSI | CI-built in v0.2.26; real-device QA/signing incomplete |
-| Linux x86_64 Debian/Ubuntu | DEB | CI-built v0.2.26; runtime QA incomplete |
-| Linux x86_64 multiple distributions | AppImage | CI-built v0.2.26; glibc/WebKitGTK/Wayland constraints |
+| Windows x86_64 (64-bit) | Portable EXE, NSIS Setup EXE, WiX MSI | CI-built in v0.2.35; real-device QA/signing incomplete |
+| Linux x86_64 Debian/Ubuntu | DEB | CI-built v0.2.35; runtime QA incomplete |
+| Linux x86_64 multiple distributions | AppImage | CI-built v0.2.35; glibc/WebKitGTK/Wayland constraints |
 | Linux x86_64 Fedora/RPM family | RPM | **QA-only experimental build**; no published support yet |
 | Windows x86 (32-bit) | none | Not compiled; needs target-specific build/test and dependencies |
 | Windows ARM64 | none | Not compiled; needs ARM64 native build/test and signing |

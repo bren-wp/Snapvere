@@ -3,10 +3,14 @@
 **Product:** SNAPVERE  
 **Publisher / maintainer:** BRENDIGO · https://brendigo.com  
 **Official product domain:** https://snapvere.com  
-**Current published desktop package:** v0.2.5  
+**Current published desktop package:** v0.2.35 (unsigned preview; v0.2.36 candidate)  
 **Current source implementation:** Tauri 2 + Rust + React/TypeScript; this is not the separate WinUI implementation presently displayed on the public domain.
 
 This document describes the **current codebase**, not an aspirational feature list. Availability must be checked against actual source, native tests and Windows release artifacts.
+
+## Platform and edition scope
+
+Windows 10/11 x64 is primary. Linux x64 is a preview with shared interface, image capture/editor/gallery and silent GIF; public MP4/audio and cursor compositing remain gated. Free keeps core capture and editing; Pro adds eight recording presets, six local profiles, smart collections, export profiles, native batch export (100 items) and A/B playback review. No commercial entitlement, video rendering, OCR or live audio meter is implemented. Browser extensions were retired. See [roadmap](../ROADMAP.md) and [current verification](TASK-BREAKDOWN.md).
 
 ## Product principles
 
