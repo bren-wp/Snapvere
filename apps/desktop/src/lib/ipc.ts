@@ -94,10 +94,10 @@ export const ipc = {
     logicalSelection?: LogicalRecordingSelection,
   ) =>
     invoke<RecordStatus>("start_recording", { region, monitorId, options, logicalSelection }),
-  stopRecording: () => invoke<void>("stop_recording"),
-  cancelRecording: () => invoke<void>("cancel_recording"),
-  pauseRecording: (paused: boolean) =>
-    invoke<RecordStatus>("pause_recording", { paused }),
+  stopRecording: (sessionId: string) => invoke<void>("stop_recording", { sessionId }),
+  cancelRecording: (sessionId: string) => invoke<void>("cancel_recording", { sessionId }),
+  pauseRecording: (paused: boolean, sessionId: string) =>
+    invoke<RecordStatus>("pause_recording", { paused, sessionId }),
   recordingStatus: () => invoke<RecordStatus>("recording_status"),
   getCropPreview: () => invoke<CropPreview>("get_crop_preview"),
   getCropPreviewPacket: (session: string, after: number) =>
@@ -116,8 +116,8 @@ export const ipc = {
   setDrawInteractive: (interactive: boolean) =>
     invoke<void>("set_draw_interactive", { interactive }),
   /** Redact zone koje Rust pikselizira u svakom frameu snimke. */
-  setBlurRegions: (rects: PixelRect[], viewportWidth: number, viewportHeight: number) =>
-    invoke<void>("set_blur_regions", { rects, viewportWidth, viewportHeight }),
+  setBlurRegions: (sessionId: string, rects: PixelRect[], viewportWidth: number, viewportHeight: number) =>
+    invoke<number>("set_blur_regions", { sessionId, rects, viewportWidth, viewportHeight }),
 
   // ── editor ──
   saveEditedImage: (base64Png: string, format: ImageFormat, quality: number) =>

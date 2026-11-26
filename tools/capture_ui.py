@@ -134,11 +134,16 @@ TAURI_PREVIEW = r"""
         return null;
       }
       if (command === "stop_recording") {
+        if (args?.sessionId !== "preview-recording-session") throw new Error("Missing session identity");
         window.__SNAPVERE_TEST_STOP_ATTEMPTS = (window.__SNAPVERE_TEST_STOP_ATTEMPTS || 0) + 1;
         if (window.__SNAPVERE_TEST_STOP_ATTEMPTS === 1) throw new Error("Simulated native stop failure");
         return null;
       }
-      if (command === "recording_status") return { state: "idle" };
+      if (command === "recording_status") return {
+        sessionId: "preview-recording-session", phase: "recording", elapsedMs: 1200,
+        frames: 30, width: 1280, height: 720, format: "gif", sizeBytes: 0,
+        mic: false, systemAudio: false, blurRevision: 0, encodedBlurRevision: 0
+      };
       if (command === "set_rec_hud_expanded") {
         window.__SNAPVERE_HUD_EXPANDED = args?.expanded === true;
         return null;

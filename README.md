@@ -117,7 +117,7 @@ The Windows notification-area menu follows the selected language.
 
 ## Available native packages and privacy
 
-[Version 0.2.35](https://github.com/bren-wp/Snapvere/releases/tag/v0.2.35) is available as an unsigned preview. Free and Pro downloads include Windows x86_64
+[Version 0.2.36](https://github.com/bren-wp/Snapvere/releases/tag/v0.2.36) is available as an unsigned preview. Free and Pro downloads include Windows x86_64
 Portable/Setup/MSI and Linux x86_64 DEB/AppImage packages. Experimental Fedora/RPM packaging is
 under QA in the development branch and is not a supported download yet.
 The app's default mode keeps captures local, without automatic cloud uploads.
@@ -175,6 +175,8 @@ Snapvere is built around local capture and local storage. Screen content is
 not automatically sent to a server. Microphone and system audio are options
 for user-initiated recordings. Users remain responsible for obtaining any
 required recording permissions and protecting saved sensitive content.
+
+Snapvere is an original Brendigo product, developed and maintained by its project owner. The owner's authorship statement and licensing boundaries are recorded in [source provenance](SOURCE-PROVENANCE.md).
 
 The source code distributed under [MIT](LICENSE) retains its open-source
 rights. The Windows installer also includes a

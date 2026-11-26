@@ -15,12 +15,12 @@ This file replaces the outdated initial-project scaffolding task list. It docume
 | Home, Settings, Editor, website previews | Implemented | Playwright-generated images in `docs/screenshots` |
 | Screenshot frozen-frame binary transfer | Implemented | Tauri IPC, header/pixel validation and PNG memory fallback |
 | Black-overlay error handling | Implemented | Cancel and report failure rather than display an empty canvas |
-| Windows package build | v0.2.35 published; v0.2.36 candidate | Native build workflow; six Windows and four Linux packages, SBOM, notice and checksum manifest and physical Windows QA still required |
+| Windows package build | v0.2.36 published; v0.2.37 candidate | Native build workflow; six Windows and four Linux packages, SBOM, notice and checksum manifest and physical Windows QA still required |
 | Recording subsystem and HUD | Implemented | Rust/React source, release tests; live Windows device QA still required |
 
 ## Current release evidence
 
-Main commit `3c6846255422d314f48c13a7c269fd5644df7d1f`: [quality](https://github.com/bren-wp/Snapvere/actions/runs/45723826076), [visual](https://github.com/bren-wp/Snapvere/actions/runs/45723826041) and [release](https://github.com/bren-wp/Snapvere/actions/runs/45723825969) passed. These are automated checks, not physical-device certification. The v0.2.36 candidate requires a fresh full cycle. See [audit register](AUDIT-2026-11-26.md).
+Main commit `3c6846255422d314f48c13a7c269fd5644df7d1f`: [quality](https://github.com/bren-wp/Snapvere/actions/runs/45723826076), [visual](https://github.com/bren-wp/Snapvere/actions/runs/45723826041) and [release](https://github.com/bren-wp/Snapvere/actions/runs/45723825969) passed. These are automated checks, not physical-device certification. The published v0.2.36 preview is newer than this historical baseline; the v0.2.37 candidate requires fresh exact-revision CI. See [audit register](AUDIT-2026-11-26.md).
 
 ## Acceptance tests still requiring real Windows hardware
 

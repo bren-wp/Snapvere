@@ -99,34 +99,78 @@ fn validate_job(job: &PendingDeletion) -> Result<()> {
 }
 
 #[cfg(target_os = "linux")]
-fn rename_noreplace(source: &Path, destination: &Path) -> Result<()> {
+fn rename_verified_noreplace(source: &Path, destination: &Path, expected: &str) -> Result<()> {
     use rustix::fs::{renameat_with, RenameFlags, CWD};
+    // Keep the original inode alive until the operation and its checks finish.
+    // Linux has no identity-conditional rename; this detects but cannot
+    // prevent an adversarial pathname replacement between check and rename.
+    let (file, identity) = open_leaf(source, false)?;
+    ensure!(identity == expected, "Gallery media identity changed");
     renameat_with(CWD, source, CWD, destination, RenameFlags::NOREPLACE)?;
-    Ok(())
+    ensure!(
+        leaf_stamp(&file, &file.metadata()?)? == expected,
+        "Gallery media changed during rename"
+    );
+    verify_leaf(destination, expected)
 }
 
 #[cfg(windows)]
-fn rename_noreplace(source: &Path, destination: &Path) -> Result<()> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows::core::PCWSTR;
-    use windows::Win32::Storage::FileSystem::MoveFileW;
-
-    let wide = |path: &Path| -> Result<Vec<u16>> {
-        let mut value: Vec<u16> = path.as_os_str().encode_wide().collect();
-        ensure!(!value.contains(&0), "Invalid deletion path");
-        value.push(0);
-        Ok(value)
+fn rename_verified_noreplace(source: &Path, destination: &Path, expected: &str) -> Result<()> {
+    use std::mem::{align_of, offset_of, size_of};
+    use std::os::windows::{ffi::OsStrExt, io::AsRawHandle};
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::Storage::FileSystem::{
+        FileRenameInfo, SetFileInformationByHandle, FILE_RENAME_INFO,
     };
-    let source = wide(source)?;
-    let destination = wide(destination)?;
-    // SAFETY: both buffers are live, NUL-terminated UTF-16 strings.
-    // MoveFileW fails if the target exists.
-    unsafe { MoveFileW(PCWSTR(source.as_ptr()), PCWSTR(destination.as_ptr())) }?;
+
+    ensure!(
+        source.is_absolute()
+            && destination.is_absolute()
+            && source.parent() == destination.parent(),
+        "Gallery rename requires absolute sibling paths"
+    );
+    let (file, identity) = open_leaf(source, true)?;
+    ensure!(
+        expected != "missing" && identity == expected,
+        "Gallery media identity changed"
+    );
+
+    let mut name: Vec<u16> = destination.as_os_str().encode_wide().collect();
+    ensure!(
+        !name.is_empty() && name.len() < 32768 && !name.contains(&0),
+        "Invalid gallery rename destination"
+    );
+    let name_bytes = name.len() * size_of::<u16>();
+    name.push(0);
+    let offset = offset_of!(FILE_RENAME_INFO, FileName);
+    let bytes = size_of::<FILE_RENAME_INFO>().max(offset + name.len() * size_of::<u16>());
+    ensure!(
+        align_of::<FILE_RENAME_INFO>() <= align_of::<usize>(),
+        "Unsupported rename buffer alignment"
+    );
+    let mut buffer = vec![0usize; bytes.div_ceil(size_of::<usize>())];
+    let raw = buffer.as_mut_ptr().cast::<u8>();
+    let info = raw.cast::<FILE_RENAME_INFO>();
+    // SAFETY: the aligned, zero-initialized buffer covers the native header
+    // and complete UTF-16 destination including its terminator. Zero flags
+    // disable replacement; RootDirectory is null for an absolute path.
+    // The verified DELETE-capable File remains alive and denies competing
+    // write/delete handles until SetFileInformationByHandle returns.
+    unsafe {
+        std::ptr::addr_of_mut!((*info).FileNameLength).write(name_bytes as u32);
+        std::ptr::copy_nonoverlapping(name.as_ptr(), raw.add(offset).cast::<u16>(), name.len());
+        SetFileInformationByHandle(
+            HANDLE(file.as_raw_handle()),
+            FileRenameInfo,
+            raw.cast(),
+            bytes as u32,
+        )
+    }?;
     Ok(())
 }
 
 #[cfg(not(any(target_os = "linux", windows)))]
-fn rename_noreplace(_source: &Path, _destination: &Path) -> Result<()> {
+fn rename_verified_noreplace(_source: &Path, _destination: &Path, _expected: &str) -> Result<()> {
     bail!("Safe gallery rename is unsupported on this platform")
 }
 
@@ -207,8 +251,34 @@ fn open_leaf(path: &Path, delete_access: bool) -> Result<(fs::File, String)> {
             "Redirected or multiply linked gallery file"
         );
     }
-    let identity = crate::pinned_directory::file_identity(&file).map_err(anyhow::Error::msg)?;
+    let identity = leaf_stamp(&file, &metadata)?;
     Ok((file, identity))
+}
+
+/// A versioned journal fingerprint is stronger than an inode/file ID alone.
+/// It is not a content hash and cannot certify identity against a same-user
+/// attacker who can manipulate metadata. Rename does not change file mtime.
+fn leaf_stamp(file: &fs::File, metadata: &fs::Metadata) -> Result<String> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn timestamp(value: SystemTime) -> String {
+        match value.duration_since(UNIX_EPOCH) {
+            Ok(duration) => format!("+{}:{:09}", duration.as_secs(), duration.subsec_nanos()),
+            Err(error) => {
+                let duration = error.duration();
+                format!("-{}:{:09}", duration.as_secs(), duration.subsec_nanos())
+            }
+        }
+    }
+
+    let id = crate::pinned_directory::file_identity(file).map_err(anyhow::Error::msg)?;
+    let modified = timestamp(metadata.modified()?);
+    // Some supported Linux filesystems do not expose creation time.
+    let created = metadata
+        .created()
+        .map(timestamp)
+        .unwrap_or_else(|_| "unavailable".to_owned());
+    Ok(format!("v3:{id}:{}:{modified}:{created}", metadata.len()))
 }
 
 fn leaf_identity(path: &Path) -> Result<String> {
@@ -234,6 +304,10 @@ fn checked_leaf<'a>(directory: &PinnedDirectory, identity: Option<&'a str>) -> R
     ensure!(
         directory.identity().map_err(anyhow::Error::msg)? == parent,
         "Gallery directory identity changed"
+    );
+    ensure!(
+        leaf == "missing" || leaf.starts_with("v3:"),
+        "Deletion journal uses an older identity format; preserve media for recovery"
     );
     Ok(leaf)
 }
@@ -261,8 +335,8 @@ fn stage_one(source: &str, staged: &str, identity: Option<&str>) -> Result<()> {
         );
         return Ok(());
     }
-    verify_leaf(&source, expected)?;
-    rename_noreplace(&source, &staged).context("Could not stage media for deletion")?;
+    rename_verified_noreplace(&source, &staged, expected)
+        .context("Could not stage media for deletion")?;
     verify_leaf(&staged, expected)
 }
 
@@ -281,8 +355,8 @@ fn restore_one(source: &str, staged: &str, identity: Option<&str>) -> Result<()>
         return Ok(());
     }
     if exists(&staged)? {
-        verify_leaf(&staged, expected)?;
-        rename_noreplace(&staged, &source).context("Could not restore staged gallery media")?;
+        rename_verified_noreplace(&staged, &source, expected)
+            .context("Could not restore staged gallery media")?;
     }
     verify_leaf(&source, expected)?;
     directory.sync_entries().map_err(anyhow::Error::msg)
@@ -316,10 +390,22 @@ fn remove_verified(path: &Path, expected: &str) -> Result<()> {
 
 #[cfg(not(windows))]
 fn remove_verified(path: &Path, expected: &str) -> Result<()> {
-    // Linux unlink remains pathname-based; do not claim an atomic identity
-    // compare-and-unlink against another process running as the same user.
-    verify_leaf(path, expected)?;
-    fs::remove_file(path).context("Could not clear committed deletion staging file")
+    // Holding the verified file prevents reuse of its inode during cleanup.
+    // Unlink is still pathname-based: the postcheck detects a mismatch but
+    // cannot undo an unlink of a substituted pathname.
+    let (file, identity) = open_leaf(path, false)?;
+    ensure!(identity == expected, "Gallery media identity changed");
+    fs::remove_file(path).context("Could not clear committed deletion staging file")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        ensure!(
+            file.metadata()?.nlink() == 0,
+            "Verified gallery media was not unlinked; recovery remains pending"
+        );
+    }
+    ensure!(!exists(path)?, "Gallery cleanup remains pending");
+    Ok(())
 }
 
 fn delete_one(staged: &str, identity: Option<&str>) -> Result<()> {
@@ -373,32 +459,81 @@ fn verify_staged_files(job: &PendingDeletion) -> Result<()> {
     Ok(())
 }
 
+/// Verify that a rollback member is either already restored or safe to restore.
+/// A conflict in either member must leave both untouched during preflight.
+fn preflight_restore(source: &str, staged: &str, identity: Option<&str>) -> Result<()> {
+    let source = Path::new(source);
+    let staged = Path::new(staged);
+    let directory = pin_parent(source)?;
+    let expected = checked_leaf(&directory, identity)?;
+    let source = pinned_path(&directory, source)?;
+    let staged = pinned_path(&directory, staged)?;
+    let source_exists = exists(&source)?;
+    let staged_exists = exists(&staged)?;
+    if expected == "missing" {
+        ensure!(
+            !source_exists && !staged_exists,
+            "Unexpected media for missing-file intent"
+        );
+    } else if staged_exists {
+        ensure!(!source_exists, "Original gallery path is occupied");
+        verify_leaf(&staged, expected)?;
+    } else {
+        ensure!(source_exists, "Original and staged media are unavailable");
+        verify_leaf(&source, expected)?;
+    }
+    Ok(())
+}
+
 fn restore_files(job: &PendingDeletion) -> Result<()> {
     validate_job(job)?;
-    // Try both paths even if the first restore failed; never overwrite a destination.
-    let main = restore_one(
+    preflight_restore(
         &job.file_path,
         &job.staged_file_path,
         job.file_identity.as_deref(),
-    );
-    let thumb = match (&job.thumb_path, &job.staged_thumb_path) {
-        (Some(source), Some(staged)) => restore_one(source, staged, job.thumb_identity.as_deref()),
-        _ => Ok(()),
-    };
-    main?;
-    thumb
+    )?;
+    if let (Some(source), Some(staged)) = (&job.thumb_path, &job.staged_thumb_path) {
+        preflight_restore(source, staged, job.thumb_identity.as_deref())?;
+    }
+
+    // Revalidate each member during restoration. A failure leaves the journal
+    // intact, including after a partial rollback caused by a concurrent change.
+    restore_one(
+        &job.file_path,
+        &job.staged_file_path,
+        job.file_identity.as_deref(),
+    )?;
+    if let (Some(source), Some(staged)) = (&job.thumb_path, &job.staged_thumb_path) {
+        restore_one(source, staged, job.thumb_identity.as_deref())?;
+    }
+    Ok(())
 }
 
 fn cleanup_files(job: &PendingDeletion) -> Result<()> {
     validate_job(job)?;
-    // Attempt both cleanups; a failure keeps the durable journal entry.
-    let main = delete_one(&job.staged_file_path, job.file_identity.as_deref());
-    let thumb = match &job.staged_thumb_path {
-        Some(staged) => delete_one(staged, job.thumb_identity.as_deref()),
-        None => Ok(()),
+    // Validate the entire staged set before removing either member. A conflict
+    // must preserve the remaining media and its durable journal for review.
+    let preflight = |staged: &str, identity: Option<&str>| -> Result<()> {
+        let staged = Path::new(staged);
+        let directory = pin_parent(staged)?;
+        let expected = checked_leaf(&directory, identity)?;
+        let staged = pinned_path(&directory, staged)?;
+        if exists(&staged)? {
+            verify_leaf(&staged, expected)?;
+        }
+        Ok(())
     };
-    main?;
-    thumb
+    preflight(&job.staged_file_path, job.file_identity.as_deref())?;
+    if let Some(staged) = &job.staged_thumb_path {
+        preflight(staged, job.thumb_identity.as_deref())?;
+    }
+    // Each removal still rechecks its identity. Preflight is not an atomic
+    // compare-and-unlink across files or a guarantee against concurrent races.
+    delete_one(&job.staged_file_path, job.file_identity.as_deref())?;
+    if let Some(staged) = &job.staged_thumb_path {
+        delete_one(staged, job.thumb_identity.as_deref())?;
+    }
+    Ok(())
 }
 
 pub fn delete(db: &mut Db, id: &str) -> Result<()> {
@@ -567,9 +702,97 @@ mod tests {
         let target = folder.path().join("target.png");
         fs::write(&source, b"source")?;
         fs::write(&target, b"target")?;
-        assert!(rename_noreplace(&source, &target).is_err());
+        let identity = leaf_identity(&source)?;
+        assert!(rename_verified_noreplace(&source, &target, &identity).is_err());
         assert_eq!(fs::read(source)?, b"source");
         assert_eq!(fs::read(target)?, b"target");
+        Ok(())
+    }
+
+    #[test]
+    fn verified_rename_rejects_replaced_source_and_preserves_destination() -> Result<()> {
+        let folder = tempfile::tempdir()?;
+        let source = folder.path().join("source.png");
+        let target = folder.path().join("target.png");
+        let backup = folder.path().join("original.png");
+        fs::write(&source, b"original")?;
+        let identity = leaf_identity(&source)?;
+        fs::rename(&source, &backup)?;
+        fs::write(&source, b"replacement")?;
+        assert!(rename_verified_noreplace(&source, &target, &identity).is_err());
+        assert_eq!(fs::read(&source)?, b"replacement");
+        assert_eq!(fs::read(&backup)?, b"original");
+        assert!(!target.exists());
+        fs::remove_file(&source)?;
+        fs::rename(&backup, &source)?;
+        rename_verified_noreplace(&source, &target, &identity)?;
+        assert!(!source.exists());
+        assert_eq!(fs::read(&target)?, b"original");
+        assert_eq!(leaf_identity(&target)?, identity);
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn verified_rename_defers_while_source_is_locked() -> Result<()> {
+        let folder = tempfile::tempdir()?;
+        let source = folder.path().join("source.png");
+        let target = folder.path().join("target.png");
+        fs::write(&source, b"original")?;
+        let identity = leaf_identity(&source)?;
+        let (locked, _) = open_leaf(&source, false)?;
+        assert!(rename_verified_noreplace(&source, &target, &identity).is_err());
+        assert_eq!(fs::read(&source)?, b"original");
+        assert!(!target.exists());
+        drop(locked);
+        rename_verified_noreplace(&source, &target, &identity)?;
+        assert_eq!(fs::read(target)?, b"original");
+        Ok(())
+    }
+
+    #[test]
+    fn changed_content_on_same_file_identity_blocks_staging() -> Result<()> {
+        let (folder, db, shot) = fixture()?;
+        let job = intent(&shot)?;
+        db.prepare_delete(&job)?;
+        fs::write(&shot.file_path, b"modified original with different length")?;
+        assert!(stage_files(&job).is_err());
+        assert_eq!(
+            fs::read(&shot.file_path)?,
+            b"modified original with different length"
+        );
+        assert!(!Path::new(&job.staged_file_path).exists());
+        assert!(db.get(&shot.id)?.is_some());
+        assert!(db.pending_delete(&shot.id)?.is_some());
+        drop(db);
+        fs::remove_dir_all(folder)?;
+        Ok(())
+    }
+
+    #[test]
+    fn legacy_inode_only_journal_preserves_both_staged_members() -> Result<()> {
+        let (folder, mut db, shot) = fixture()?;
+        let mut job = intent(&shot)?;
+        stage_files(&job)?;
+        let directory = pin_parent(Path::new(&job.staged_file_path))?;
+        let parent = directory.identity().map_err(anyhow::Error::msg)?;
+        let (file, _) = open_leaf(Path::new(&job.staged_file_path), false)?;
+        let id = crate::pinned_directory::file_identity(&file).map_err(anyhow::Error::msg)?;
+        drop(file);
+        drop(directory);
+        job.file_identity = Some(format!("{parent}|{id}"));
+        db.prepare_delete(&job)?;
+        db.commit_delete(&shot.id)?;
+        drop(db);
+        let db = Db::open(&folder.join("gallery.sqlite"))?;
+        assert!(db.pending_delete(&shot.id)?.is_some());
+        assert_eq!(fs::read(&job.staged_file_path)?, b"original");
+        assert_eq!(
+            fs::read(job.staged_thumb_path.as_deref().unwrap())?,
+            b"thumbnail"
+        );
+        drop(db);
+        fs::remove_dir_all(folder)?;
         Ok(())
     }
 
@@ -647,6 +870,39 @@ mod tests {
         let db = Db::open(&folder.join("gallery.sqlite"))?;
         assert_eq!(fs::read(&shot.file_path)?, b"original");
         assert_eq!(fs::read(shot.thumb_path.as_deref().unwrap())?, b"thumbnail");
+        assert!(db.pending_deletions()?.is_empty());
+        drop(db);
+        fs::remove_dir_all(folder)?;
+        Ok(())
+    }
+
+    #[test]
+    fn rollback_thumbnail_conflict_preserves_both_staged_members() -> Result<()> {
+        let (folder, db, shot) = fixture()?;
+        let job = intent(&shot)?;
+        db.prepare_delete(&job)?;
+        stage_files(&job)?;
+        let thumb = shot.thumb_path.as_deref().unwrap();
+        let staged_thumb = job.staged_thumb_path.as_deref().unwrap();
+
+        // An unrelated file appeared at the original thumbnail destination.
+        fs::write(thumb, b"unrelated thumbnail")?;
+        drop(db);
+        let db = Db::open(&folder.join("gallery.sqlite"))?;
+        assert!(db.get(&shot.id)?.is_some());
+        assert!(db.pending_delete(&shot.id)?.is_some());
+        assert!(!Path::new(&shot.file_path).exists());
+        assert_eq!(fs::read(&job.staged_file_path)?, b"original");
+        assert_eq!(fs::read(staged_thumb)?, b"thumbnail");
+        assert_eq!(fs::read(thumb)?, b"unrelated thumbnail");
+        drop(db);
+
+        let preserved = folder.join("preserved-thumbnail.webp");
+        fs::rename(thumb, &preserved)?;
+        let db = Db::open(&folder.join("gallery.sqlite"))?;
+        assert_eq!(fs::read(&shot.file_path)?, b"original");
+        assert_eq!(fs::read(thumb)?, b"thumbnail");
+        assert_eq!(fs::read(preserved)?, b"unrelated thumbnail");
         assert!(db.pending_deletions()?.is_empty());
         drop(db);
         fs::remove_dir_all(folder)?;
@@ -769,6 +1025,37 @@ mod tests {
         fs::rename(&backup, &job.staged_file_path)?;
         let db = Db::open(&folder.join("gallery.sqlite"))?;
         assert!(db.pending_deletions()?.is_empty());
+        drop(db);
+        fs::remove_dir_all(folder)?;
+        Ok(())
+    }
+
+    #[test]
+    fn committed_thumbnail_conflict_preserves_staged_media() -> Result<()> {
+        let (folder, mut db, shot) = fixture()?;
+        let job = intent(&shot)?;
+        db.prepare_delete(&job)?;
+        stage_files(&job)?;
+        db.commit_delete(&shot.id)?;
+        let staged_thumb = job.staged_thumb_path.as_deref().unwrap();
+        let backup = folder.join("original-staged-thumb.webp");
+        fs::rename(staged_thumb, &backup)?;
+        fs::write(staged_thumb, b"unrelated")?;
+        drop(db);
+
+        let db = Db::open(&folder.join("gallery.sqlite"))?;
+        assert_eq!(fs::read(&job.staged_file_path)?, b"original");
+        assert_eq!(fs::read(staged_thumb)?, b"unrelated");
+        assert_eq!(fs::read(&backup)?, b"thumbnail");
+        assert!(db.pending_delete(&shot.id)?.is_some());
+        drop(db);
+
+        fs::remove_file(staged_thumb)?;
+        fs::rename(&backup, staged_thumb)?;
+        let db = Db::open(&folder.join("gallery.sqlite"))?;
+        assert!(db.pending_deletions()?.is_empty());
+        assert!(!Path::new(&job.staged_file_path).exists());
+        assert!(!Path::new(staged_thumb).exists());
         drop(db);
         fs::remove_dir_all(folder)?;
         Ok(())

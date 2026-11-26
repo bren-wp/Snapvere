@@ -62,7 +62,8 @@ export default function RecBar() {
   const [color, setColor] = useState("#FF453A");
   const [size, setSize] = useState(6);
   const [palette, setPalette] = useState(false);
-  const closing = useRef(false);
+  const closing = useRef({ current: false });
+  const sessionRef = useRef<string | null>(null);
 
   // A 58px native HUD clips popovers positioned above its toolbar. Ask Rust
   // for a taller window only while the palette or an error is visible.
@@ -74,37 +75,60 @@ export default function RecBar() {
 
   // Tick iz Rusta (~4x/s) je izvor istine za tajmer — nema drifta u JS-u.
   useEffect(() => {
+    let active = true;
+    let seenState = false;
     const subs = [
-      listen<RecordStatus>("snapvere:rec-tick", (e) => setStatus(e.payload)),
+      listen<RecordStatus>("snapvere:rec-tick", (e) => {
+        if (e.payload.sessionId === sessionRef.current) setStatus(e.payload);
+      }),
       listen<RecordStatus>("snapvere:rec-state", (e) => {
+        if (!active) return;
+        seenState = true;
+        const nextSession = e.payload.sessionId ?? null;
+        if (nextSession !== sessionRef.current) {
+          // A pending action keeps its original lock object, never the next session's.
+          closing.current = { current: false };
+          setBusy(false);
+          setActionError(null);
+        }
+        sessionRef.current = nextSession;
         setStatus(e.payload);
-        // Novo snimanje (prozor HUD-a živi između snimanja, komponenta se ne remounta):
-        // otključaj Stop/Odbaci — inače bi nakon prvog snimanja zauvijek ostali mrtvi.
-        if (e.payload.phase === "recording") closing.current = false;
       }),
       listen("snapvere:rec-done", () => {
-        closing.current = true;
+        closing.current.current = true;
         setActionError(null);
         // Sljedeće snimanje kreće bez alata i palete — sloj za crtanje je ionako
         // click-through nakon zatvaranja, pa bi "zalijepljen" alat samo zbunjivao.
         setTool("off");
         setPalette(false);
-        void emit("snapvere:draw-tool", { tool: "off" });
         void ipc.closeRecHud();
       }),
       // Sloj za crtanje može sam ugasiti alat (Esc) — traka mora pratiti.
-      listen<DrawToolMsg>("snapvere:draw-tool", (e) => setTool(e.payload.tool)),
+      listen<DrawToolMsg>("snapvere:draw-tool", (e) => {
+        // Only the active overlay can turn off the current tool.
+        if (e.payload.sessionId === sessionRef.current) setTool(e.payload.tool);
+      }),
     ];
     // Prvi status odmah, da traka ne bljesne prazna.
-    void ipc.recordingStatus().then(setStatus).catch(() => undefined);
+    void Promise.all(subs).then(async () => {
+      if (!active) return;
+      const initial = await ipc.recordingStatus();
+      if (active && !seenState) {
+        sessionRef.current = initial.sessionId ?? null;
+        setStatus(initial);
+      }
+    }).catch(() => undefined);
     return () => {
-      subs.forEach((s) => void s.then((un) => un()));
+      active = false;
+      subs.forEach((s) => void s.then((un) => un()).catch(() => undefined));
     };
   }, []);
 
   const sendTool = useCallback((t: RecTool, c: string, s: number) => {
-    void emit("snapvere:draw-tool", { tool: t, color: c, size: s });
-  }, []);
+    if (status?.sessionId) {
+      void emit("snapvere:draw-tool", { tool: t, color: c, size: s, sessionId: status.sessionId });
+    }
+  }, [status?.sessionId]);
 
   const pickTool = (t: RecTool) => {
     const next = t === tool && t !== "off" ? "off" : t;
@@ -117,38 +141,41 @@ export default function RecBar() {
   const finishing = status?.phase === "finishing";
 
   const togglePause = useCallback(async () => {
-    if (busy || finishing) return;
+    if (busy || finishing || !status?.sessionId) return;
+    const sessionId = status.sessionId;
     setBusy(true);
     try {
-      setStatus(await ipc.pauseRecording(!paused));
-      setActionError(null);
+      const next = await ipc.pauseRecording(!paused, sessionId);
+      if (sessionRef.current === sessionId) {
+        setStatus(next);
+        setActionError(null);
+      }
     } catch (error) {
       console.error(error);
-      setActionError(t("Could not change pause state. Try again."));
+      if (sessionRef.current === sessionId) setActionError(t("Could not change pause state. Try again."));
     } finally {
-      setBusy(false);
+      if (sessionRef.current === sessionId) setBusy(false);
     }
-  }, [busy, finishing, paused, t]);
+  }, [busy, finishing, paused, status?.sessionId, t]);
 
-  const stop = useCallback(async () => {
+  const finish = useCallback(async (discard: boolean) => {
+    const sessionId = status?.sessionId;
+    if (!sessionId || sessionId !== sessionRef.current || finishing) return;
+    const lock = closing.current;
     try {
-      if (await runRecordingAction(closing, ipc.stopRecording)) setActionError(null);
+      const completed = await runRecordingAction(lock, () =>
+        discard ? ipc.cancelRecording(sessionId) : ipc.stopRecording(sessionId),
+      );
+      if (completed && sessionRef.current === sessionId) setActionError(null);
     } catch (error) {
       console.error(error);
-      // Never hide the controls if Stop fails; users must be able to retry.
-      setActionError(t("Could not stop recording. Try again."));
+      if (sessionRef.current === sessionId) {
+        setActionError(t(discard
+          ? "Could not discard recording. Try again."
+          : "Could not stop recording. Try again."));
+      }
     }
-  }, [t]);
-
-  const discard = useCallback(async () => {
-    try {
-      if (await runRecordingAction(closing, ipc.cancelRecording)) setActionError(null);
-    } catch (error) {
-      console.error(error);
-      // A failed discard must not leave an active recorder without a HUD.
-      setActionError(t("Could not discard recording. Try again."));
-    }
-  }, [t]);
+  }, [finishing, status?.sessionId, t]);
 
   // Namjerno bez tipkovničkih prečaca: HUD je WS_EX_NOACTIVATE (nikad nema fokus), pa
   // tipke koje korisnik pritisne u svojoj aplikaciji ne mogu slučajno zaustaviti snimanje.
@@ -205,7 +232,7 @@ export default function RecBar() {
       <button
         title={t("Undo")}
         aria-label={t("Undo")}
-        onClick={() => void emit("snapvere:draw-undo")}
+        onClick={() => status?.sessionId && void emit("snapvere:draw-undo", { sessionId: status.sessionId })}
         className="grid h-8 w-8 shrink-0 place-items-center rounded-lg transition hover:bg-white/15"
       >
         <Undo2 size={15} />
@@ -213,7 +240,7 @@ export default function RecBar() {
       <button
         title={t("Clear all drawings")}
         aria-label={t("Clear all drawings")}
-        onClick={() => void emit("snapvere:draw-clear")}
+        onClick={() => status?.sessionId && void emit("snapvere:draw-clear", { sessionId: status.sessionId })}
         className="grid h-8 w-8 shrink-0 place-items-center rounded-lg transition hover:bg-white/15"
       >
         <Eraser size={15} />
@@ -232,8 +259,8 @@ export default function RecBar() {
         {paused ? <Play size={15} /> : <Pause size={15} />}
       </button>
       <button
-        onClick={stop}
-        disabled={finishing}
+        onClick={() => void finish(false)}
+        disabled={finishing || !status?.sessionId}
         title={t("Stop and save")}
         aria-label={t("Stop and save")}
         className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-danger transition hover:brightness-110 active:scale-95 disabled:opacity-40"
@@ -241,8 +268,8 @@ export default function RecBar() {
         <Square size={13} fill="currentColor" />
       </button>
       <button
-        onClick={discard}
-        disabled={finishing}
+        onClick={() => void finish(true)}
+        disabled={finishing || !status?.sessionId}
         title={t("Discard")}
         aria-label={t("Discard")}
         className="grid h-8 w-8 shrink-0 place-items-center rounded-full transition hover:bg-white/15 active:scale-95 disabled:opacity-40"

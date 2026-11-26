@@ -5,7 +5,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ipc } from "../lib/ipc";
 import { useLanguage } from "../lib/LanguageProvider";
 import { renderAnnotations } from "../lib/canvas";
-import type { Annotation, DrawToolMsg, Point, RecTool } from "../lib/types";
+import { recordingMasks } from "../lib/recordingMasks";
+import type { Annotation, DrawToolMsg, Point, RecordStatus, RecTool } from "../lib/types";
 
 /**
  * Prozirni sloj za crtanje preko snimanog područja.
@@ -27,6 +28,36 @@ const textFont = (size: number) => Math.round(size * 3.5 + 8);
 const DRAG_TOOLS: RecTool[] = ["arrow", "rect", "ellipse", "line", "blur"];
 
 export default function RecDraw() {
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    let seenEvent = false;
+    const accept = (status: RecordStatus) => {
+      if (!active) return;
+      setSessionId(
+        status.phase === "recording" || status.phase === "paused"
+          ? status.sessionId ?? null
+          : null,
+      );
+    };
+    const subscription = listen<RecordStatus>("snapvere:rec-state", (event) => {
+      seenEvent = true;
+      accept(event.payload);
+    });
+    void subscription.then(async () => {
+      if (!active) return;
+      const status = await ipc.recordingStatus();
+      if (!seenEvent) accept(status);
+    }).catch(() => undefined);
+    return () => {
+      active = false;
+      void subscription.then((unlisten) => unlisten()).catch(() => undefined);
+    };
+  }, []);
+  return sessionId ? <RecordingOverlay key={sessionId} sessionId={sessionId} /> : null;
+}
+
+function RecordingOverlay({ sessionId }: { sessionId: string }) {
   const { t } = useLanguage();
   const [tool, setTool] = useState<RecTool>("off");
   const [color, setColor] = useState("#09BFD9");
@@ -37,6 +68,7 @@ export default function RecDraw() {
   const [scale, setScale] = useState(1);
   const [redactError, setRedactError] = useState(false);
   const redactQueue = useRef<Promise<void>>(Promise.resolve());
+  const maskIntent = useRef(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -51,10 +83,12 @@ export default function RecDraw() {
     void getCurrentWindow().scaleFactor().then(setScale).catch(() => undefined);
   }, []);
 
-  // ── kontrole stižu iz HUD-a (on je izuzet iz snimke, pa toolbar nije u videu) ──
+  // Drawing events are meaningful only for the overlay's immutable session.
   useEffect(() => {
+    let active = true;
     const subs = [
       listen<DrawToolMsg>("snapvere:draw-tool", (e) => {
+        if (!active || e.payload.sessionId !== sessionId) return;
         const { tool: t, color: c, size: s } = e.payload;
         setTool(t);
         if (c) setColor(c);
@@ -67,47 +101,49 @@ export default function RecDraw() {
         // ne može raditi ništa drugo dok snimanje traje.
         void ipc.setDrawInteractive(t !== "off");
       }),
-      listen("snapvere:draw-undo", () => setAnnotations((p) => p.slice(0, -1))),
-      listen("snapvere:draw-clear", () => setAnnotations([])),
+      listen<{ sessionId: string }>("snapvere:draw-undo", (e) => {
+        if (active && e.payload.sessionId === sessionId) setAnnotations((p) => p.slice(0, -1));
+      }),
+      listen<{ sessionId: string }>("snapvere:draw-clear", (e) => {
+        if (!active || e.payload.sessionId !== sessionId) return;
+        maskIntent.current = true;
+        setAnnotations([]);
+      }),
     ];
     return () => {
-      subs.forEach((s) => void s.then((un) => un()));
+      active = false;
+      subs.forEach((s) => void s.then((un) => un()).catch(() => undefined));
     };
-  }, []);
+  }, [sessionId]);
 
-  // ── redact zone idu u Rust; on ih pikselizira u svakom frameu ──
   useEffect(() => {
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const rects = annotations
-      .filter((a) => a.tool === "blur" && a.points.length > 1)
-      .map((a) => {
-        const [p0, p1] = a.points;
-        const x = Math.max(0, Math.floor(Math.min(p0.x, p1.x)));
-        const y = Math.max(0, Math.floor(Math.min(p0.y, p1.y)));
-        return {
-          x,
-          y,
-          width: Math.min(viewportWidth, Math.ceil(Math.max(p0.x, p1.x))) - x,
-          height: Math.min(viewportHeight, Math.ceil(Math.max(p0.y, p1.y))) - y,
-        };
-      })
-      .filter((r) => r.width > 0 && r.height > 0);
-    // Serialize updates so a slow earlier IPC cannot overwrite a newer mask.
-    redactQueue.current = redactQueue.current.catch(() => undefined).then(async () => {
-      try {
-        const status = await ipc.recordingStatus();
-        if (status.phase === "idle" || status.phase === "finishing") return;
-        await ipc.setBlurRegions(rects, viewportWidth, viewportHeight);
-        setRedactError(false);
-      } catch (error) {
-        if (rects.length === 0) return;
-        console.error("Redaction update failed", error);
-        setRedactError(true);
-        await ipc.pauseRecording(true).catch(() => undefined);
-      }
-    });
-  }, [annotations, scale]);
+    let active = true;
+    const publish = () => {
+      // A remounted overlay must not silently clear masks already in native state.
+      if (!maskIntent.current) return;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      redactQueue.current = redactQueue.current.catch(() => undefined).then(async () => {
+        if (!active) return;
+        try {
+          const rects = recordingMasks(annotations, viewportWidth, viewportHeight);
+          await ipc.setBlurRegions(sessionId, rects, viewportWidth, viewportHeight);
+          if (active) setRedactError(false);
+        } catch {
+          if (!active) return;
+          setRedactError(true);
+          // A failed clear is also an uncertain native mask state.
+          await ipc.pauseRecording(true, sessionId).catch(() => undefined);
+        }
+      });
+    };
+    publish();
+    window.addEventListener("resize", publish);
+    return () => {
+      active = false;
+      window.removeEventListener("resize", publish);
+    };
+  }, [annotations, scale, sessionId]);
 
   // ── crtanje ──
   const redraw = useCallback(() => {
@@ -155,7 +191,15 @@ export default function RecDraw() {
     }
   }, [annotations, scale]);
 
-  useEffect(redraw, [redraw]);
+  useEffect(() => {
+    redraw();
+    window.addEventListener("resize", redraw);
+    return () => {
+      window.removeEventListener("resize", redraw);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+    };
+  }, [redraw]);
 
   /** Redraw spojen na animacijski frame — miš zna slati više eventa po frameu. */
   const scheduleRedraw = useCallback(() => {
@@ -166,7 +210,10 @@ export default function RecDraw() {
     });
   }, [redraw]);
 
-  const commit = (a: Annotation) => setAnnotations((p) => [...p, a]);
+  const commit = (a: Annotation) => {
+    if (a.tool === "blur") maskIntent.current = true;
+    setAnnotations((p) => [...p, a]);
+  };
 
   const onDown = (e: React.MouseEvent) => {
     if (tool === "off") return;
@@ -255,11 +302,11 @@ export default function RecDraw() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || textEdit) return;
-      void emit("snapvere:draw-tool", { tool: "off" });
+      void emit("snapvere:draw-tool", { tool: "off", sessionId });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [textEdit]);
+  }, [textEdit, sessionId]);
 
   const cursor =
     tool === "off" ? "default" : tool === "text" ? "text" : "crosshair";

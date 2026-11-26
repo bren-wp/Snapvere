@@ -145,15 +145,8 @@ jobs:
       - name: Verify public surfaces are Snapvere branded
         shell: bash
         run: |
-          legacy_pattern="$(printf '%s' 'rv' 'geshot')|$(printf '%s' 'not' 'brec')"
-          if git grep -niE "$legacy_pattern" -- .; then
-            echo 'Legacy identity found in tracked source or documentation.'
-            exit 1
-          fi
-          if git ls-files | grep -iE "$legacy_pattern"; then
-            echo 'Legacy identity found in tracked paths.'
-            exit 1
-          fi
+          python tools/test_product_identity.py
+          python tools/check_product_identity.py
           grep -qi 'Brendigo' README.md
           grep -q 'snapvere.com' README.md
           python - <<'PY'
