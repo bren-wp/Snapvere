@@ -333,3 +333,21 @@ mod deletion_label_tests {
         assert_eq!(deletion_labels("unknown"), deletion_labels("en"));
     }
 }
+
+#[cfg(target_os = "linux")]
+pub fn quarantine_restore_title(language: &str) -> &'static str {
+    match language {
+        "hr" => "Vratiti posljednju uklonjenu snimku?",
+        "de" => "Zuletzt entfernte Aufnahme wiederherstellen?",
+        "es" => "¿Restaurar la última captura retirada?",
+        "fr" => "Restaurer la dernière capture retirée ?",
+        "it" => "Ripristinare l’ultima acquisizione rimossa?",
+        "pt" => "Restaurar a última captura removida?",
+        "nl" => "Laatst verwijderde opname herstellen?",
+        "pl" => "Przywrócić ostatnio usunięty zapis?",
+        "cs" => "Obnovit poslední odebraný snímek?",
+        "sk" => "Obnoviť poslednú odstránenú snímku?",
+        "sl" => "Obnovim zadnji odstranjeni posnetek?",
+        _ => "Restore the last removed capture?",
+    }
+}

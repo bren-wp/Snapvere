@@ -599,6 +599,23 @@ pub fn delete(db: &mut Db, id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Explicit recovery of a committed Linux quarantine item. A failed
+/// filesystem or SQLite step retains the journal for a later retry.
+#[cfg(target_os = "linux")]
+pub fn restore_quarantined(db: &mut Db, id: &str) -> Result<()> {
+    let job = db.pending_delete(id)?.context("No quarantine journal")?;
+    ensure!(job.committed, "Quarantine item is not committed");
+    db.validate_quarantine_restore(&job)?;
+    ensure!(
+        job.file_identity.as_deref().is_some_and(|id| !id.ends_with("|missing")),
+        "Original capture identity is unavailable"
+    );
+    restore_files(&job)?;
+    // Recheck the complete restored set before registering it again.
+    restore_files(&job)?;
+    db.commit_quarantine_restore(&job)
+}
+
 fn recover_job(db: &Db, job: &PendingDeletion) -> Result<()> {
     let current = db.get(&job.id)?;
     if job.committed {
@@ -890,6 +907,44 @@ mod tests {
             let job = db.pending_delete(&shot.id)?.expect("retained journal");
             assert_committed_retention_policy(&db, &job)?;
         }
+        drop(db);
+        fs::remove_dir_all(folder)?;
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn quarantine_restore_retries_after_interrupted_restore() -> Result<()> {
+        let (folder, mut db, shot) = fixture()?;
+        db.add_tag(&shot.id, "important")?;
+        delete(&mut db, &shot.id)?;
+        let job = db.pending_delete(&shot.id)?.unwrap();
+        restore_files(&job)?;
+        drop(db);
+        let mut db = Db::open(&folder.join("gallery.sqlite"))?;
+        assert!(db.get(&shot.id)?.is_none());
+        assert!(db.pending_delete(&shot.id)?.is_some());
+        restore_quarantined(&mut db, &shot.id)?;
+        assert_eq!(db.get(&shot.id)?.unwrap().tags, vec!["important"]);
+        assert_eq!(fs::read(&shot.file_path)?, b"original");
+        assert_eq!(fs::read(shot.thumb_path.as_deref().unwrap())?, b"thumbnail");
+        assert!(db.pending_delete(&shot.id)?.is_none());
+        drop(db);
+        fs::remove_dir_all(folder)?;
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn quarantine_restore_never_overwrites_occupied_destination() -> Result<()> {
+        let (folder, mut db, shot) = fixture()?;
+        delete(&mut db, &shot.id)?;
+        let job = db.pending_delete(&shot.id)?.unwrap();
+        fs::write(&shot.file_path, b"new capture")?;
+        assert!(restore_quarantined(&mut db, &shot.id).is_err());
+        assert_eq!(fs::read(&shot.file_path)?, b"new capture");
+        assert_eq!(fs::read(&job.staged_file_path)?, b"original");
+        assert!(db.pending_delete(&shot.id)?.is_some());
         drop(db);
         fs::remove_dir_all(folder)?;
         Ok(())

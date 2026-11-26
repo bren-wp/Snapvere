@@ -1973,6 +1973,51 @@ pub async fn delete_screenshot(
     .map_err(estr)?
 }
 
+/// Restore the latest removed capture only after native user confirmation.
+#[tauri::command]
+pub async fn restore_latest_quarantined_capture(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+) -> Result<bool, String> {
+    require_window_label(window.label(), &["home"])?;
+    #[cfg(target_os = "linux")]
+    {
+        tauri::async_runtime::spawn_blocking(move || {
+            use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+
+            let _guard = image_export::SaveAsGuard::acquire()?;
+            let state = app.state::<AppState>();
+            let Some((id, name)) = lock(&state.db).latest_quarantine().map_err(estr)? else {
+                return Ok(false);
+            };
+            let language = get_app_language(window.clone(), app.clone())?;
+            let title = crate::tray_locale::quarantine_restore_title(&language);
+            let name: String = name.chars().filter(|ch| !ch.is_control()).take(200).collect();
+            let confirmed = app
+                .dialog()
+                .message(name)
+                .title(title)
+                .kind(MessageDialogKind::Info)
+                .buttons(MessageDialogButtons::OkCancel)
+                .parent(&window)
+                .blocking_show();
+            if !confirmed {
+                return Ok(false);
+            }
+            crate::gallery_delete::restore_quarantined(&mut lock(&state.db), &id)
+                .map_err(estr)?;
+            Ok(true)
+        })
+        .await
+        .map_err(estr)?
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = app;
+        Err("Quarantine restoration is available on Linux only".into())
+    }
+}
+
 #[tauri::command]
 pub fn add_tag(
     window: tauri::WebviewWindow,

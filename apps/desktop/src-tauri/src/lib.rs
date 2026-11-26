@@ -160,6 +160,7 @@ pub fn run() {
             commands::list_screenshots,
             commands::search_screenshots,
             commands::delete_screenshot,
+            commands::restore_latest_quarantined_capture,
             commands::add_tag,
             commands::open_media,
             commands::reveal_media,
