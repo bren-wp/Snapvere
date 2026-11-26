@@ -101,11 +101,17 @@ fn validate_job(job: &PendingDeletion) -> Result<()> {
 #[cfg(target_os = "linux")]
 fn rename_verified_noreplace(source: &Path, destination: &Path, expected: &str) -> Result<()> {
     use rustix::fs::{renameat_with, RenameFlags, CWD};
-    // Linux has no identity-conditional rename; retain the post-rename
-    // verification at the caller and fail closed on detected conflicts.
-    verify_leaf(source, expected)?;
+    // Keep the original inode alive until the operation and its checks finish.
+    // Linux has no identity-conditional rename; this detects but cannot
+    // prevent an adversarial pathname replacement between check and rename.
+    let (file, identity) = open_leaf(source, false)?;
+    ensure!(identity == expected, "Gallery media identity changed");
     renameat_with(CWD, source, CWD, destination, RenameFlags::NOREPLACE)?;
-    Ok(())
+    ensure!(
+        leaf_stamp(&file, &file.metadata()?)? == expected,
+        "Gallery media changed during rename"
+    );
+    verify_leaf(destination, expected)
 }
 
 #[cfg(windows)]
@@ -245,8 +251,34 @@ fn open_leaf(path: &Path, delete_access: bool) -> Result<(fs::File, String)> {
             "Redirected or multiply linked gallery file"
         );
     }
-    let identity = crate::pinned_directory::file_identity(&file).map_err(anyhow::Error::msg)?;
+    let identity = leaf_stamp(&file, &metadata)?;
     Ok((file, identity))
+}
+
+/// A versioned journal fingerprint is stronger than an inode/file ID alone.
+/// It is not a content hash and cannot certify identity against a same-user
+/// attacker who can manipulate metadata. Rename does not change file mtime.
+fn leaf_stamp(file: &fs::File, metadata: &fs::Metadata) -> Result<String> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn timestamp(value: SystemTime) -> String {
+        match value.duration_since(UNIX_EPOCH) {
+            Ok(duration) => format!("+{}:{:09}", duration.as_secs(), duration.subsec_nanos()),
+            Err(error) => {
+                let duration = error.duration();
+                format!("-{}:{:09}", duration.as_secs(), duration.subsec_nanos())
+            }
+        }
+    }
+
+    let id = crate::pinned_directory::file_identity(file).map_err(anyhow::Error::msg)?;
+    let modified = timestamp(metadata.modified()?);
+    // Some supported Linux filesystems do not expose creation time.
+    let created = metadata
+        .created()
+        .map(timestamp)
+        .unwrap_or_else(|_| "unavailable".to_owned());
+    Ok(format!("v3:{id}:{}:{modified}:{created}", metadata.len()))
 }
 
 fn leaf_identity(path: &Path) -> Result<String> {
@@ -272,6 +304,10 @@ fn checked_leaf<'a>(directory: &PinnedDirectory, identity: Option<&'a str>) -> R
     ensure!(
         directory.identity().map_err(anyhow::Error::msg)? == parent,
         "Gallery directory identity changed"
+    );
+    ensure!(
+        leaf == "missing" || leaf.starts_with("v3:"),
+        "Deletion journal uses an older identity format; preserve media for recovery"
     );
     Ok(leaf)
 }
@@ -354,10 +390,22 @@ fn remove_verified(path: &Path, expected: &str) -> Result<()> {
 
 #[cfg(not(windows))]
 fn remove_verified(path: &Path, expected: &str) -> Result<()> {
-    // Linux unlink remains pathname-based; do not claim an atomic identity
-    // compare-and-unlink against another process running as the same user.
-    verify_leaf(path, expected)?;
-    fs::remove_file(path).context("Could not clear committed deletion staging file")
+    // Holding the verified file prevents reuse of its inode during cleanup.
+    // Unlink is still pathname-based: the postcheck detects a mismatch but
+    // cannot undo an unlink of a substituted pathname.
+    let (file, identity) = open_leaf(path, false)?;
+    ensure!(identity == expected, "Gallery media identity changed");
+    fs::remove_file(path).context("Could not clear committed deletion staging file")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        ensure!(
+            file.metadata()?.nlink() == 0,
+            "Verified gallery media was not unlinked; recovery remains pending"
+        );
+    }
+    ensure!(!exists(path)?, "Gallery cleanup remains pending");
+    Ok(())
 }
 
 fn delete_one(staged: &str, identity: Option<&str>) -> Result<()> {
@@ -699,6 +747,52 @@ mod tests {
         drop(locked);
         rename_verified_noreplace(&source, &target, &identity)?;
         assert_eq!(fs::read(target)?, b"original");
+        Ok(())
+    }
+
+    #[test]
+    fn changed_content_on_same_file_identity_blocks_staging() -> Result<()> {
+        let (folder, db, shot) = fixture()?;
+        let job = intent(&shot)?;
+        db.prepare_delete(&job)?;
+        fs::write(&shot.file_path, b"modified original with different length")?;
+        assert!(stage_files(&job).is_err());
+        assert_eq!(
+            fs::read(&shot.file_path)?,
+            b"modified original with different length"
+        );
+        assert!(!Path::new(&job.staged_file_path).exists());
+        assert!(db.get(&shot.id)?.is_some());
+        assert!(db.pending_delete(&shot.id)?.is_some());
+        drop(db);
+        fs::remove_dir_all(folder)?;
+        Ok(())
+    }
+
+    #[test]
+    fn legacy_inode_only_journal_preserves_both_staged_members() -> Result<()> {
+        let (folder, mut db, shot) = fixture()?;
+        let mut job = intent(&shot)?;
+        stage_files(&job)?;
+        let directory = pin_parent(Path::new(&job.staged_file_path))?;
+        let parent = directory.identity().map_err(anyhow::Error::msg)?;
+        let (file, _) = open_leaf(Path::new(&job.staged_file_path), false)?;
+        let id = crate::pinned_directory::file_identity(&file).map_err(anyhow::Error::msg)?;
+        drop(file);
+        drop(directory);
+        job.file_identity = Some(format!("{parent}|{id}"));
+        db.prepare_delete(&job)?;
+        db.commit_delete(&shot.id)?;
+        drop(db);
+        let db = Db::open(&folder.join("gallery.sqlite"))?;
+        assert!(db.pending_delete(&shot.id)?.is_some());
+        assert_eq!(fs::read(&job.staged_file_path)?, b"original");
+        assert_eq!(
+            fs::read(job.staged_thumb_path.as_deref().unwrap())?,
+            b"thumbnail"
+        );
+        drop(db);
+        fs::remove_dir_all(folder)?;
         Ok(())
     }
 
