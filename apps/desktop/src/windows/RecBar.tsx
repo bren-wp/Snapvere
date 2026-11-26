@@ -88,7 +88,11 @@ export default function RecBar() {
         if (terminal && !matchesRecordingSession(latestSession.current, e.payload.sessionId)) return;
         seenState = true;
         const nextSession = terminal ? null : e.payload.sessionId ?? null;
-        if (nextSession) latestSession.current = nextSession;
+        if (nextSession && nextSession !== latestSession.current) {
+          latestSession.current = nextSession;
+          setTool("off");
+          setPalette(false);
+        }
         if (nextSession !== sessionRef.current) {
           // A pending action keeps its original lock object, never the next session's.
           closing.current = { current: false };
@@ -96,17 +100,21 @@ export default function RecBar() {
           setActionError(null);
         }
         sessionRef.current = nextSession;
-        setStatus(e.payload);
+        setStatus(terminal ? { ...e.payload, sessionId: null } : e.payload);
       }),
       listen<RecordDone>("snapvere:rec-done", (e) => {
-        if (!active || !matchesRecordingSession(latestSession.current, e.payload.sessionId)) return;
-        closing.current.current = true;
-        setActionError(null);
-        // Sljedeće snimanje kreće bez alata i palete — sloj za crtanje je ionako
-        // click-through nakon zatvaranja, pa bi "zalijepljen" alat samo zbunjivao.
-        setTool("off");
-        setPalette(false);
-        void ipc.closeRecHud(e.payload.sessionId).catch(() => undefined);
+        const sessionId = e.payload.sessionId;
+        if (!active || !sessionId) return;
+        if (latestSession.current && !matchesRecordingSession(latestSession.current, sessionId)) return;
+        // A late-mounted HUD may have missed the initial state event. Native
+        // teardown still checks the recorder slot before touching any window.
+        void ipc.closeRecHud(sessionId).then(() => {
+          if (!active || !matchesRecordingSession(latestSession.current, sessionId)) return;
+          closing.current.current = true;
+          setActionError(null);
+          setTool("off");
+          setPalette(false);
+        }).catch(() => undefined);
       }),
       // Sloj za crtanje može sam ugasiti alat (Esc) — traka mora pratiti.
       listen<DrawToolMsg>("snapvere:draw-tool", (e) => {
