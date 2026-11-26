@@ -385,21 +385,29 @@ pub fn start(
 /// Zaustavi snimanje i spremi datoteku. Vraća odmah — enkoder zatvara datoteku u
 /// pozadini i javlja se preko `snapvere:rec-done`.
 pub fn stop(app: &AppHandle) -> Result<(), String> {
-    with_ctl(app, |ctl| {
-        ctl.stop.store(true, Ordering::SeqCst);
-        ctl.phase.store(PHASE_FINISHING, Ordering::SeqCst);
-    })?;
-    publish_phase(app);
-    Ok(())
+    finish_request(app, None, false)
 }
 
-/// Prekini snimanje i baci datoteku.
-pub fn cancel(app: &AppHandle) -> Result<(), String> {
-    with_ctl(app, |ctl| {
-        ctl.cancel.store(true, Ordering::SeqCst);
-        ctl.stop.store(true, Ordering::SeqCst);
-        ctl.phase.store(PHASE_FINISHING, Ordering::SeqCst);
-    })?;
+pub fn stop_for_session(app: &AppHandle, session_id: &str) -> Result<(), String> {
+    finish_request(app, Some(session_id), false)
+}
+
+/// Discard is a destructive request and must name the active session.
+pub fn cancel(app: &AppHandle, session_id: &str) -> Result<(), String> {
+    finish_request(app, Some(session_id), true)
+}
+
+fn finish_request(
+    app: &AppHandle,
+    session_id: Option<&str>,
+    discard: bool,
+) -> Result<(), String> {
+    {
+        let state = app.state::<AppState>();
+        let slot = crate::state::lock(&state.recorder);
+        let ctl = &slot.as_ref().ok_or("No active recording")?.ctl;
+        ctl.request_finish(session_id, discard)?;
+    }
     publish_phase(app);
     Ok(())
 }
@@ -620,16 +628,6 @@ fn publish_phase(app: &AppHandle) -> RecordStatus {
     crate::tray::set_phase(app, st.phase);
     let _ = app.emit("snapvere:rec-state", &st);
     st
-}
-
-fn with_ctl(app: &AppHandle, f: impl FnOnce(&Ctl)) -> Result<(), String> {
-    let state = app.state::<AppState>();
-    let guard = crate::state::lock(&state.recorder);
-    let Some(session) = guard.as_ref() else {
-        return Err("nema aktivnog snimanja".into());
-    };
-    f(&session.ctl);
-    Ok(())
 }
 
 // ───────────────────────────── radna dretva ─────────────────────────────

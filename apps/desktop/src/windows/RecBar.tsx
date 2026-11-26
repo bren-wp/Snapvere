@@ -62,7 +62,7 @@ export default function RecBar() {
   const [color, setColor] = useState("#FF453A");
   const [size, setSize] = useState(6);
   const [palette, setPalette] = useState(false);
-  const closing = useRef(false);
+  const closing = useRef({ current: false });
   const sessionRef = useRef<string | null>(null);
 
   // A 58px native HUD clips popovers positioned above its toolbar. Ask Rust
@@ -84,14 +84,18 @@ export default function RecBar() {
       listen<RecordStatus>("snapvere:rec-state", (e) => {
         if (!active) return;
         seenState = true;
-        sessionRef.current = e.payload.sessionId ?? null;
+        const nextSession = e.payload.sessionId ?? null;
+        if (nextSession !== sessionRef.current) {
+          // A pending action keeps its original lock object, never the next session's.
+          closing.current = { current: false };
+          setBusy(false);
+          setActionError(null);
+        }
+        sessionRef.current = nextSession;
         setStatus(e.payload);
-        // Novo snimanje (prozor HUD-a živi između snimanja, komponenta se ne remounta):
-        // otključaj Stop/Odbaci — inače bi nakon prvog snimanja zauvijek ostali mrtvi.
-        if (e.payload.phase === "recording") closing.current = false;
       }),
       listen("snapvere:rec-done", () => {
-        closing.current = true;
+        closing.current.current = true;
         setActionError(null);
         // Sljedeće snimanje kreće bez alata i palete — sloj za crtanje je ionako
         // click-through nakon zatvaranja, pa bi "zalijepljen" alat samo zbunjivao.
@@ -142,35 +146,36 @@ export default function RecBar() {
     setBusy(true);
     try {
       const next = await ipc.pauseRecording(!paused, sessionId);
-      if (sessionRef.current === sessionId) setStatus(next);
-      setActionError(null);
+      if (sessionRef.current === sessionId) {
+        setStatus(next);
+        setActionError(null);
+      }
     } catch (error) {
       console.error(error);
-      setActionError(t("Could not change pause state. Try again."));
+      if (sessionRef.current === sessionId) setActionError(t("Could not change pause state. Try again."));
     } finally {
-      setBusy(false);
+      if (sessionRef.current === sessionId) setBusy(false);
     }
   }, [busy, finishing, paused, status?.sessionId, t]);
 
-  const stop = useCallback(async () => {
+  const finish = useCallback(async (discard: boolean) => {
+    const sessionId = status?.sessionId;
+    if (!sessionId || sessionId !== sessionRef.current || finishing) return;
+    const lock = closing.current;
     try {
-      if (await runRecordingAction(closing, ipc.stopRecording)) setActionError(null);
+      const completed = await runRecordingAction(lock, () =>
+        discard ? ipc.cancelRecording(sessionId) : ipc.stopRecording(sessionId),
+      );
+      if (completed && sessionRef.current === sessionId) setActionError(null);
     } catch (error) {
       console.error(error);
-      // Never hide the controls if Stop fails; users must be able to retry.
-      setActionError(t("Could not stop recording. Try again."));
+      if (sessionRef.current === sessionId) {
+        setActionError(t(discard
+          ? "Could not discard recording. Try again."
+          : "Could not stop recording. Try again."));
+      }
     }
-  }, [t]);
-
-  const discard = useCallback(async () => {
-    try {
-      if (await runRecordingAction(closing, ipc.cancelRecording)) setActionError(null);
-    } catch (error) {
-      console.error(error);
-      // A failed discard must not leave an active recorder without a HUD.
-      setActionError(t("Could not discard recording. Try again."));
-    }
-  }, [t]);
+  }, [finishing, status?.sessionId, t]);
 
   // Namjerno bez tipkovničkih prečaca: HUD je WS_EX_NOACTIVATE (nikad nema fokus), pa
   // tipke koje korisnik pritisne u svojoj aplikaciji ne mogu slučajno zaustaviti snimanje.
@@ -254,8 +259,8 @@ export default function RecBar() {
         {paused ? <Play size={15} /> : <Pause size={15} />}
       </button>
       <button
-        onClick={stop}
-        disabled={finishing}
+        onClick={() => void finish(false)}
+        disabled={finishing || !status?.sessionId}
         title={t("Stop and save")}
         aria-label={t("Stop and save")}
         className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-danger transition hover:brightness-110 active:scale-95 disabled:opacity-40"
@@ -263,8 +268,8 @@ export default function RecBar() {
         <Square size={13} fill="currentColor" />
       </button>
       <button
-        onClick={discard}
-        disabled={finishing}
+        onClick={() => void finish(true)}
+        disabled={finishing || !status?.sessionId}
         title={t("Discard")}
         aria-label={t("Discard")}
         className="grid h-8 w-8 shrink-0 place-items-center rounded-full transition hover:bg-white/15 active:scale-95 disabled:opacity-40"

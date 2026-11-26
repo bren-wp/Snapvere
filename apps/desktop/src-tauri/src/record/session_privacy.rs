@@ -22,6 +22,26 @@ impl Ctl {
         )
     }
 
+    /// Called while holding the recorder slot lock. An unscoped native stop
+    /// is permitted for the tray/hotkey; discarding always needs a session.
+    pub(super) fn request_finish(
+        &self,
+        requested: Option<&str>,
+        discard: bool,
+    ) -> Result<(), String> {
+        if let Some(expected) = requested {
+            self.check_live_session(expected)?;
+        } else if discard {
+            return Err("Discard requires a recording session".into());
+        }
+        if discard {
+            self.cancel.store(true, Ordering::SeqCst);
+        }
+        self.stop.store(true, Ordering::SeqCst);
+        self.phase.store(PHASE_FINISHING, Ordering::SeqCst);
+        Ok(())
+    }
+
     pub(super) fn replace_blur(
         &self,
         requested: &str,
@@ -149,6 +169,31 @@ mod tests {
         assert_eq!(ctl.status().encoded_blur_revision, next);
         ctl.acknowledge_encoded_masks(first);
         assert_eq!(ctl.status().encoded_blur_revision, next);
+    }
+
+    #[test]
+    fn stale_or_unscoped_discard_cannot_destroy_current_recording() {
+        let ctl = recorder();
+        assert!(ctl.request_finish(Some("old-session"), true).is_err());
+        assert!(ctl.request_finish(None, true).is_err());
+        assert!(ctl.request_finish(Some("old-session"), false).is_err());
+        assert!(!ctl.stop.load(Ordering::Acquire));
+        assert!(!ctl.cancel.load(Ordering::Acquire));
+        assert_eq!(ctl.phase.load(Ordering::Acquire), PHASE_RECORDING);
+        ctl.request_finish(Some("new-session"), false).unwrap();
+        assert!(ctl.stop.load(Ordering::Acquire));
+        assert!(!ctl.cancel.load(Ordering::Acquire));
+        assert!(ctl.request_finish(Some("new-session"), true).is_err());
+        assert!(!ctl.cancel.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn matching_active_session_can_be_discarded() {
+        let ctl = recorder();
+        ctl.request_finish(Some("new-session"), true).unwrap();
+        assert!(ctl.stop.load(Ordering::Acquire));
+        assert!(ctl.cancel.load(Ordering::Acquire));
+        assert_eq!(ctl.phase.load(Ordering::Acquire), PHASE_FINISHING);
     }
 
     #[test]

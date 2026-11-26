@@ -94,8 +94,8 @@ export const ipc = {
     logicalSelection?: LogicalRecordingSelection,
   ) =>
     invoke<RecordStatus>("start_recording", { region, monitorId, options, logicalSelection }),
-  stopRecording: () => invoke<void>("stop_recording"),
-  cancelRecording: () => invoke<void>("cancel_recording"),
+  stopRecording: (sessionId: string) => invoke<void>("stop_recording", { sessionId }),
+  cancelRecording: (sessionId: string) => invoke<void>("cancel_recording", { sessionId }),
   pauseRecording: (paused: boolean, sessionId: string) =>
     invoke<RecordStatus>("pause_recording", { paused, sessionId }),
   recordingStatus: () => invoke<RecordStatus>("recording_status"),

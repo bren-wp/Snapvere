@@ -1602,15 +1602,23 @@ pub fn dispatch_record_fullscreen(app: &AppHandle) {
 }
 
 #[tauri::command]
-pub fn stop_recording(window: tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
+pub fn stop_recording(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    session_id: String,
+) -> Result<(), String> {
     require_window_label(window.label(), &["recbar"])?;
-    record::stop(&app)
+    record::stop_for_session(&app, &session_id)
 }
 
 #[tauri::command]
-pub fn cancel_recording(window: tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
+pub fn cancel_recording(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    session_id: String,
+) -> Result<(), String> {
     require_window_label(window.label(), &["recbar"])?;
-    record::cancel(&app)
+    record::cancel(&app, &session_id)
 }
 
 #[tauri::command]
