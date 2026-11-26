@@ -35,3 +35,11 @@ BLOCKED means pending rights/provenance review for proprietary release, not a fi
 ## Concurrent security gates
 
 The existing [audit register](docs/AUDIT-2026-11-26.md) records unresolved filesystem identity races, memory safety acceptance, release-label discrepancy and semantic-clone scope. These remain open. No native tests, CI, binary verification or physical QA were performed by this screening; no release is authorized by this report.
+
+## Annotation renderer replacement candidate — cycle 2
+
+Runtime candidate [b36db89](https://github.com/bren-wp/Snapvere/commit/b36db89bc0f2d94750826b1317796497a14fb8b7) replaces the shared canvas renderer and separates pure geometry into annotationGeometry.ts. Public interfaces remain unchanged. Geometry uses vector projection; shape, label, path and pixelation responsibilities are separated. Input validation, per-annotation canvas state restoration, 1024-by-1024 temporary pixelation allocation limit, opaque fallback for small positive regions or sampling failures, and opaque sampling background were added. Pixelation is not guaranteed irreversible redaction; invalid or zero-area selections do not define a mask, and real export and browser acceptance remain mandatory.
+
+Eight isolated Node 22.16.0 tests passed (four geometry, four mocked renderer tests). The local inputs were checked against GitHub blob IDs: geometry 3500ceb8a048cdd70982b77f1c87a5674453c3f1; renderer d524a7cdc6c497048530f7ec5b94f8d0479544f1; geometry test e7b4b75b61924d7a1900838691da72f746b654c6; renderer test d0a058edb487a663244834d55b35a731684aa14b. The existing unit suite includes both files. This is not a full frontend build, visual comparison or native test.
+
+Provenance status remains BLOCKED: this is a replacement/refactor informed by existing Snapvere interfaces and visual parameters, not a separately staffed clean-room implementation or proof of copyright clearance. The prior baseline comparison remains historical evidence. Preserve current license and history; obtain independent review and rights evidence before proprietary release. Remaining Rust and React provenance, native security findings, physical QA, signing and all 13 release assets remain open.
