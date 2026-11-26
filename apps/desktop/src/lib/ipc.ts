@@ -138,6 +138,8 @@ export const ipc = {
     invoke<Screenshot[]>("search_screenshots", { query, limit, offset, kind }),
   deleteScreenshot: (id: string) =>
     invoke<boolean>("delete_screenshot", { id }),
+  restoreLatestQuarantinedCapture: () =>
+    invoke<boolean>("restore_latest_quarantined_capture"),
   addTag: (id: string, tag: string) => invoke<void>("add_tag", { id, tag }),
 
   // ── preglednik (po id-u zapisa, ne po putanji) ──

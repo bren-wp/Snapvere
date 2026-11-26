@@ -40,6 +40,7 @@ import Viewer from "../components/Viewer";
 import CaptureCard from "../components/home/CaptureCard";
 import EmptyGallery from "../components/home/EmptyGallery";
 import UpdateNotice from "../components/UpdateNotice";
+import { quarantineCopy } from "../lib/quarantineCopy";
 
 type Filter = GalleryFilter;
 const PAGE_SIZE = 120;
@@ -67,6 +68,17 @@ export default function Home() {
   const [activeSelection] = useState(createGallerySelectionStore);
   const [toast, setToast] = useState<string | null>(null);
   const [captureBusy, setCaptureBusy] = useState(false);
+  const [linuxQuarantine, setLinuxQuarantine] = useState(false);
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const restoreLock = useRef(false);
+  const recoveryText = quarantineCopy(language);
+  useEffect(() => {
+    let active = true;
+    void ipc.getPlatformCapabilities().then((platform) => {
+      if (active) setLinuxQuarantine(platform?.os === "linux");
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
   /** Otvoren u pregledniku (id, ne indeks — lista se osvježava ispod njega). */
   const [viewId, setViewId] = useState<string | null>(null);
   const galleryRequest = useRef(0);
@@ -483,6 +495,31 @@ export default function Home() {
             <ArrowUpRight className="snapvere-action-arrow" size={17} aria-hidden="true" />
           </button>
         </div>
+        {linuxQuarantine && (
+          <button type="button" className="snapvere-btn-secondary mt-2"
+            disabled={restoreBusy || proExportBusy}
+            onClick={async () => {
+              if (restoreLock.current || proExportLock.current) return;
+              restoreLock.current = true;
+              setRestoreBusy(true);
+              try {
+                if (await ipc.restoreLatestQuarantinedCapture()) {
+                  await load();
+                  setToast(recoveryText.restored);
+                } else {
+                  setToast(recoveryText.noChange);
+                }
+              } catch (error) {
+                console.error("Quarantine recovery failed", error);
+                setToast(recoveryText.failed);
+              } finally {
+                restoreLock.current = false;
+                setRestoreBusy(false);
+              }
+            }}>
+            {recoveryText.restore}
+          </button>
+        )}
         {IS_PRO && (
           <div className="snapvere-pro-ribbon" role="group" aria-label={proText.studioTitle}>
             <span className="snapvere-pro-ribbon-label">{APP_NAME}</span>

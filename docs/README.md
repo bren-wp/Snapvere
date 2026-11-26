@@ -1,12 +1,11 @@
 # Snapvere documentation
 
-Current baseline: v0.2.36 unsigned preview; v0.2.37 candidate. Use the current documents below for product status; older version/date-specific reports are historical evidence, not current availability claims.
+Current development candidate: v0.2.38; v0.2.37 is the separate merged-main preview release track. Verify the Releases page for published versions. Use the current documents below for product status; older version/date-specific reports are historical evidence, not current availability claims.
 
 | Document | Purpose |
 |---|---|
 | [Product specification](SPECIFICATION.md) | Current interfaces, architecture and platform boundaries |
 | [Roadmap](../ROADMAP.md) | Seven ordered phases and exit criteria |
-| [Feature matrix](../FEATURE-MATRIX.md) | Free/Pro scope and functional references |
 | [Source provenance](../SOURCE-PROVENANCE.md) | Owner's authorship statement and licensing boundaries |
 | [Current audit register](AUDIT-2026-11-26.md) | Security/dead-code findings, evidence and open gaps |
 | [Verification matrix](TASK-BREAKDOWN.md) | CI and physical acceptance |
