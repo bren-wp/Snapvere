@@ -53,6 +53,8 @@ jobs:
         run: python tools/test_release_preflight.py
       - name: Test private sharing service
         run: node --test snpv.re/server.test.mjs
+      - name: Verify update website and all edition download routes
+        run: python tools/test_update_site.py
       - name: Verify Snapvere by Brendigo source headers
         run: python tools/check_source_headers.py
       - name: Enforce reachable Rust modules (dead-code graph)

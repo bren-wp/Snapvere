@@ -16,7 +16,22 @@ const MAX_MANIFEST_BYTES = 8192;
 const TIMEOUT_MS = 6500;
 
 type Version = readonly [number, number, number];
-export type AvailableUpdate = Readonly<{ version: string; notes: string }>;
+export type UpdateTarget = Readonly<{ os: "windows" | "linux"; edition: "free" | "pro" }>;
+export type UpdatePackage = Readonly<{ name: string; size: number; sha256: string }>;
+export type AvailableUpdate = Readonly<{ version: string; notes: string; packages?: readonly UpdatePackage[] }>;
+export function updateTarget(os: string | null, pro: boolean): UpdateTarget | null {
+  return os === "windows" || os === "linux" ? { os, edition: pro ? "pro" : "free" } : null;
+}
+export function packageNames(target: UpdateTarget): string[] {
+  const prefix = target.edition === "pro" ? "Snapvere-Pro" : "Snapvere";
+  return target.os === "windows"
+    ? ["-Setup.exe", "-Setup.msi", "-Portable.exe"].map(s => prefix+s)
+    : ["-Linux-amd64.deb", "-Linux-x86_64.AppImage"].map(s => prefix+s);
+}
+export function updateDownloadUrl(version: string, name: string, target: UpdateTarget): string {
+  if (!parseVersion(version) || !packageNames(target).includes(name)) throw new Error("Invalid update package");
+  return "https://update.snapvere.com/download.php?" + new URLSearchParams({version, package:name}).toString();
+}
 
 export function parseVersion(value: string): Version | null {
   if (value.length > 20) return null;
@@ -38,7 +53,7 @@ export function isNewerVersion(candidate: string, current: string): boolean {
 }
 
 /** Server data is only plain text and never controls an external URL. */
-export function parseUpdateManifest(raw: unknown, currentVersion: string): AvailableUpdate | null {
+export function parseUpdateManifest(raw: unknown, currentVersion: string, target?: UpdateTarget): AvailableUpdate | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("Invalid update manifest");
   }
@@ -54,9 +69,27 @@ export function parseUpdateManifest(raw: unknown, currentVersion: string): Avail
       (typeof record.notes !== "string" || record.notes.length > 800)) {
     throw new Error("Update release notes are invalid");
   }
-  return isNewerVersion(record.version, currentVersion)
-    ? { version: record.version, notes: (record.notes as string | undefined) ?? "" }
-    : null;
+  if (!isNewerVersion(record.version, currentVersion)) return null;
+  const result = { version: record.version, notes: (record.notes as string | undefined) ?? "" };
+  if (!target) return result;
+  if (!Array.isArray(record.packages) || record.packages.length !== 10 || record.channel !== "stable") {
+    throw new Error("No verified package catalog");
+  }
+  const names = new Set([
+    ...packageNames({os:"windows",edition:"free"}), ...packageNames({os:"windows",edition:"pro"}),
+    ...packageNames({os:"linux",edition:"free"}), ...packageNames({os:"linux",edition:"pro"}),
+  ]);
+  const packages: UpdatePackage[] = [];
+  for (const rawPackage of record.packages) {
+    if (!rawPackage || typeof rawPackage !== "object" || Array.isArray(rawPackage)) throw new Error("Invalid package");
+    const item = rawPackage as Record<string, unknown>;
+    if (typeof item.name !== "string" || !names.delete(item.name) ||
+        typeof item.size !== "number" || !Number.isSafeInteger(item.size) || item.size < 1000000 ||
+        typeof item.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(item.sha256)) throw new Error("Invalid package");
+    packages.push({name:item.name,size:item.size,sha256:item.sha256});
+  }
+  const matching = packageNames(target).map(name => packages.find(item => item.name === name)!);
+  return {...result, packages:matching};
 }
 
 /**
@@ -88,6 +121,7 @@ async function readManifestBounded(response: Response): Promise<string> {
 export async function checkForUpdates(
   currentVersion: string,
   cancelSignal?: AbortSignal,
+  target?: UpdateTarget,
 ): Promise<AvailableUpdate | null> {
   if (!parseVersion(currentVersion)) throw new Error("Invalid installed version");
   const controller = new AbortController();
@@ -114,7 +148,7 @@ export async function checkForUpdates(
       throw new Error("Unexpected update response");
     }
     const text = await readManifestBounded(response);
-    return parseUpdateManifest(JSON.parse(text) as unknown, currentVersion);
+    return parseUpdateManifest(JSON.parse(text) as unknown, currentVersion, target);
   } finally {
     controller.abort();
     clearTimeout(timeout);

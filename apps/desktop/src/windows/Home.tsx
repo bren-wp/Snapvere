@@ -838,7 +838,7 @@ export default function Home() {
         )}
       </main>
 
-      <UpdateNotice mode="home" onAction={openSettings} raised={toast !== null} />
+      <UpdateNotice mode="home" onAction={() => openSettings("about")} raised={toast !== null} />
 
       {shareCapture && <ShareCaptureDialog shot={shareCapture} language={language} onClose={() => setShareCapture(null)} />}
       {viewId && (

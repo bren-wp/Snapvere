@@ -149,3 +149,24 @@ test('version validation rejects extra characters and bounds the input', () => {
   }
   assert.deepEqual(parseVersion('999999.999999.999999'), [999999, 999999, 999999]);
 });
+
+test("stable catalog isolates Free/Pro and Windows/Linux downloads", async () => {
+  const {updateTarget,packageNames,updateDownloadUrl}=await import('../src/lib/updateFeed.ts');
+  const targets=[updateTarget("windows",false),updateTarget("windows",true),updateTarget("linux",false),updateTarget("linux",true)];
+  const packages=targets.flatMap(target=>packageNames(target).map(name=>({name,size:1500000,sha256:"a".repeat(64)})));
+  const manifest={product:UPDATE_PRODUCT,version:"0.2.39",channel:"stable",packages};
+  for(const target of targets){
+    const update=parseUpdateManifest(manifest,"0.2.38",target);
+    assert.deepEqual(update.packages.map(item=>item.name),packageNames(target));
+    const url=new URL(updateDownloadUrl(update.version,update.packages[0].name,target));
+    assert.equal(url.origin,"https://update.snapvere.com");
+    assert.equal(url.pathname,"/download.php");
+    assert.equal(url.searchParams.get("package"),update.packages[0].name);
+    assert.throws(()=>updateDownloadUrl("0.2.39","../evil.exe",target));
+  }
+  assert.equal(updateTarget("macos",false),null);
+  assert.throws(()=>parseUpdateManifest({...manifest,packages:packages.slice(1)},"0.2.38",targets[0]));
+  assert.throws(()=>parseUpdateManifest({...manifest,packages:packages.map((p,i)=>i===0?{...p,sha256:"bad"}:p)},"0.2.38",targets[0]));
+  assert.throws(()=>parseUpdateManifest({...manifest,channel:"preview"},"0.2.38",targets[0]));
+  assert.equal(parseUpdateManifest(manifest,"0.2.39",targets[0]),null);
+});

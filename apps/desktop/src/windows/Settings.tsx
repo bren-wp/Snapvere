@@ -7,7 +7,6 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { emit, listen } from "@tauri-apps/api/event";
 import UpdateNotice from "../components/UpdateNotice";
-import { OFFICIAL_DOWNLOAD_URL } from "../lib/updateFeed";
 import { ipc } from "../lib/ipc";
 import { LANGUAGES, type Language } from "../lib/i18n";
 import { useLanguage } from "../lib/LanguageProvider";
@@ -656,27 +655,12 @@ export default function Settings() {
               </button>
             </div>
             <div className="mt-4">
-              {linuxGifOnly || IS_PRO ? (
-                <div className="rounded-xl border border-border bg-elevated/80 px-4 py-3">
-                  {linuxGifOnly && (
-                    <p className="text-sm text-muted">
-                      {t("On Linux, silent GIF recording is available. MP4, audio and recorded cursor are not supported.")}
-                    </p>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => void openUrl(OFFICIAL_DOWNLOAD_URL).catch(() => setNotice(t("Could not open the page.")))}
-                    className="mt-3 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:border-accent focus-visible:ring-2 focus-visible:ring-accent"
-                    aria-label={t("Official website")}
-                  >
-                    {t("Official website")}: snapvere.com/download/tauri/
-                  </button>
-                </div>
-              ) : (
-                <UpdateNotice mode="settings" onAction={() => {
-                  void openUrl(OFFICIAL_DOWNLOAD_URL).catch(() => setNotice(t("Could not open the page.")));
-                }} />
-              )}
+              {linuxGifOnly && <p className="mb-2 text-sm text-muted">
+                {t("On Linux, silent GIF recording is available. MP4, audio and recorded cursor are not supported.")}
+              </p>}
+              <UpdateNotice mode="settings" onAction={(url) => {
+                if (url) void openUrl(url).catch(() => setNotice(t("Could not open the page.")));
+              }} />
             </div>
             <div className="mt-5 rounded-xl border border-border/60 bg-elevated/20 p-4">
               <div className="text-sm font-medium">{t("Commercial license agreement")}</div>

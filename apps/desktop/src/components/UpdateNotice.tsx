@@ -5,7 +5,7 @@ import { IS_PRO } from "../lib/edition";
 import { ipc } from "../lib/ipc";
 import type { Language } from "../lib/i18n";
 import { useLanguage } from "../lib/LanguageProvider";
-import { autoUpdateChecksEnabled, canCheckWindowsUpdates, checkForUpdates, shouldShowReleaseNotice, type AvailableUpdate } from "../lib/updateFeed";
+import { autoUpdateChecksEnabled, updateTarget, updateDownloadUrl, checkForUpdates, shouldShowReleaseNotice, type AvailableUpdate } from "../lib/updateFeed";
 import { version as installedVersion } from "../../package.json";
 
 type TextSet = Readonly<{
@@ -16,7 +16,7 @@ const en: TextSet = {
   available: "New Snapvere version available", check: "Check for updates",
   checking: "Checking for updates…", upToDate: "You have the latest version.",
   unreachable: "Update server is unavailable. Try again later.",
-  download: "Open official download", settings: "View update in Settings", close: "Dismiss",
+  download: "Download update", settings: "View update in Settings", close: "Dismiss",
   automatic: "Check automatically on startup",
   disabled: "Automatic checks are off. Use Check for updates to check manually.",
 };
@@ -24,47 +24,47 @@ const words: Partial<Record<Language, TextSet>> = {
   hr: { available: "Dostupna je nova verzija Snapverea", check: "Provjeri ažuriranja",
     checking: "Provjeravam ažuriranja…", upToDate: "Imate najnoviju verziju.",
     unreachable: "Poslužitelj za ažuriranja nije dostupan. Pokušajte poslije.",
-    download: "Otvori službeno preuzimanje", settings: "Pogledaj ažuriranje u postavkama", close: "Zatvori", automatic: "Provjeri automatski pri pokretanju", disabled: "Automatska provjera je isključena. Ažuriranja možete provjeriti ručno." },
+    download: "Preuzmi ažuriranje", settings: "Pogledaj ažuriranje u postavkama", close: "Zatvori", automatic: "Provjeri automatski pri pokretanju", disabled: "Automatska provjera je isključena. Ažuriranja možete provjeriti ručno." },
   de: { available: "Neue Snapvere-Version verfügbar", check: "Auf Updates prüfen",
     checking: "Suche nach Updates…", upToDate: "Sie haben die neueste Version.",
     unreachable: "Update-Server nicht erreichbar. Später erneut versuchen.",
-    download: "Offizielle Downloadseite öffnen", settings: "Update in Einstellungen ansehen", close: "Schließen", automatic: "Beim Start automatisch prüfen", disabled: "Automatische Updatesuche ist aus. Nutzen Sie die manuelle Prüfung." },
+    download: "Update herunterladen", settings: "Update in Einstellungen ansehen", close: "Schließen", automatic: "Beim Start automatisch prüfen", disabled: "Automatische Updatesuche ist aus. Nutzen Sie die manuelle Prüfung." },
   es: { available: "Nueva versión de Snapvere disponible", check: "Buscar actualizaciones",
     checking: "Buscando actualizaciones…", upToDate: "Tienes la última versión.",
     unreachable: "Servidor de actualizaciones no disponible. Inténtalo más tarde.",
-    download: "Abrir descarga oficial", settings: "Ver actualización en Ajustes", close: "Cerrar", automatic: "Comprobar automáticamente al iniciar", disabled: "La búsqueda automática está desactivada. Puede comprobar manualmente." },
+    download: "Descargar actualización", settings: "Ver actualización en Ajustes", close: "Cerrar", automatic: "Comprobar automáticamente al iniciar", disabled: "La búsqueda automática está desactivada. Puede comprobar manualmente." },
   fr: { available: "Nouvelle version de Snapvere disponible", check: "Rechercher des mises à jour",
     checking: "Recherche de mises à jour…", upToDate: "Vous avez la dernière version.",
     unreachable: "Serveur de mises à jour indisponible. Réessayez plus tard.",
-    download: "Ouvrir le téléchargement officiel", settings: "Voir la mise à jour dans Paramètres", close: "Fermer", automatic: "Vérifier automatiquement au démarrage", disabled: "La vérification automatique est désactivée. Vérifiez manuellement." },
+    download: "Télécharger la mise à jour", settings: "Voir la mise à jour dans Paramètres", close: "Fermer", automatic: "Vérifier automatiquement au démarrage", disabled: "La vérification automatique est désactivée. Vérifiez manuellement." },
   it: { available: "Nuova versione di Snapvere disponibile", check: "Controlla aggiornamenti",
     checking: "Ricerca aggiornamenti…", upToDate: "Hai l'ultima versione.",
     unreachable: "Server degli aggiornamenti non disponibile. Riprova più tardi.",
-    download: "Apri download ufficiale", settings: "Visualizza aggiornamento in Impostazioni", close: "Chiudi", automatic: "Controlla automaticamente all'avvio", disabled: "La verifica automatica è disattivata. Controlla manualmente." },
+    download: "Scarica aggiornamento", settings: "Visualizza aggiornamento in Impostazioni", close: "Chiudi", automatic: "Controlla automaticamente all'avvio", disabled: "La verifica automatica è disattivata. Controlla manualmente." },
   pt: { available: "Nova versão do Snapvere disponível", check: "Procurar atualizações",
     checking: "A procurar atualizações…", upToDate: "Tem a versão mais recente.",
     unreachable: "Servidor de atualizações indisponível. Tente mais tarde.",
-    download: "Abrir transferência oficial", settings: "Ver atualização nas Definições", close: "Fechar", automatic: "Verificar automaticamente ao iniciar", disabled: "A verificação automática está desativada. Verifique manualmente." },
+    download: "Descarregar atualização", settings: "Ver atualização nas Definições", close: "Fechar", automatic: "Verificar automaticamente ao iniciar", disabled: "A verificação automática está desativada. Verifique manualmente." },
   nl: { available: "Nieuwe Snapvere-versie beschikbaar", check: "Controleren op updates",
     checking: "Updates controleren…", upToDate: "Je hebt de nieuwste versie.",
     unreachable: "Updateserver niet beschikbaar. Probeer het later opnieuw.",
-    download: "Officiële download openen", settings: "Update in Instellingen bekijken", close: "Sluiten", automatic: "Automatisch controleren bij starten", disabled: "Automatisch controleren staat uit. Controleer handmatig." },
+    download: "Update downloaden", settings: "Update in Instellingen bekijken", close: "Sluiten", automatic: "Automatisch controleren bij starten", disabled: "Automatisch controleren staat uit. Controleer handmatig." },
   pl: { available: "Dostępna jest nowa wersja Snapvere", check: "Sprawdź aktualizacje",
     checking: "Sprawdzanie aktualizacji…", upToDate: "Masz najnowszą wersję.",
     unreachable: "Serwer aktualizacji jest niedostępny. Spróbuj później.",
-    download: "Otwórz oficjalną stronę pobierania", settings: "Pokaż aktualizację w Ustawieniach", close: "Zamknij", automatic: "Sprawdzaj automatycznie przy uruchomieniu", disabled: "Automatyczne sprawdzanie jest wyłączone. Sprawdź ręcznie." },
+    download: "Pobierz aktualizację", settings: "Pokaż aktualizację w Ustawieniach", close: "Zamknij", automatic: "Sprawdzaj automatycznie przy uruchomieniu", disabled: "Automatyczne sprawdzanie jest wyłączone. Sprawdź ręcznie." },
   cs: { available: "Je dostupná nová verze Snapvere", check: "Zkontrolovat aktualizace",
     checking: "Kontrola aktualizací…", upToDate: "Máte nejnovější verzi.",
     unreachable: "Aktualizační server není dostupný. Zkuste to později.",
-    download: "Otevřít oficiální stažení", settings: "Zobrazit aktualizaci v Nastavení", close: "Zavřít", automatic: "Automaticky kontrolovat při spuštění", disabled: "Automatická kontrola je vypnutá. Zkontrolujte ručně." },
+    download: "Stáhnout aktualizaci", settings: "Zobrazit aktualizaci v Nastavení", close: "Zavřít", automatic: "Automaticky kontrolovat při spuštění", disabled: "Automatická kontrola je vypnutá. Zkontrolujte ručně." },
   sk: { available: "Je dostupná nová verzia Snapvere", check: "Skontrolovať aktualizácie",
     checking: "Kontrola aktualizácií…", upToDate: "Máte najnovšiu verziu.",
     unreachable: "Aktualizačný server nie je dostupný. Skúste to neskôr.",
-    download: "Otvoriť oficiálne stiahnutie", settings: "Zobraziť aktualizáciu v Nastaveniach", close: "Zavrieť", automatic: "Automaticky kontrolovať pri spustení", disabled: "Automatická kontrola je vypnutá. Skontrolujte ručne." },
+    download: "Stiahnuť aktualizáciu", settings: "Zobraziť aktualizáciu v Nastaveniach", close: "Zavrieť", automatic: "Automaticky kontrolovať pri spustení", disabled: "Automatická kontrola je vypnutá. Skontrolujte ručne." },
   sl: { available: "Na voljo je nova različica Snapvere", check: "Preveri posodobitve",
     checking: "Preverjanje posodobitev…", upToDate: "Imate najnovejšo različico.",
     unreachable: "Strežnik za posodobitve ni dosegljiv. Poskusite pozneje.",
-    download: "Odpri uradni prenos", settings: "Poglej posodobitev v nastavitvah", close: "Zapri", automatic: "Samodejno preveri ob zagonu", disabled: "Samodejno preverjanje je izklopljeno. Preverite ročno." },
+    download: "Prenesi posodobitev", settings: "Poglej posodobitev v nastavitvah", close: "Zapri", automatic: "Samodejno preveri ob zagonu", disabled: "Samodejno preverjanje je izklopljeno. Preverite ročno." },
 };
 
 const AUTO_KEY = "snapvere-auto-update-check";
@@ -74,7 +74,7 @@ export default function UpdateNotice({
   mode, onAction, raised = false,
 }: {
   mode: "home" | "settings";
-  onAction: () => void | Promise<void>;
+  onAction: (downloadUrl?: string) => void | Promise<void>;
   /** Raise the corner notice above a transient Home action toast. */
   raised?: boolean;
 }) {
@@ -82,6 +82,7 @@ export default function UpdateNotice({
   const w = words[language] ?? en;
   const [available, setAvailable] = useState<AvailableUpdate | null>(null);
   const [state, setState] = useState<"idle" | "checking" | "current" | "error">("idle");
+  const [selectedPackage, setSelectedPackage] = useState("");
   // Closing one release should not reopen its banner on every window focus
   // or hourly fetch; a newly published version is shown again.
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(() => {
@@ -108,7 +109,7 @@ export default function UpdateNotice({
   const lastAttemptAt = useRef(0);
 
   const check = useCallback(async () => {
-    if (IS_PRO || !canCheckWindowsUpdates(platformOs)) {
+    if (!updateTarget(platformOs, IS_PRO)) {
       controller.current?.abort();
       setAvailable(null);
       setState("idle");
@@ -120,9 +121,12 @@ export default function UpdateNotice({
     controller.current = active;
     setState("checking");
     try {
-      const info = await checkForUpdates(installedVersion, active.signal);
+      const target = updateTarget(platformOs, IS_PRO);
+      if (!target) return;
+      const info = await checkForUpdates(installedVersion, active.signal, target);
       if (!active.signal.aborted) {
         setAvailable(info);
+        setSelectedPackage(info?.packages?.[0]?.name ?? "");
         setState("current");
       }
     } catch (error) {
@@ -136,7 +140,7 @@ export default function UpdateNotice({
     }
   }, [platformOs]);
   useEffect(() => {
-    if (IS_PRO || !canCheckWindowsUpdates(platformOs)) {
+    if (!updateTarget(platformOs, IS_PRO)) {
       controller.current?.abort();
       setAvailable(null);
       setState("idle");
@@ -214,10 +218,8 @@ export default function UpdateNotice({
     }
   };
 
-  // Linux previews do not consume the Windows-only version feed.
-  // Until there is a separate authenticated Linux feed, use manual
-  // GitHub Releases navigation via Settings / About instead.
-  if (IS_PRO || !canCheckWindowsUpdates(platformOs)) return null;
+  // Only an explicitly supported native platform may use the release catalog.
+  if (!updateTarget(platformOs, IS_PRO)) return null;
   if (mode === "home" && !shouldShowReleaseNotice(available, dismissedVersion)) return null;
   return (
     <section
@@ -235,8 +237,18 @@ export default function UpdateNotice({
             <strong className="text-text">{w.available}: {available.version}</strong>
             {available.notes && <p className="mt-1 line-clamp-2 text-xs text-muted">{available.notes}</p>}
           </div>
-          <button type="button" onClick={() => void onAction()}
-            className="rounded-lg bg-accent px-3 py-2 font-semibold text-white focus-visible:ring-2 focus-visible:ring-accent">
+          {mode === "settings" && available.packages && (
+            <select aria-label={w.download} value={selectedPackage} onChange={event => setSelectedPackage(event.target.value)}
+              className="max-w-full rounded-lg border border-border bg-elevated px-2 py-2 text-xs">
+              {available.packages.map(item => <option key={item.name} value={item.name}>{item.name} · {(item.size / 1048576).toFixed(1)} MiB</option>)}
+            </select>
+          )}
+          <button type="button" disabled={mode === "settings" && !selectedPackage} onClick={() => {
+              const target = updateTarget(platformOs, IS_PRO);
+              if (mode === "home") void onAction();
+              else if (target && selectedPackage) void onAction(updateDownloadUrl(available.version, selectedPackage, target));
+            }}
+            className="rounded-lg bg-accent px-3 py-2 font-semibold text-white focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
             {mode === "settings" ? w.download : w.settings}
           </button>
           <button type="button" onClick={dismiss}

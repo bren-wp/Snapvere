@@ -1,0 +1,14 @@
+DirectoryIndex index.php
+Options -Indexes
+<IfModule mod_headers.c>
+  <Files "stable.json">
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Cache-Control "no-store, max-age=0"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Strict-Transport-Security "max-age=31536000"
+  </Files>
+</IfModule>
+AddType application/json .json
+<FilesMatch "^(catalog\.php|stable\.example\.json|README\.md)$">
+  Require all denied
+</FilesMatch>
