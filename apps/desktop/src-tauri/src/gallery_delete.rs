@@ -373,20 +373,54 @@ fn verify_staged_files(job: &PendingDeletion) -> Result<()> {
     Ok(())
 }
 
+/// Verify that a rollback member is either already restored or safe to restore.
+/// A conflict in either member must leave both untouched during preflight.
+fn preflight_restore(source: &str, staged: &str, identity: Option<&str>) -> Result<()> {
+    let source = Path::new(source);
+    let staged = Path::new(staged);
+    let directory = pin_parent(source)?;
+    let expected = checked_leaf(&directory, identity)?;
+    let source = pinned_path(&directory, source)?;
+    let staged = pinned_path(&directory, staged)?;
+    let source_exists = exists(&source)?;
+    let staged_exists = exists(&staged)?;
+    if expected == "missing" {
+        ensure!(
+            !source_exists && !staged_exists,
+            "Unexpected media for missing-file intent"
+        );
+    } else if staged_exists {
+        ensure!(!source_exists, "Original gallery path is occupied");
+        verify_leaf(&staged, expected)?;
+    } else {
+        ensure!(source_exists, "Original and staged media are unavailable");
+        verify_leaf(&source, expected)?;
+    }
+    Ok(())
+}
+
 fn restore_files(job: &PendingDeletion) -> Result<()> {
     validate_job(job)?;
-    // Try both paths even if the first restore failed; never overwrite a destination.
-    let main = restore_one(
+    preflight_restore(
         &job.file_path,
         &job.staged_file_path,
         job.file_identity.as_deref(),
-    );
-    let thumb = match (&job.thumb_path, &job.staged_thumb_path) {
-        (Some(source), Some(staged)) => restore_one(source, staged, job.thumb_identity.as_deref()),
-        _ => Ok(()),
-    };
-    main?;
-    thumb
+    )?;
+    if let (Some(source), Some(staged)) = (&job.thumb_path, &job.staged_thumb_path) {
+        preflight_restore(source, staged, job.thumb_identity.as_deref())?;
+    }
+
+    // Revalidate each member during restoration. A failure leaves the journal
+    // intact, including after a partial rollback caused by a concurrent change.
+    restore_one(
+        &job.file_path,
+        &job.staged_file_path,
+        job.file_identity.as_deref(),
+    )?;
+    if let (Some(source), Some(staged)) = (&job.thumb_path, &job.staged_thumb_path) {
+        restore_one(source, staged, job.thumb_identity.as_deref())?;
+    }
+    Ok(())
 }
 
 fn cleanup_files(job: &PendingDeletion) -> Result<()> {
@@ -662,6 +696,39 @@ mod tests {
         let db = Db::open(&folder.join("gallery.sqlite"))?;
         assert_eq!(fs::read(&shot.file_path)?, b"original");
         assert_eq!(fs::read(shot.thumb_path.as_deref().unwrap())?, b"thumbnail");
+        assert!(db.pending_deletions()?.is_empty());
+        drop(db);
+        fs::remove_dir_all(folder)?;
+        Ok(())
+    }
+
+    #[test]
+    fn rollback_thumbnail_conflict_preserves_both_staged_members() -> Result<()> {
+        let (folder, db, shot) = fixture()?;
+        let job = intent(&shot)?;
+        db.prepare_delete(&job)?;
+        stage_files(&job)?;
+        let thumb = shot.thumb_path.as_deref().unwrap();
+        let staged_thumb = job.staged_thumb_path.as_deref().unwrap();
+
+        // An unrelated file appeared at the original thumbnail destination.
+        fs::write(thumb, b"unrelated thumbnail")?;
+        drop(db);
+        let db = Db::open(&folder.join("gallery.sqlite"))?;
+        assert!(db.get(&shot.id)?.is_some());
+        assert!(db.pending_delete(&shot.id)?.is_some());
+        assert!(!Path::new(&shot.file_path).exists());
+        assert_eq!(fs::read(&job.staged_file_path)?, b"original");
+        assert_eq!(fs::read(staged_thumb)?, b"thumbnail");
+        assert_eq!(fs::read(thumb)?, b"unrelated thumbnail");
+        drop(db);
+
+        let preserved = folder.join("preserved-thumbnail.webp");
+        fs::rename(thumb, &preserved)?;
+        let db = Db::open(&folder.join("gallery.sqlite"))?;
+        assert_eq!(fs::read(&shot.file_path)?, b"original");
+        assert_eq!(fs::read(thumb)?, b"thumbnail");
+        assert_eq!(fs::read(preserved)?, b"unrelated thumbnail");
         assert!(db.pending_deletions()?.is_empty());
         drop(db);
         fs::remove_dir_all(folder)?;
