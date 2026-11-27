@@ -64,7 +64,7 @@ def build(release, out):
         update_files = {p.relative_to(update).as_posix():p for p in update.rglob("*") if p.is_file()}
         update_files["README.txt"] = ROOT / "deploy/update.snapvere.com/README.txt"
         share = ROOT / "deploy/snpv.re"
-        share_files = {n:share/n for n in ("index.php","service.php",".htaccess","README.txt")}
+        share_files = {n:share/n for n in ("index.php","service.php","resume.php",".htaccess","README.txt")}
         share_files.update({"viewer.html":ROOT/"snpv.re/index.html",
                             "share.css":ROOT/"snpv.re/share.css",
                             "share.js":ROOT/"snpv.re/share.js",

@@ -67,6 +67,7 @@ jobs:
         run: |
           php -l deploy/snpv.re/index.php
           php -l deploy/snpv.re/service.php
+          php -l deploy/snpv.re/resume.php
 
       - name: Verify Snapvere by Brendigo source headers
         run: python tools/check_source_headers.py

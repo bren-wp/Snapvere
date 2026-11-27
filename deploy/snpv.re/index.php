@@ -11,6 +11,11 @@ if ($method==='GET' && ($path==='/' || preg_match('~\A/[A-Za-z0-9_-]{43}\z~',(st
     header('Content-Type: text/html; charset=utf-8');
     readfile(__DIR__.'/viewer.html'); exit;
 }
+if (is_string($path) && preg_match('~\\A/api/v1/shares/resume/(begin|status|chunk|finish|abort)\\z~',$path,$resume)) {
+    if (parse_url($_SERVER['REQUEST_URI'],PHP_URL_QUERY)!==null) fail_share(404);
+    require __DIR__.'/resume.php';
+    try {resume_dispatch($resume[1],$method);} catch (Throwable $e) {fail_share(503);}
+}
 if (!is_string($path) || !preg_match('~\A/api/v1/shares(?:/(grant|recover|[A-Za-z0-9_-]{43})(/media)?)?\z~',$path,$match)) fail_share(404);
 if (parse_url($_SERVER['REQUEST_URI'],PHP_URL_QUERY)!==null) fail_share(404);
 $id=$match[1]??''; $media=isset($match[2]);
@@ -48,7 +53,7 @@ try {
         $pending=null;
         try {
             $used=$root.'/used-'.hash('sha256',$bearer);
-            if (file_exists($used)||file_exists($dir)) fail_share(409);
+            if (file_exists($used)||is_link($used)||file_exists($dir)||is_link($dir)||file_exists($root.'/resume-'.hash('sha256',$bearer))||is_link($root.'/resume-'.hash('sha256',$bearer))) fail_share(409);
             maintain_expired($root,milliseconds());
             if (storage_bytes($root)+$size+4096>QUOTA || disk_free_space($root)<$size+67108864) fail_share(507);
             $pending=$root.'/pending-'.bin2hex(random_bytes(16));

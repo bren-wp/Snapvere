@@ -35,6 +35,7 @@ jobs:
         run: |
           php -l deploy/snpv.re/index.php
           php -l deploy/snpv.re/service.php
+          php -l deploy/snpv.re/resume.php
 
           python tools/test_update_site.py
           unzip -t web-packages/snpv.re-English.zip

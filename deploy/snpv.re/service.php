@@ -158,13 +158,16 @@ function remove_pending(string $dir): void {
     foreach (['media','meta.json'] as $name) { $p=$dir.'/'.$name; if (is_file($p)) unlink($p); }
     rmdir($dir);
 }
+function valid_media_signature(string $type,string $head,string $tail,int $n): bool {
+    return match($type) { 'image/png'=>str_starts_with($head,"\x89PNG\r\n\x1a\n"),'image/jpeg'=>str_starts_with($head,"\xff\xd8\xff")&&$tail==="\xff\xd9",'image/gif'=>in_array(substr($head,0,6),['GIF87a','GIF89a'],true),'image/webp'=>substr($head,0,4)==='RIFF'&&substr($head,8,4)==='WEBP','video/mp4'=>$n>=12&&substr($head,4,4)==='ftyp',default=>false };
+}
 function stage_media(string $path,int $size,string $type): ?string {
     $in=fopen('php://input','rb'); $out=fopen($path,'xb'); if (!$in||!$out) throw new RuntimeException();
     $n=0; $head=''; $tail=''; $hash=hash_init('sha256');
     try {
         if (!chmod($path,0600)) throw new RuntimeException();
         while (!feof($in)) { $chunk=fread($in,65536); if ($chunk===false) throw new RuntimeException(); if ($chunk==='') break; $n+=strlen($chunk); if ($n>$size) return null; $head=substr($head.$chunk,0,16); $tail=substr($tail.$chunk,-2); hash_update($hash,$chunk); if (fwrite($out,$chunk)!==strlen($chunk)) throw new RuntimeException(); }
-        $valid=match($type) { 'image/png'=>str_starts_with($head,"\x89PNG\r\n\x1a\n"),'image/jpeg'=>str_starts_with($head,"\xff\xd8\xff")&&$tail==="\xff\xd9",'image/gif'=>in_array(substr($head,0,6),['GIF87a','GIF89a'],true),'image/webp'=>substr($head,0,4)==='RIFF'&&substr($head,8,4)==='WEBP','video/mp4'=>$n>=12&&substr($head,4,4)==='ftyp',default=>false };
+        $valid=valid_media_signature($type,$head,$tail,$n);
         if ($n!==$size||!$valid) return null;
         if (!fflush($out)||!fsync($out)) throw new RuntimeException(); return hash_final($hash);
     } finally { fclose($in); fclose($out); }

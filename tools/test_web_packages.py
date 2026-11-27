@@ -102,8 +102,11 @@ def main(directory):
             current_marker=private/("used-"+"f"*64)
             old_marker.write_text(str(now-91000000))
             current_marker.write_text(str(now))
+            extra_grants=[]
             for _ in range(3):
-                assert request(api+"/grant", "POST", origin, b"")[0] == 201
+                code,_,body=request(api+"/grant","POST",origin,b"")
+                assert code==201
+                extra_grants.append(json.loads(body)["grant"])
             assert request(api+"/grant", "POST", origin, b"")[0] == 429
             assert not expired.exists() and not old_marker.exists()
             assert (active/"media").read_bytes()==fixture
@@ -129,6 +132,37 @@ def main(directory):
             assert request(endpoint, "DELETE", {"Authorization": "Bearer " + result["revocation"]})[0] == 204
             assert request(endpoint)[0] == 404
             assert request(api + "/recover", "POST", {"Authorization": "Bearer " + grant}, b"")[0] == 404
+            # Resume one logical upload after a simulated lost chunk acknowledgement.
+            payload=png+b"x"*262144
+            auth={"Authorization":"Bearer "+extra_grants[0]}
+            spec={**auth,"X-Share-Type":"image/png","X-Share-Size":str(len(payload)),
+                  "X-Share-SHA256":hashlib.sha256(payload).hexdigest(),"X-Share-TTL":"3600"}
+            resume=api+"/resume/"
+            assert request(resume+"begin","POST",spec,b"")[0]==200
+            assert request(api,"POST",{**headers,**auth},png)[0]==409
+            def chunk(offset,body):
+                return request(resume+"chunk","POST",{**auth,"Content-Type":"application/octet-stream","X-Share-Offset":str(offset)},body)
+            assert chunk(262144,payload[262144:])[0]==409
+            assert request(resume+"finish","POST",auth,b"")[0]==409
+            assert chunk(0,payload[:262144])[0]==200
+            assert json.loads(request(resume+"status","POST",auth,b"")[2])["offset"]==262144
+            assert chunk(0,payload[:262144])[0]==200
+            assert chunk(0,b"z"*262144)[0]==409
+            assert request(resume+"begin","POST",{**spec,"X-Share-TTL":"86400"},b"")[0]==409
+            assert chunk(262144,payload[262144:])[0]==200
+            code,_,body=request(resume+"finish","POST",auth,b"")
+            assert code==201
+            committed=json.loads(body)
+            assert request(api+"/"+committed["url"].rsplit("/",1)[1]+"/media")[2]==payload
+            assert json.loads(request(api+"/recover","POST",auth,b"")[2])==committed
+            assert request(resume+"finish","POST",auth,b"")[0]==409
+            bad_auth={"Authorization":"Bearer "+extra_grants[1]}
+            assert request(resume+"begin","POST",{**spec,**bad_auth,"X-Share-SHA256":"0"*64},b"")[0]==200
+            for offset in range(0,len(payload),262144):
+                assert request(resume+"chunk","POST",{**bad_auth,"Content-Type":"application/octet-stream","X-Share-Offset":str(offset)},payload[offset:offset+262144])[0]==200
+            assert request(resume+"finish","POST",bad_auth,b"")[0]==415
+            assert request(resume+"abort","POST",bad_auth,b"")[0]==204
+            assert request(resume+"begin","POST",{**spec,**bad_auth},b"")[0]==409
         finally:
             stop(proc)
         proc, base = start(update, os.environ)
