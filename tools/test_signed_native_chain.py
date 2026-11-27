@@ -103,7 +103,39 @@ def main():
         assert base.read_bytes() == original
         assert new.read_bytes() == updated
         assert gallery.read_bytes() == b"untouched gallery fixture"
-        print("Signed native delta chain passed: exact reconstruction, wrong key/edition, tampering, wrong base, no overwrite")
+        # Reuse the authenticated digest in an explicitly initialized native
+        # transaction workspace. No installed path or executable is targeted.
+        workspace = root / "transaction-workspace"
+        def transaction(action, *args, ok=True):
+            result = subprocess.run([str(stager), "workspace", action, str(workspace), *map(str,args)],
+                                    capture_output=True, timeout=60)
+            assert (result.returncode == 0) == ok, result.stderr.decode(errors="replace")
+            return result.stdout.decode().strip()
+
+        transaction("init")
+        live = workspace / "installed.bin"
+        live.write_bytes(original)
+        live.chmod(0o700)
+        unrelated = workspace / "gallery.sqlite"
+        unrelated.write_bytes(b"preserve user data")
+        verified = subprocess.check_output(
+            [str(verifier), str(descriptor), str(signature), str(der), pin, target, old, version],
+            timeout=30).decode("ascii").strip()
+        transaction("prepare", patch, target, old, version, verified)
+        assert transaction("status") == "prepared"
+        assert live.read_bytes() == original
+        backup = workspace / "transaction" / "previous.bin"
+        assert backup.read_bytes() == original
+        assert transaction("apply") == "applied"
+        assert transaction("apply") == "applied"
+        assert live.read_bytes() == updated
+        assert transaction("rollback") == "rolled-back"
+        assert transaction("rollback") == "rolled-back"
+        assert live.read_bytes() == original
+        assert backup.read_bytes() == original
+        assert unrelated.read_bytes() == b"preserve user data"
+        transaction("prepare", patch, target, old, version, verified, ok=False)
+        print("Signed native delta chain passed: exact reconstruction, wrong key/edition, tampering, wrong base, no overwrite, isolated activation and rollback")
 
 
 if __name__ == "__main__":

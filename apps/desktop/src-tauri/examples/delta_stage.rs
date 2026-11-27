@@ -4,16 +4,19 @@
 //! verified descriptor; this program does not establish publisher trust.
 
 use flate2::{Decompress, FlushDecompress, Status};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs::{self, File};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
+#[path = "support/update_transaction.rs"]
+mod update_transaction;
+
 const BLOCK: usize = 65_536;
 const MAX_BYTES: u64 = 512 * 1024 * 1024;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Header {
     target: String,
@@ -208,7 +211,7 @@ fn reconstruct(
     Ok(())
 }
 
-fn stage(args: &[String]) -> io::Result<()> {
+fn stage(args: &[String]) -> io::Result<Header> {
     let [base_path, patch_path, out_path, target, from, to, trusted_digest] = args else {
         return Err(invalid(
             "Usage: delta_stage BASE PATCH NEW_OUTPUT TARGET FROM TO TRUSTED_PATCH_SHA256",
@@ -253,11 +256,16 @@ fn stage(args: &[String]) -> io::Result<()> {
     temporary.as_file().sync_all()?;
     // Never overwrite an existing output, including the base or patch.
     temporary.persist_noclobber(out).map_err(|e| e.error)?;
-    Ok(())
+    Ok(header)
 }
 
 fn main() -> io::Result<()> {
-    stage(&std::env::args().skip(1).collect::<Vec<_>>())
+    let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|arg| arg == "workspace") {
+        update_transaction::run(&args[1..])
+    } else {
+        stage(&args).map(|_| ())
+    }
 }
 
 #[cfg(test)]
