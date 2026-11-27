@@ -1,0 +1,8 @@
+DirectoryIndex index.php
+Options -Indexes
+RewriteEngine On
+RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+RewriteRule ^(?:api/v1/shares(?:/.*)?|[A-Za-z0-9_-]{43})$ index.php [L]
+<FilesMatch "^(service\.php|resume\.php|setup\.php|viewer\.html|README\.txt)$">
+  Require all denied
+</FilesMatch>

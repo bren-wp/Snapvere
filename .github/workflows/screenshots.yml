@@ -46,6 +46,14 @@ jobs:
           cd ../..
           python -m pip install "playwright>=1.55,<2" "Pillow>=10,<13"
           python -m playwright install --with-deps chromium
+      - name: Generate isolated preview catalog signing key
+        shell: bash
+        run: |
+          key="$RUNNER_TEMP/snapvere-preview-catalog.pem"
+          openssl genpkey -algorithm Ed25519 -out "$key"
+          openssl pkey -in "$key" -pubout -outform DER -out "$RUNNER_TEMP/snapvere-preview-catalog.der"
+          echo "SNAPVERE_PREVIEW_PRIVATE_KEY=$key" >> "$GITHUB_ENV"
+          echo "VITE_SNAPVERE_UPDATE_PUBLIC_KEY=$(python -c 'import sys; print(open(sys.argv[1],"rb").read()[-32:].hex())' "$RUNNER_TEMP/snapvere-preview-catalog.der")" >> "$GITHUB_ENV"
       - name: Serve real frontend and website
         shell: bash
         run: |

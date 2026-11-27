@@ -224,6 +224,35 @@ pub fn age(app: &AppHandle) -> Option<Duration> {
         .map(|s| s.ctl.started.elapsed())
 }
 
+fn terminal_hud_allowed(requested: &str, active: Option<(&str, u8)>) -> bool {
+    !requested.is_empty()
+        && active.is_none_or(|(session, phase)| {
+            session == requested && matches!(phase, PHASE_FINISHING | PHASE_IDLE)
+        })
+}
+
+/// Hold the recorder slot across window teardown so a delayed IPC request
+/// cannot close the controls of a newly registered recording.
+pub fn with_terminal_hud_session(
+    app: &AppHandle,
+    requested: &str,
+    close: impl FnOnce(),
+) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let slot = crate::state::lock(&state.recorder);
+    let active = slot.as_ref().map(|session| {
+        (
+            session.ctl.session_id.as_str(),
+            session.ctl.phase.load(Ordering::Acquire),
+        )
+    });
+    if !terminal_hud_allowed(requested, active) {
+        return Err("Recording session has changed or is still active".into());
+    }
+    close();
+    Ok(())
+}
+
 pub fn status(app: &AppHandle) -> RecordStatus {
     let state = app.state::<AppState>();
     let guard = crate::state::lock(&state.recorder);
@@ -269,6 +298,8 @@ pub fn start(
         return Err("Snimanje je već u tijeku".into());
     }
     validate_audio_options(&opts)?;
+    #[cfg(target_os = "macos")]
+    crate::macos_permissions::require_screen_capture()?;
     #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
     if opts.format == RecordFormat::Mp4 && opts.capture_cursor {
         return Err("Experimental Linux MP4 requires cursor capture to be disabled".into());
@@ -762,6 +793,7 @@ fn finish_session(
     #[derive(serde::Serialize, Clone)]
     #[serde(rename_all = "camelCase")]
     struct Done {
+        session_id: String,
         screenshot: Option<Screenshot>,
         error: Option<String>,
         cancelled: bool,
@@ -773,6 +805,7 @@ fn finish_session(
             remove_owned_recording(path, owned);
             log(&format!("snimanje neuspješno: {e}"));
             Done {
+                session_id: ctl.session_id.clone(),
                 screenshot: None,
                 error: Some(e),
                 cancelled: false,
@@ -782,6 +815,7 @@ fn finish_session(
             remove_owned_recording(path, owned);
             log("snimanje otkazano, datoteka obrisana");
             Done {
+                session_id: ctl.session_id.clone(),
                 screenshot: None,
                 error: None,
                 cancelled: true,
@@ -792,6 +826,7 @@ fn finish_session(
             if frames == 0 {
                 remove_owned_recording(path, owned);
                 Done {
+                    session_id: ctl.session_id.clone(),
                     screenshot: None,
                     error: Some("Snimka nema nijedan frame".into()),
                     cancelled: false,
@@ -813,12 +848,14 @@ fn finish_session(
                             shot.size_bytes / 1024
                         ));
                         Done {
+                            session_id: ctl.session_id.clone(),
                             screenshot: Some(shot),
                             error: None,
                             cancelled: false,
                         }
                     }
                     Err(e) => Done {
+                        session_id: ctl.session_id.clone(),
                         screenshot: None,
                         error: Some(e),
                         cancelled: false,
@@ -841,7 +878,9 @@ fn finish_session(
     // Otherwise a new session can start while this worker is still emitting
     // old "idle" events and resetting its tray UI.
     crate::tray::set_recording(app, false);
-    let _ = app.emit("snapvere:rec-state", RecordStatus::idle());
+    let mut terminal = RecordStatus::idle();
+    terminal.session_id = Some(ctl.session_id.clone());
+    let _ = app.emit("snapvere:rec-state", terminal);
     let _ = app.emit("snapvere:rec-done", payload);
 
     let state = app.state::<AppState>();
@@ -878,6 +917,17 @@ fn output_path(app: &AppHandle, format: RecordFormat) -> Result<PathBuf, String>
 #[cfg(test)]
 mod recorder_start_tests {
     use super::*;
+
+    #[test]
+    fn terminal_hud_requests_cannot_close_a_new_or_live_session() {
+        assert!(!terminal_hud_allowed("", None));
+        assert!(terminal_hud_allowed("old", None));
+        assert!(!terminal_hud_allowed("old", Some(("new", PHASE_RECORDING))));
+        assert!(!terminal_hud_allowed("old", Some(("new", PHASE_FINISHING))));
+        assert!(!terminal_hud_allowed("new", Some(("new", PHASE_PAUSED))));
+        assert!(!terminal_hud_allowed("new", Some(("new", PHASE_RECORDING))));
+        assert!(terminal_hud_allowed("new", Some(("new", PHASE_FINISHING))));
+    }
 
     #[test]
     fn start_guard_rejects_overlapping_initialization() {

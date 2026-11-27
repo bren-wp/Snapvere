@@ -23,8 +23,8 @@ import {
 import { ipc } from "../lib/ipc";
 import { useLanguage } from "../lib/LanguageProvider";
 import { formatMediaSize } from "../lib/mediaFormatting";
-import { runRecordingAction } from "../lib/recordingControls";
-import type { DrawToolMsg, RecordStatus, RecTool } from "../lib/types";
+import { matchesRecordingSession, runRecordingAction } from "../lib/recordingControls";
+import type { DrawToolMsg, RecordDone, RecordStatus, RecTool } from "../lib/types";
 
 /**
  * Plutajuća traka koja stoji iznad svega dok snimanje traje.
@@ -64,6 +64,7 @@ export default function RecBar() {
   const [palette, setPalette] = useState(false);
   const closing = useRef({ current: false });
   const sessionRef = useRef<string | null>(null);
+  const latestSession = useRef<string | null>(null);
 
   // A 58px native HUD clips popovers positioned above its toolbar. Ask Rust
   // for a taller window only while the palette or an error is visible.
@@ -83,8 +84,15 @@ export default function RecBar() {
       }),
       listen<RecordStatus>("snapvere:rec-state", (e) => {
         if (!active) return;
+        const terminal = e.payload.phase === "idle";
+        if (terminal && !matchesRecordingSession(latestSession.current, e.payload.sessionId)) return;
         seenState = true;
-        const nextSession = e.payload.sessionId ?? null;
+        const nextSession = terminal ? null : e.payload.sessionId ?? null;
+        if (nextSession && nextSession !== latestSession.current) {
+          latestSession.current = nextSession;
+          setTool("off");
+          setPalette(false);
+        }
         if (nextSession !== sessionRef.current) {
           // A pending action keeps its original lock object, never the next session's.
           closing.current = { current: false };
@@ -92,16 +100,21 @@ export default function RecBar() {
           setActionError(null);
         }
         sessionRef.current = nextSession;
-        setStatus(e.payload);
+        setStatus(terminal ? { ...e.payload, sessionId: null } : e.payload);
       }),
-      listen("snapvere:rec-done", () => {
-        closing.current.current = true;
-        setActionError(null);
-        // Sljedeće snimanje kreće bez alata i palete — sloj za crtanje je ionako
-        // click-through nakon zatvaranja, pa bi "zalijepljen" alat samo zbunjivao.
-        setTool("off");
-        setPalette(false);
-        void ipc.closeRecHud();
+      listen<RecordDone>("snapvere:rec-done", (e) => {
+        const sessionId = e.payload.sessionId;
+        if (!active || !sessionId) return;
+        if (latestSession.current && !matchesRecordingSession(latestSession.current, sessionId)) return;
+        // A late-mounted HUD may have missed the initial state event. Native
+        // teardown still checks the recorder slot before touching any window.
+        void ipc.closeRecHud(sessionId).then(() => {
+          if (!active || !matchesRecordingSession(latestSession.current, sessionId)) return;
+          closing.current.current = true;
+          setActionError(null);
+          setTool("off");
+          setPalette(false);
+        }).catch(() => undefined);
       }),
       // Sloj za crtanje može sam ugasiti alat (Esc) — traka mora pratiti.
       listen<DrawToolMsg>("snapvere:draw-tool", (e) => {
@@ -114,7 +127,8 @@ export default function RecBar() {
       if (!active) return;
       const initial = await ipc.recordingStatus();
       if (active && !seenState) {
-        sessionRef.current = initial.sessionId ?? null;
+        sessionRef.current = initial.phase === "idle" ? null : initial.sessionId ?? null;
+        if (sessionRef.current) latestSession.current = sessionRef.current;
         setStatus(initial);
       }
     }).catch(() => undefined);

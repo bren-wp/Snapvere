@@ -1,0 +1,42 @@
+# Snapvere by Brendigo
+name: Native update authentication acceptance
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'tools/native-update-auth/**'
+      - 'tools/test_native_update_auth.py'
+      - '.github/workflows/native-update-auth.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.90.0
+        with:
+          components: rustfmt, clippy
+      - name: Compile and test locked verifier
+        working-directory: tools/native-update-auth
+        run: |
+          cargo test --locked
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo build --locked
+      - name: OpenSSL signature interoperability
+        if: runner.os == 'Linux'
+        run: python tools/test_native_update_auth.py tools/native-update-auth/target/debug/snapvere-native-update-auth
+      - name: Audit locked authentication dependencies
+        if: runner.os == 'Linux'
+        working-directory: tools/native-update-auth
+        run: |
+          cargo install cargo-audit --version 0.23.0 --locked
+          cargo audit --file Cargo.lock

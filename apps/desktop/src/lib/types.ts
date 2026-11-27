@@ -82,6 +82,7 @@ export interface PlatformCapabilities {
   cursorInRecordings: boolean;
   /** Only opt-in Linux builds may display the native device picker. */
   linuxAudioPicker?: boolean;
+  installedUpdateEligible?: boolean;
 }
 
 // ── snimanje ekrana ──
@@ -117,6 +118,7 @@ export interface RecordStatus {
 
 /** Payload eventa `snapvere:rec-done`. */
 export interface RecordDone {
+  sessionId: string;
   screenshot: Screenshot | null;
   error: string | null;
   cancelled: boolean;

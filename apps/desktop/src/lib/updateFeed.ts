@@ -1,13 +1,15 @@
 // Snapvere by Brendigo
 /**
  * Public, privacy-preserving update *notification* for the Tauri/Rust edition.
- * No installers are downloaded or executed by the WebView. The only permitted
- * network request is a user-triggered or explicitly opted-in GET for a version
- * manifest at update.snapvere.com; startup is offline by default.
+ * No installers are downloaded or executed by the WebView. The only update
+ * request is a user-triggered or explicitly opted-in GET for the release
+ * catalog at update.snapvere.com; startup is offline by default. Manual
+ * downloads are opened by Settings in the default browser.
  */
 export const UPDATE_FEED_URL = "https://update.snapvere.com/stable.json";
 export const OFFICIAL_DOWNLOAD_URL = "https://snapvere.com/download/tauri/";
 export const UPDATE_PRODUCT = "snapvere-tauri-windows";
+export const PATCH_PRODUCT = "snapvere-installed-delta-v1";
 /** A Windows-only release feed must never advertise Windows installers on Linux. */
 export function canCheckWindowsUpdates(os: string | null): boolean {
   return os === "windows";
@@ -16,7 +18,22 @@ const MAX_MANIFEST_BYTES = 8192;
 const TIMEOUT_MS = 6500;
 
 type Version = readonly [number, number, number];
-export type AvailableUpdate = Readonly<{ version: string; notes: string }>;
+export type UpdateTarget = Readonly<{ os: "windows" | "linux"; edition: "free" | "pro" }>;
+export type UpdatePackage = Readonly<{ name: string; size: number; sha256: string; from: string; kind: "delta" }>;
+export type AvailableUpdate = Readonly<{ version: string; notes: string; packages?: readonly UpdatePackage[] }>;
+export function updateTarget(os: string | null, pro: boolean, installed: boolean): UpdateTarget | null {
+  return installed && (os === "windows" || os === "linux") ? { os, edition: pro ? "pro" : "free" } : null;
+}
+export function packageNames(target: UpdateTarget): string[] {
+  const prefix = target.edition === "pro" ? "Snapvere-Pro" : "Snapvere";
+  return target.os === "windows"
+    ? [prefix+"-Update.exe"]
+    : [prefix+"-Linux-Update.svpatch"];
+}
+export function updateDownloadUrl(version: string, name: string, target: UpdateTarget, from: string): string {
+  if (!isNewerVersion(version, from) || !packageNames(target).includes(name)) throw new Error("Invalid update package");
+  return "https://update.snapvere.com/download.php?" + new URLSearchParams({version, from, package:name}).toString();
+}
 
 export function parseVersion(value: string): Version | null {
   if (value.length > 20) return null;
@@ -38,14 +55,14 @@ export function isNewerVersion(candidate: string, current: string): boolean {
 }
 
 /** Server data is only plain text and never controls an external URL. */
-export function parseUpdateManifest(raw: unknown, currentVersion: string): AvailableUpdate | null {
+export function parseUpdateManifest(raw: unknown, currentVersion: string, target?: UpdateTarget): AvailableUpdate | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("Invalid update manifest");
   }
   const record = raw as Record<string, unknown>;
-  if (record.product !== UPDATE_PRODUCT || typeof record.version !== "string" ||
+  if (record.product !== (target ? PATCH_PRODUCT : UPDATE_PRODUCT) || typeof record.version !== "string" ||
       !parseVersion(record.version)) {
-    throw new Error("Update manifest does not describe the official Windows edition");
+    throw new Error("Update manifest does not describe the official release channel");
   }
   if (record.download_url !== undefined && record.download_url !== OFFICIAL_DOWNLOAD_URL) {
     throw new Error("Update manifest contains a nonofficial download address");
@@ -54,9 +71,29 @@ export function parseUpdateManifest(raw: unknown, currentVersion: string): Avail
       (typeof record.notes !== "string" || record.notes.length > 800)) {
     throw new Error("Update release notes are invalid");
   }
-  return isNewerVersion(record.version, currentVersion)
-    ? { version: record.version, notes: (record.notes as string | undefined) ?? "" }
-    : null;
+  if (!isNewerVersion(record.version, currentVersion)) return null;
+  const result = { version: record.version, notes: (record.notes as string | undefined) ?? "" };
+  if (!target) return result;
+  if (!Array.isArray(record.packages) || record.packages.length > 4 || record.channel !== "stable") {
+    throw new Error("No verified package catalog");
+  }
+  const names = new Set([
+    ...packageNames({os:"windows",edition:"free"}), ...packageNames({os:"windows",edition:"pro"}),
+    ...packageNames({os:"linux",edition:"free"}), ...packageNames({os:"linux",edition:"pro"}),
+  ]);
+  const packages: UpdatePackage[] = [];
+  for (const rawPackage of record.packages) {
+    if (!rawPackage || typeof rawPackage !== "object" || Array.isArray(rawPackage)) throw new Error("Invalid package");
+    const item = rawPackage as Record<string, unknown>;
+    if (typeof item.name !== "string" || !names.delete(item.name) ||
+        typeof item.size !== "number" || !Number.isSafeInteger(item.size) || item.size < 1 || item.size > 536870912 ||
+        typeof item.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(item.sha256) ||
+        item.kind !== "delta" || typeof item.from !== "string" || !isNewerVersion(record.version,item.from)) throw new Error("Invalid package");
+    packages.push({name:item.name,size:item.size,sha256:item.sha256,from:item.from,kind:"delta"});
+  }
+  const matching = packages.filter(item => packageNames(target).includes(item.name) && item.from === currentVersion);
+  if (!matching.length) throw new Error("No compatible update package");
+  return {...result, packages:matching};
 }
 
 /**
@@ -85,9 +122,32 @@ async function readManifestBounded(response: Response): Promise<string> {
   return new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, size));
 }
 
+/** The unsigned empty catalog is informational only. A nonempty installed
+ * catalog must be authenticated against an independently provisioned key.
+ * The signature binds the exact UTF-8 payload, not a reserialized object. */
+export async function authenticateUpdateCatalog(raw: unknown, keyHex: string | undefined): Promise<unknown> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Invalid update catalog");
+  const envelope = raw as Record<string, unknown>;
+  if (envelope.signed === undefined && envelope.signature === undefined) {
+    if (envelope.product === PATCH_PRODUCT && Array.isArray(envelope.packages) && envelope.packages.length === 0) return raw;
+    throw new Error("Unsigned update catalog");
+  }
+  if (Object.keys(envelope).length !== 2 || typeof envelope.signed !== "string" ||
+      envelope.signed.length > MAX_MANIFEST_BYTES || typeof envelope.signature !== "string" ||
+      !/^[0-9a-f]{128}$/.test(envelope.signature) || !keyHex || !/^[0-9a-f]{64}$/.test(keyHex)) {
+    throw new Error("Update catalog has no trusted signature");
+  }
+  const bytes = (hex: string) => Uint8Array.from(hex.match(/../g) ?? [], part => Number.parseInt(part, 16));
+  const key = await crypto.subtle.importKey("raw", bytes(keyHex), {name:"Ed25519"}, false, ["verify"]);
+  const message = new TextEncoder().encode("Snapvere signed catalog v1\n" + envelope.signed);
+  if (!await crypto.subtle.verify({name:"Ed25519"}, key, bytes(envelope.signature), message)) throw new Error("Invalid update catalog signature");
+  return JSON.parse(envelope.signed) as unknown;
+}
+
 export async function checkForUpdates(
   currentVersion: string,
   cancelSignal?: AbortSignal,
+  target?: UpdateTarget,
 ): Promise<AvailableUpdate | null> {
   if (!parseVersion(currentVersion)) throw new Error("Invalid installed version");
   const controller = new AbortController();
@@ -114,7 +174,9 @@ export async function checkForUpdates(
       throw new Error("Unexpected update response");
     }
     const text = await readManifestBounded(response);
-    return parseUpdateManifest(JSON.parse(text) as unknown, currentVersion);
+    const raw: unknown = JSON.parse(text);
+    const catalog = target ? await authenticateUpdateCatalog(raw, import.meta.env?.VITE_SNAPVERE_UPDATE_PUBLIC_KEY) : raw;
+    return parseUpdateManifest(catalog, currentVersion, target);
   } finally {
     controller.abort();
     clearTimeout(timeout);

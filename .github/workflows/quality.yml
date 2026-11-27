@@ -13,7 +13,10 @@ on:
   workflow_dispatch:
 concurrency:
   group: snapvere-quality-${{ github.ref }}
-  cancel-in-progress: true
+  # Preserve the active native build instead of cancelling it on every edit.
+  # GitHub keeps only the latest pending run for this concurrency group.
+  # Only checks for the exact final commit count toward release acceptance.
+  cancel-in-progress: false
 permissions:
   contents: read
 
@@ -51,12 +54,37 @@ jobs:
           NODE
       - name: Regression-test release orchestration (mock GitHub API)
         run: python tools/test_release_preflight.py
+      - name: Test private sharing service
+        run: node --test snpv.re/server.test.mjs
+      - name: Verify update website and all edition download routes
+        run: python tools/test_update_site.py
+      - name: Verify differential update reconstruction and rejection of corrupted patches
+        run: |
+          python tools/test_delta_patch.py
+          python tools/test_signed_delta.py
+          python tools/test_update_transaction.py
+      - name: Lint PHP shared-host sharing service
+        run: |
+          php -l deploy/snpv.re/index.php
+          php -l deploy/snpv.re/service.php
+          php -l deploy/snpv.re/resume.php
+
       - name: Verify Snapvere by Brendigo source headers
         run: python tools/check_source_headers.py
       - name: Enforce reachable Rust modules (dead-code graph)
         run: python tools/check_rust_modules.py
       - name: Audit duplicate maintained desktop and QA source files
         run: python tools/audit_duplicate_sources.py
+      - name: Inventory structural clone candidates across maintained code
+        run: |
+          python tools/test_semantic_clone_audit.py
+          python tools/audit_semantic_clones.py --out audit-evidence/structural-clones.json
+      - name: Preserve clone-review evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Snapvere-structural-clone-review
+          path: audit-evidence/structural-clones.json
+          if-no-files-found: error
       - name: Enforce production-only TypeScript module reachability
         working-directory: apps/desktop
         run: node ../../tools/check_dead_code.mjs
@@ -233,7 +261,11 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Run Rust tests with locked dependencies
         working-directory: apps/desktop/src-tauri
-        run: cargo test --locked
+        run: |
+          cargo test --locked
+          cargo test --locked --example delta_stage
+      - name: Verify native Rust delta staging against Python release codec
+        run: python tools/test_native_delta.py
       - name: Enforce Clippy correctness and dead-code checks
         working-directory: apps/desktop/src-tauri
         run: cargo clippy --all-targets --locked -- -D warnings
@@ -440,7 +472,13 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Linux Rust unit and integration tests (no display required)
         working-directory: apps/desktop/src-tauri
-        run: cargo test --locked
+        run: |
+          cargo test --locked
+          cargo test --locked --example delta_stage
+      - name: Verify native Rust delta staging against Python release codec
+        run: python tools/test_native_delta.py
+      - name: Verify signed native delta end-to-end before any activation
+        run: python tools/test_signed_native_chain.py
       - name: Linux Clippy (warnings treated as errors)
         working-directory: apps/desktop/src-tauri
         run: cargo clippy --all-targets --locked -- -D warnings

@@ -1,6 +1,7 @@
 {
-  "product": "snapvere-tauri-windows",
-  "version": "0.2.19",
-  "notes": "Example only: replace this file after publishing the next tested release.",
-  "download_url": "https://snapvere.com/download/tauri/"
+  "product": "snapvere-installed-delta-v1",
+  "version": "0.2.38",
+  "channel": "stable",
+  "packages": [],
+  "notes": "Example only. Publish only verified actual incremental updates."
 }

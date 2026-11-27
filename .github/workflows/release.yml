@@ -51,14 +51,14 @@ jobs:
           tag_count="$(jq --arg ref "refs/tags/$tag" '[.[] | select(.ref == $ref)] | length' <<< "$refs")"
           if [[ "$count" == 1 ]]; then
             target="$(jq -r '.[0].target_commitish' <<< "$matches")"
-            [[ "$(jq -r '.[0].prerelease' <<< "$matches")" == true ]] || { echo "::error::$tag is not marked preview; reconcile metadata first"; exit 1; }
-            if [[ "$(jq -r '.[0].draft' <<< "$matches")" == false ]]; then
+              if [[ "$(jq -r '.[0].draft' <<< "$matches")" == false ]]; then
               [[ "$tag_count" == 1 ]] || { echo "::error::Published release is missing its tag"; exit 1; }
               [[ "$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq '.sha')" == "$target" ]] || { echo "::error::Published release tag/target mismatch"; exit 1; }
               echo "$tag is already published; leaving all existing assets untouched."
               echo "build=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
+            [[ "$(jq -r '.[0].prerelease' <<< "$matches")" == true ]] || { echo "::error::Existing draft must remain a private prerelease"; exit 1; }
             [[ "$target" == "$GITHUB_SHA" ]] || { echo "::error::Existing draft targets another commit; review it before recovery"; exit 1; }
           elif [[ "$tag_count" != 0 ]]; then
             echo "::error::Existing tag without a matching release; refusing to reuse it"
@@ -72,7 +72,7 @@ jobs:
   release-gate:
     needs: release-preflight
     if: needs.release-preflight.outputs.build == 'true'
-    name: Require successful quality and visual checks for this main commit
+    name: Require successful exact-revision quality, visual, update and web checks
     runs-on: ubuntu-24.04
     timeout-minutes: 185
     permissions:
@@ -88,7 +88,7 @@ jobs:
           [[ "$GITHUB_REF" == refs/heads/main ]] || { echo "::error::Releases require main"; exit 1; }
           for attempt in $(seq 1 360); do
             ready=true
-            for workflow in quality.yml screenshots.yml; do
+            for workflow in quality.yml screenshots.yml native-update-auth.yml native-updater-packages.yml web-packages.yml; do
               runs="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs" -f head_sha="$GITHUB_SHA" -f branch=main -f event=push -F per_page=100)"
               run="$(jq -c --arg sha "$GITHUB_SHA" '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == "main" and .event == "push")] | max_by(.id) // {}' <<< "$runs")"
               status="$(jq -r '.status // "missing"' <<< "$run")"
@@ -100,7 +100,7 @@ jobs:
               fi
             done
             if [[ "$ready" == true ]]; then
-              echo "Quality and frontend visual checks passed for $GITHUB_SHA"
+              echo "Quality, visual, native update authentication, package fixtures and web checks passed for $GITHUB_SHA"
               exit 0
             fi
             sleep 30
@@ -424,12 +424,13 @@ jobs:
           }
           python tools/generate_sbom.py --output "dist-installers/Snapvere-SBOM.cdx.json"
           if ($LASTEXITCODE -ne 0) { throw "Could not generate supply-chain SBOM" }
-          python tools/generate_update_manifest.py --version "${{ steps.version.outputs.value }}" --out "dist-installers/Snapvere-update-stable.json"
-          if ($LASTEXITCODE -ne 0) { throw "Could not generate the version-only update manifest" }
+          python tools/generate_update_manifest.py --version "${{ steps.version.outputs.value }}" --out "dist-installers/Snapvere-update-stable.json" --packages-dir "dist-installers"
+          if ($LASTEXITCODE -ne 0) { throw "Could not generate the informational release catalog" }
           $feed = Get-Content (Join-Path $dist 'Snapvere-update-stable.json') -Raw | ConvertFrom-Json
           if ($feed.product -ne 'snapvere-tauri-windows' -or
               $feed.version -ne "${{ steps.version.outputs.value }}" -or
-              $feed.download_url -ne 'https://snapvere.com/download/tauri/') {
+              $feed.download_url -ne 'https://snapvere.com/download/tauri/' -or
+              $feed.channel -ne 'stable' -or @($feed.packages).Count -ne 10) {
             throw 'Invalid release version manifest; refusing publication'
           }
           $expected = $windowsNames + $linuxNames
@@ -460,23 +461,6 @@ jobs:
           path: dist-installers/*
           if-no-files-found: error
           retention-days: 90
-      - name: Ensure legacy unsigned release metadata remains prerelease
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $repo = '${{ github.repository }}'
-          foreach ($tag in @('v0.2.25','v0.2.26','v0.2.27')) {
-            $existing = gh api "repos/$repo/releases/tags/$tag" | ConvertFrom-Json
-            if ($LASTEXITCODE -ne 0 -or !$existing.id) { throw "Cannot inspect previous release $tag" }
-            if (-not $existing.draft -and -not $existing.prerelease) {
-              gh release edit $tag --repo $repo --prerelease
-              if ($LASTEXITCODE -ne 0) { throw "Cannot restore prerelease status for $tag" }
-            }
-            $verified = gh api "repos/$repo/releases/tags/$tag" | ConvertFrom-Json
-            if ($LASTEXITCODE -ne 0 -or -not $verified.prerelease) { throw "Unsigned release $tag is still marked stable" }
-          }
       - name: Recheck main before staging the release draft
         shell: pwsh
         env:
@@ -496,7 +480,7 @@ jobs:
           fail_on_unmatched_files: true
           files: dist-installers/*
           body: |
-            # Snapvere v${{ steps.version.outputs.value }} — Windows + Linux previews
+            # Snapvere v${{ steps.version.outputs.value }} — Windows + Linux stable distribution
             Branded by **Brendigo** · https://brendigo.com · https://snapvere.com
 
             ### Download
@@ -511,7 +495,7 @@ jobs:
             - **Pro preview** — not a paid, entitlement-enforced release. No activation or account backend is implemented.
             - **SHA256SUMS.txt** — integrity checksums for all packages and the dependency inventory
             - **Snapvere-SBOM.cdx.json** — reproducible CycloneDX 1.6 dependency inventory from npm and Cargo lockfiles
-            - **Snapvere-update-stable.json** — legacy-named, unsigned version-notice sample; do not deploy this preview to a production stable update channel.
+            - **Snapvere-update-stable.json** — legacy-named, unsigned version-notice sample; informational only; not a signed automatic update.
 
             All Windows and Linux installers, the SBOM and the update manifest are covered by SHA256SUMS.txt.
 
@@ -525,7 +509,7 @@ jobs:
               A newer release can notify again; startup checks remain optional.
             - Keep official HTTPS-only, time-bounded, version-only update checks
               and a user-initiated download link; no silent installer execution.
-            - Mark the previous unsigned v0.2.25 metadata as prerelease and enforce the same status for the new packages.
+            - Publish verified packages in the stable distribution channel; signing status is disclosed separately.
             - Preserve private offline capture, PrintScreen, local gallery,
               clipboard transfer and existing least-privilege permissions.
             - Enforce TypeScript, Rust tests/Clippy, RustSec and SHA-256 release
@@ -536,7 +520,7 @@ jobs:
             are opened on the official website and should be verified against
             publisher signatures and published SHA-256 hashes.
 
-            **Preview release.** Linux uses the same React/Tauri design, screenshot/editor/gallery and silent GIF backend. Experimental native MP4, PipeWire microphone/system audio and Wayland portal components have isolated CI coverage but remain gated pending native acceptance. No production support or physical compatibility is implied.
+            **Stable distribution channel, unsigned packages.** Linux uses the same React/Tauri design, screenshot/editor/gallery and silent GIF backend. Experimental native MP4, PipeWire microphone/system audio and Wayland portal components have isolated CI coverage but remain gated pending native acceptance. No production support or physical compatibility is implied.
 
             Native Windows 10/11 capture, recorder, audio, multi-monitor,
             accessibility, install/upgrade/uninstall and 1:1 visual comparisons are not yet
@@ -621,19 +605,19 @@ jobs:
           # created release with the same name or an unverified asset set.
           $mainSha = gh api "repos/$repo/git/ref/heads/main" --jq '.object.sha'
           if ($LASTEXITCODE -ne 0 -or $mainSha -ne $env:GITHUB_SHA) { throw 'Main changed before publication; leaving verified draft private' }
-          $published = gh api --method PATCH "repos/$repo/releases/$releaseId" -F draft=false -F prerelease=true | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0) { throw "Unable to publish verified prerelease $tag" }
+          $published = gh api --method PATCH "repos/$repo/releases/$releaseId" -F draft=false -F prerelease=false | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw "Unable to publish verified release $tag" }
           if ($published.id -ne $releaseId -or $published.tag_name -ne $tag -or
-              $published.draft -or -not $published.prerelease) {
+              $published.draft -or $published.prerelease) {
             throw "Published release identity or prerelease status is incorrect"
           }
           $verified = gh api "repos/$repo/releases/$releaseId" | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0 -or $verified.id -ne $releaseId -or
-              $verified.tag_name -ne $tag -or $verified.draft -or -not $verified.prerelease) {
+              $verified.tag_name -ne $tag -or $verified.draft -or $verified.prerelease) {
             throw "Published release cannot be verified by immutable release ID"
           }
           $tagCommit = gh api "repos/$repo/commits/$tag" --jq '.sha'
           if ($LASTEXITCODE -ne 0 -or $tagCommit -ne '${{ github.sha }}') {
             throw "Published tag $tag does not resolve to the tested commit"
           }
-          Write-Host "Published verified Free and Pro prerelease packages: $tag (id=$releaseId)"
+          Write-Host "Published verified Free and Pro stable-channel packages: $tag (id=$releaseId)"

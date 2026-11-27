@@ -106,7 +106,7 @@ export const ipc = {
     invoke<number>("acknowledge_crop_preview", { session, frameId }),
   resumeCropPreview: (session: string, marks: PreviewMark[], historyDelta: number) =>
     invoke<RecordStatus>("resume_crop_preview", { session, marks, historyDelta }),
-  closeRecHud: () => invoke<void>("close_rec_hud"),
+  closeRecHud: (sessionId: string) => invoke<void>("close_rec_hud", { sessionId }),
   /** Expand the native HUD viewport to show its palette/error, then shrink. */
   setRecHudExpanded: (expanded: boolean) =>
     invoke<void>("set_rec_hud_expanded", { expanded }),
@@ -149,6 +149,7 @@ export const ipc = {
   revealMedia: (id: string) => invoke<void>("reveal_media", { id }),
   copyMediaImage: (id: string) => invoke<void>("copy_media_image", { id }),
   copyMediaPath: (id: string) => invoke<void>("copy_media_path", { id }),
+  readShareMedia: (id: string) => invoke<ArrayBuffer>("read_share_media", { id }),
   /** Pro native builds only: bounded, ID-based, user-approved local folder export. */
   proExportBatch: (ids: string[], preset: ProExportPreset) =>
     invoke<BatchExportReport>("pro_export_batch", { ids, preset }),

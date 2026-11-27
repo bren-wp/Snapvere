@@ -1,0 +1,189 @@
+<?php
+// Snapvere by Brendigo
+declare(strict_types=1);
+const MAX_SHARE=16777216;
+const QUOTA=2147483648;
+function milliseconds(): int { return (int)floor(microtime(true)*1000); }
+function b64u(string $v): string { return rtrim(strtr(base64_encode($v),'+/','-_'),'='); }
+function share_types(): array { return ['image/png'=>'png','image/jpeg'=>'jpg','image/gif'=>'gif','image/webp'=>'webp','video/mp4'=>'mp4']; }
+function share_origin(): bool { return in_array($_SERVER['HTTP_ORIGIN']??'', ['http://tauri.localhost','https://tauri.localhost','tauri://localhost'],true); }
+function share_headers(): void {
+    header('Cache-Control: no-store'); header('Referrer-Policy: no-referrer'); header('X-Robots-Tag: noindex, nofollow, noarchive');
+    header('X-Content-Type-Options: nosniff'); header('X-Frame-Options: DENY'); header('Strict-Transport-Security: max-age=31536000');
+    header("Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; connect-src 'self'; font-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+    if (share_origin()) { header('Access-Control-Allow-Origin: '.$_SERVER['HTTP_ORIGIN']); header('Vary: Origin'); }
+}
+function share_json(int $status,array $body): never { http_response_code($status); header('Content-Type: application/json'); echo json_encode($body,JSON_THROW_ON_ERROR); exit; }
+function fail_share(int $status): never { share_json($status,['error'=>'Request unavailable']); }
+function storage_path(): string {
+    $explicit=getenv('SNAPVERE_SHARE_STORAGE');
+    if (is_string($explicit)&&$explicit!=='') return $explicit;
+    // A subdomain may live beneath public_html: never assume its parent is private.
+    $home=getenv('HOME');
+    if (function_exists('posix_geteuid')&&function_exists('posix_getpwuid')) {
+        $account=posix_getpwuid(posix_geteuid());
+        if (is_array($account)&&is_string($account['dir']??null)) $home=$account['dir'];
+    }
+    $home=is_string($home)?realpath($home):false;
+    $web=realpath(__DIR__);
+    if (!$home||!$web||$home==='/'||!str_starts_with($web,$home.DIRECTORY_SEPARATOR)) throw new RuntimeException('Private home directory unavailable');
+    return $home.'/.snapvere-share-data-'.substr(hash('sha256',__DIR__),0,16);
+}
+function initialize_storage(): array {
+    $path=storage_path();
+    if (!is_dir($path)&&!@mkdir($path,0700)&&!is_dir($path)) throw new RuntimeException();
+    $root=share_storage();
+    $lock=fopen($root.'/lock','c');
+    if (!$lock||!flock($lock,LOCK_EX)) throw new RuntimeException();
+    try {
+        $keyPath=$root.'/key';
+        if (!file_exists($keyPath)&&!is_link($keyPath)) {
+            // An existing store without its original key must not be silently re-keyed.
+            foreach (scandir($root)?:[] as $entry) if (!in_array($entry,['.','..','lock'],true)) throw new RuntimeException();
+            write_new($keyPath,bin2hex(random_bytes(32)));
+        }
+        return [$root,share_key($root)];
+    } finally { flock($lock,LOCK_UN); fclose($lock); }
+}
+// Anonymous, short-lived one-use grant issuance. Origin is a browser boundary,
+// not identity. Limit by connection address and a global hourly budget.
+function issue_grant(string $root,string $key): string {
+    $address=$_SERVER['REMOTE_ADDR']??'';
+    if (!filter_var($address,FILTER_VALIDATE_IP)) fail_share(400);
+    $bucket=(int)floor(milliseconds()/3600000);
+    $id=hash_hmac('sha256','rate:'.$bucket.':'.$address,$key);
+    $lock=fopen($root.'/lock','c');
+    if (!$lock||!flock($lock,LOCK_EX|LOCK_NB)) fail_share(503);
+    try {
+        $p=$root.'/rate.json';
+        $rate=['hour'=>$bucket,'total'=>0,'clients'=>[]];
+        if (file_exists($p)||is_link($p)) {
+            if (is_link($p)||!is_file($p)||filesize($p)>16384) throw new RuntimeException();
+            $old=json_decode((string)file_get_contents($p),true,8,JSON_THROW_ON_ERROR);
+            if (!is_array($old)||!is_int($old['hour']??null)||!is_int($old['total']??null)||!is_array($old['clients']??null)||$old['hour']>$bucket) throw new RuntimeException();
+            if ($old['hour']===$bucket) $rate=$old;
+        }
+        if ($rate['total']>=60||($rate['clients'][$id]??0)>=4) { header('Retry-After: 3600'); fail_share(429); }
+        // The exclusive upload lock also serializes bounded retention cleanup.
+        maintain_expired($root,milliseconds());
+        if (storage_bytes($root)+4096>QUOTA || disk_free_space($root)<67108864) fail_share(507);
+        $rate['total']++; $rate['clients'][$id]=($rate['clients'][$id]??0)+1;
+        $tmp=$root.'/rate-'.bin2hex(random_bytes(12)).'.tmp';
+        write_new($tmp,json_encode($rate,JSON_THROW_ON_ERROR));
+        if (!rename($tmp,$p)) throw new RuntimeException();
+        $payload=(milliseconds()+3600000).'.'.b64u(random_bytes(24));
+        return $payload.'.'.b64u(hash_hmac('sha256',$payload,$key,true));
+    } finally { flock($lock,LOCK_UN); fclose($lock); }
+}
+function share_storage(): string {
+    $path=storage_path(); $root=realpath($path); $web=realpath(__DIR__);
+    if (!$root||!$web||is_link($path)||!is_dir($root)||$root===$web||str_starts_with($root,$web.DIRECTORY_SEPARATOR)||str_starts_with($web,$root.DIRECTORY_SEPARATOR)||(fileperms($root)&0077)!==0) throw new RuntimeException('Private storage unavailable');
+    return $root;
+}
+function share_key(string $root): string {
+    $p=$root.'/key'; if (is_link($p)||!is_file($p)||(fileperms($p)&0077)!==0) throw new RuntimeException();
+    $key=file_get_contents($p,false,null,0,65); if (!is_string($key)||!preg_match('/\A[0-9a-f]{64}\z/',$key)) throw new RuntimeException(); return $key;
+}
+function share_bearer(): string { $a=$_SERVER['HTTP_AUTHORIZATION']??$_SERVER['REDIRECT_HTTP_AUTHORIZATION']??''; return str_starts_with($a,'Bearer ')?substr($a,7):''; }
+function grant_ok(string $key,string $grant): bool {
+    if (!preg_match('/\A([0-9]{13})\.([A-Za-z0-9_-]{32})\.([A-Za-z0-9_-]{43})\z/',$grant,$m)) return false;
+    $now=milliseconds(); return (int)$m[1]>$now&&(int)$m[1]<=$now+86400000&&hash_equals(b64u(hash_hmac('sha256',$m[1].'.'.$m[2],$key,true)),$m[3]);
+}
+function capabilities(string $key,string $grant): array {
+    return array_map(fn($purpose)=>b64u(hash_hmac('sha256','snapvere-share-v1:'.$purpose.':'.$grant,$key,true)),['view','revoke']);
+}
+function write_new(string $path,string $value): void {
+    $fp=fopen($path,'xb'); if (!$fp) throw new RuntimeException();
+    try { if (!chmod($path,0600)||fwrite($fp,$value)!==strlen($value)||!fflush($fp)||!fsync($fp)) throw new RuntimeException(); } finally { fclose($fp); }
+}
+function metadata(string $dir): ?array {
+    if (is_link($dir)||!is_dir($dir)) return null;
+    $p=$dir.'/meta.json'; $media=$dir.'/media';
+    if (is_link($p)||is_link($media)||!is_file($p)||!is_file($media)||filesize($p)>4096) return null;
+    $pi=lstat($p); $mi=lstat($media);
+    if (!$pi||!$mi||$pi['nlink']!==1||$mi['nlink']!==1) return null;
+    $m=json_decode((string)file_get_contents($p,false,null,0,4097),true,8);
+    if (!is_array($m)||!is_string($m['type']??null)||!isset(share_types()[$m['type']])||!is_int($m['size']??null)||$m['size']<1||$m['size']>MAX_SHARE||filesize($media)!==$m['size']||!is_int($m['expiresAt']??null)) return null;
+    foreach (['sha256','grant','revoke'] as $k) if (!is_string($m[$k]??null)||!preg_match('/\A[0-9a-f]{64}\z/',$m[$k])) return null;
+    return $m;
+}
+function storage_bytes(string $root): int {
+    $bytes=0; $count=0;
+    $it=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root,FilesystemIterator::SKIP_DOTS),RecursiveIteratorIterator::SELF_FIRST);
+    foreach ($it as $entry) { if (++$count>100000||$it->getDepth()>3||$entry->isLink()) throw new RuntimeException(); if ($entry->isFile()) $bytes+=$entry->getSize(); elseif (!$entry->isDir()) throw new RuntimeException(); }
+    return $bytes;
+}
+// Called only under the exclusive storage lock. Never recursively delete an
+// unrecognized directory or remove an unexpired or malformed share. A reader
+// with an already-open handle may finish after expiry or revocation.
+function maintain_expired(string $root,int $now): void {
+    $removed=0; $scanned=0;
+    $entries=new FilesystemIterator($root,FilesystemIterator::SKIP_DOTS);
+    foreach ($entries as $entry) {
+        if (++$scanned>100000 || $removed>=16) break;
+        $name=$entry->getFilename(); $path=$entry->getPathname();
+        if ($entry->isLink()) continue;
+        if ($entry->isDir() && preg_match('/\A[0-9a-f]{64}\z/',$name)) {
+            $m=metadata($path);
+            if (!$m || $m['expiresAt']<1 || $m['expiresAt']>$now) continue;
+            $names=scandir($path);
+            if ($names!==['.','..','media','meta.json']) continue;
+            $retired=$root.'/retired-'.bin2hex(random_bytes(16));
+            if (file_exists($retired)||is_link($retired)) continue;
+            if (!rename($path,$retired)) continue;
+            remove_pending($retired);
+            $removed++;
+        } elseif ($entry->isFile() && preg_match('/\Aused-[0-9a-f]{64}\z/',$name)) {
+            $info=lstat($path);
+            if (!$info||$info['nlink']!==1||!in_array($info['size'],[13,19],true)) continue;
+            $value=file_get_contents($path,false,null,0,20);
+            // Legacy markers store consumption time. The verifier accepts a
+            // maximum 24-hour future expiry, so keep markers for 25 hours.
+            if (!is_string($value)||!preg_match('/\A(?:abort:)?([0-9]{13})\z/',$value,$stamp)||(int)$stamp[1]<1||(int)$stamp[1]>$now-90000000) continue;
+            if (unlink($path)) $removed++;
+        }
+    }
+}
+function remove_pending(string $dir): void {
+    if (is_link($dir)||!is_dir($dir)) return;
+    foreach (scandir($dir)?:[] as $name) if (!in_array($name,['.','..','media','meta.json'],true)) return;
+    foreach (['media','meta.json'] as $name) {
+        $p=$dir.'/'.$name;
+        if (is_link($p)) return;
+        if (file_exists($p)) {
+            $info=lstat($p);
+            if (!$info||($info['mode']&0170000)!==0100000||$info['nlink']!==1) return;
+        }
+    }
+    foreach (['media','meta.json'] as $name) { $p=$dir.'/'.$name; if (is_file($p)) unlink($p); }
+    rmdir($dir);
+}
+function valid_media_signature(string $type,string $head,string $tail,int $n): bool {
+    return match($type) { 'image/png'=>str_starts_with($head,"\x89PNG\r\n\x1a\n"),'image/jpeg'=>str_starts_with($head,"\xff\xd8\xff")&&$tail==="\xff\xd9",'image/gif'=>in_array(substr($head,0,6),['GIF87a','GIF89a'],true),'image/webp'=>substr($head,0,4)==='RIFF'&&substr($head,8,4)==='WEBP','video/mp4'=>$n>=12&&substr($head,4,4)==='ftyp',default=>false };
+}
+function stage_media(string $path,int $size,string $type): ?string {
+    $in=fopen('php://input','rb'); $out=fopen($path,'xb'); if (!$in||!$out) throw new RuntimeException();
+    $n=0; $head=''; $tail=''; $hash=hash_init('sha256');
+    try {
+        if (!chmod($path,0600)) throw new RuntimeException();
+        while (!feof($in)) { $chunk=fread($in,65536); if ($chunk===false) throw new RuntimeException(); if ($chunk==='') break; $n+=strlen($chunk); if ($n>$size) return null; $head=substr($head.$chunk,0,16); $tail=substr($tail.$chunk,-2); hash_update($hash,$chunk); if (fwrite($out,$chunk)!==strlen($chunk)) throw new RuntimeException(); }
+        $valid=valid_media_signature($type,$head,$tail,$n);
+        if ($n!==$size||!$valid) return null;
+        if (!fflush($out)||!fsync($out)) throw new RuntimeException(); return hash_final($hash);
+    } finally { fclose($in); fclose($out); }
+}
+function serve_media(string $dir,array $m): never {
+    $p=$dir.'/media'; $before=lstat($p); $fp=fopen($p,'rb'); if (!$before||!$fp||is_link($p)) fail_share(404);
+    $info=fstat($fp); if (!$info||($info['mode']&0170000)!==0100000||$info['nlink']!==1||$info['ino']!==$before['ino']||$info['dev']!==$before['dev']||$info['size']!==$m['size']) fail_share(404);
+    $size=$m['size']; $start=0; $end=$size-1; $range=$_SERVER['HTTP_RANGE']??'';
+    if ($range!=='') {
+        if (!preg_match('/\Abytes=([0-9]{0,9})-([0-9]{0,9})\z/',$range,$r)||($r[1]===''&&$r[2]==='')) { header('Content-Range: bytes */'.$size); fail_share(416); }
+        $start=$r[1]===''?max(0,$size-(int)$r[2]):(int)$r[1]; $end=$r[1]!==''&&$r[2]!==''?min($end,(int)$r[2]):$end;
+        if ($start>$end||$start>=$size) { header('Content-Range: bytes */'.$size); fail_share(416); }
+        http_response_code(206); header("Content-Range: bytes $start-$end/$size");
+    }
+    header('Content-Type: '.$m['type']); header('Content-Length: '.($end-$start+1)); header('Accept-Ranges: bytes'); header('Content-Disposition: inline; filename=Snapvere.'.share_types()[$m['type']]);
+    if (fseek($fp,$start)!==0) exit; $left=$end-$start+1;
+    while ($left>0&&!feof($fp)&&!connection_aborted()) { $b=fread($fp,min(65536,$left)); if ($b===false||$b==='') break; echo $b; $left-=strlen($b); }
+    fclose($fp); exit;
+}

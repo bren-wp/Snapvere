@@ -1,7 +1,7 @@
 // Snapvere by Brendigo
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runRecordingAction } from "../src/lib/recordingControls.ts";
+import { matchesRecordingSession, runRecordingAction } from "../src/lib/recordingControls.ts";
 
 test("a failed stop action releases the lock so a user can retry", async () => {
   const lock = { current: false };
@@ -52,4 +52,13 @@ test("a previous session's rejected action does not release a new session lock",
   await assert.rejects(oldAction, /Previous session ended/);
   assert.equal(previous.current, false);
   assert.equal(current.current, true);
+});
+
+test("terminal HUD events require the latest nonempty recording session", () => {
+  assert.equal(matchesRecordingSession("new", "old"), false);
+  assert.equal(matchesRecordingSession("new", null), false);
+  assert.equal(matchesRecordingSession("new", undefined), false);
+  assert.equal(matchesRecordingSession(null, "old"), false);
+  assert.equal(matchesRecordingSession("", ""), false);
+  assert.equal(matchesRecordingSession("new", "new"), true);
 });

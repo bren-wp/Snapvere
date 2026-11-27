@@ -351,3 +351,21 @@ pub fn quarantine_restore_title(language: &str) -> &'static str {
         _ => "Restore the last removed capture?",
     }
 }
+
+/// Native consent for releasing original gallery bytes to the sharing UI.
+pub fn sharing_labels(language: &str) -> [&'static str; 4] {
+    match language {
+        "hr" => ["Podijeliti snimku?", "Izvorna datoteka bit će poslana na snpv.re. Svatko s aktivnom poveznicom može je pregledati.", "Podijeli", "Odustani"],
+        "de" => ["Aufnahme teilen?", "Die Originaldatei wird an snpv.re gesendet. Jeder mit dem aktiven Link kann sie ansehen.", "Teilen", "Abbrechen"],
+        "es" => ["¿Compartir captura?", "El archivo original se enviará a snpv.re. Cualquiera con el enlace activo puede verlo.", "Compartir", "Cancelar"],
+        "fr" => ["Partager la capture ?", "Le fichier original sera envoyé à snpv.re. Toute personne ayant le lien actif peut le consulter.", "Partager", "Annuler"],
+        "it" => ["Condividere la cattura?", "Il file originale verrà inviato a snpv.re. Chiunque abbia il link attivo può visualizzarlo.", "Condividi", "Annulla"],
+        "pt" => ["Partilhar captura?", "O ficheiro original será enviado para snpv.re. Qualquer pessoa com a ligação ativa pode vê-lo.", "Partilhar", "Cancelar"],
+        "nl" => ["Opname delen?", "Het originele bestand wordt naar snpv.re gestuurd. Iedereen met de actieve link kan het bekijken.", "Delen", "Annuleren"],
+        "pl" => ["Udostępnić zrzut?", "Oryginalny plik zostanie wysłany do snpv.re. Każdy z aktywnym linkiem może go zobaczyć.", "Udostępnij", "Anuluj"],
+        "cs" => ["Sdílet snímek?", "Původní soubor bude odeslán na snpv.re. Každý s aktivním odkazem jej může zobrazit.", "Sdílet", "Zrušit"],
+        "sk" => ["Zdieľať snímku?", "Pôvodný súbor bude odoslaný na snpv.re. Každý s aktívnym odkazom ho môže zobraziť.", "Zdieľať", "Zrušiť"],
+        "sl" => ["Deliti posnetek?", "Izvirna datoteka bo poslana na snpv.re. Vsak z aktivno povezavo si jo lahko ogleda.", "Deli", "Prekliči"],
+        _ => ["Share capture?", "The original file will be sent to snpv.re. Anyone with the active link can view it.", "Share", "Cancel"],
+    }
+}

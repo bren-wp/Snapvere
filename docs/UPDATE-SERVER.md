@@ -1,106 +1,55 @@
-# SNAPVERE — self-hosted update notifications
+# SNAPVERE — installed update-only channel
 
-This is the **Tauri/Rust Windows** distribution of SNAPVERE, not the separately distributed WinUI/.NET edition. Update checks are optional, informational, and cannot silently execute installers. Only upload a manifest when the matching Tauri installer is published and its checksum and edition verified on the dedicated download page. Never use the WinUI website version for a Tauri feed.
+The web deployment is separate from the thirteen-asset desktop release. `stable.json` on update.snapvere.com now uses product `snapvere-installed-delta-v1`; it lists only actual dedicated delta packages for installed editions, with exact base version, byte size and SHA-256. The old full-package release inventory is not deployed as this channel. Older clients reject the new product rather than offering portable downloads.
 
-## 1. Prepare `update.snapvere.com`
+Windows: Snapvere-Update.exe and Snapvere-Pro-Update.exe. Linux: Snapvere-Linux-Update.svpatch and Snapvere-Pro-Linux-Update.svpatch. Reserved filenames do not certify a working patch engine. Full installers, DEB packages, portable executables and AppImages remain separate normal downloads; never rename them to update artifacts. The initial published catalog has no patches. No fictional update file or new version is displayed. The website displays only compatible existing files, and download.php verifies their size and SHA-256 before streaming. This is integrity, not publisher authentication.
 
-Create a DNS A/AAAA record, provision valid HTTPS/TLS, and serve the following file at the exact public URL:
+Automatic installation is disabled. A signed differential patch build, exact base-file verification, rollback, protected signing keys and native integration remain required before actual update packages can be published.
 
-```text
-https://update.snapvere.com/stable.json
-```
+Generate both English root-ready web archives using tools/build_web_packages.py with a verified public GitHub release response. The web workflow validates the current published thirteen-asset inventory and deliberately emits an empty patch catalog. To stage a future actual patch catalog, use tools/prepare_update_site.py --manifest <catalog> --patches <verified-patch-root> --out <new-root>. This verifies each listed patch and includes the original website CSS/font/icon. Do not publish a test fixture or overwrite a deployed store. Deploy over HTTPS using PHP 8.1+ and Apache rewrite/headers; on other servers configure equivalent denial of direct /patches access and CORS JSON headers. Production deployment remains an independent verification gate.
 
-The contents must be a small UTF-8 JSON document (maximum 8192 bytes), with `Content-Type: application/json`:
+Desktop update checks require the native installed resource marker, expected executable name, and (on Linux) system-installed binary path with no AppImage environment. This is conservative classification, not installation authenticity. Physical installed/portable acceptance on Windows/Linux is required.
 
-```json
-{
-  "product": "snapvere-tauri-windows",
-  "version": "0.2.20",
-  "notes": "Fixed crashes and improved capture reliability.",
-  "download_url": "https://snapvere.com/download/tauri/"
-}
-```
+## Offline delta codec (reference implementation)
 
-The separate Tauri channel is `/download/tauri/`, linking only to official GitHub Releases. `/download/` remains the WinUI/.NET v0.2.4 channel. The `version` field must be a strictly numeric `major.minor.patch`. **Version 0.2.20 is only an example** — do not post it unless a corresponding, tested 0.2.20 Tauri/Rust installer is actually available on the official download page. Do not mix public WinUI binaries with Tauri/Rust update packages.
+`tools/delta_patch.py` builds an SVDELTA1 payload from two exact, trusted installed executable inputs; it copies matching 64 KiB blocks and stores only changed literal blocks (bounded compression). It refuses a delta with no reused bytes or one not smaller than the target. `reconstruct` checks platform/edition, exact base version/hash/length, output length/hash, bounds and end marker, writes a new exclusive staging file and never launches or overwrites the installed app. This is not a Windows updater executable or an installable Linux package, and is not published by the deployment generator. Signed native application, immutable release inputs, resource/package metadata changes, safe filesystem transaction, rollback and physical acceptance are still required. Test fixtures never enter the stable catalog.
 
-Example static site configuration (Nginx; provide your own certificate/key securely):
+## Authenticated offline staging
 
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name update.snapvere.com;
-    ssl_certificate /etc/letsencrypt/live/update.snapvere.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/update.snapvere.com/privkey.pem;
-    root /var/www/update.snapvere.com;
+`tools/signed_delta.py` signs a canonical, domain-separated descriptor with Ed25519 using OpenSSL 3.x. The descriptor binds the exact delta SHA-256, byte length, target edition/platform, base and target versions, and both executable digests. The verification command requires a public-key fingerprint pinned through a trusted channel independent of the downloaded payload. It verifies the signature before copying the bounded payload into a private temporary directory, validates the copy against the signed descriptor, then reconstructs only to a new exclusive staging file. Tests generate disposable keys and reject wrong pins, wrong signers, altered descriptors/signatures, corrupt patches and cross-edition requests. No private key or production trust anchor is included. This is offline reference tooling, not a native installer, rollback implementation or a claim that the current patch is ready to publish. The Windows/Linux app release remains separate from the signed delta channel.
 
-    location = /stable.json {
-        limit_except GET HEAD { deny all; }
-        default_type application/json;
-        add_header Access-Control-Allow-Origin "*" always;
-        add_header Cache-Control "no-store, max-age=0" always;
-        add_header X-Content-Type-Options nosniff always;
-        add_header Strict-Transport-Security "max-age=31536000" always;
-        try_files /stable.json =404;
-    }
-}
-```
+## Isolated transaction and rollback acceptance
 
-Upload the manifest atomically (write to a temporary file then rename it) **after** all release files, hashes and official site links are verified. No PHP, database, account, cron or WordPress plugin is required.
+`tools/update_transaction.py` is a POSIX reference transaction, restricted to an explicitly initialized private workspace with fixed filenames. It verifies the signed candidate before staging, retains a separate verified backup, flushes files and directories, replaces the workspace binary atomically and classifies interrupted states by hashes. Rollback restores a copy without consuming the backup; unexpected files, incomplete journals and corrupt backups fail closed and remain available for investigation. The local journal and workspace parent must be trusted; noncooperating writers are outside this model. Regression tests exercise application, repeated rollback, simulated interruption after rename, invalid signatures and preservation of unrelated user data. This does not yet update an installed Windows or Linux program, exercise physical power loss or handle installer/package-manager ownership, elevation, running-process coordination or Windows filesystem semantics. No update executable is published from this reference implementation.
 
-## 2. Application behavior
+## Native cross-platform staging component
 
-At startup, Home performs a 6.5-second maximum, cache-disabled, credential-free GET to the exact URL above. While visible, the app checks at most hourly, and it rechecks upon regaining focus if at least five minutes have elapsed; **no hidden-window polling or background service** is required. Settings → About performs the same check and offers a manual **Check for updates** button. Settings also provides **Check automatically on startup**, enabled by default and optional. Unavailable DNS, invalid JSON, an unchanged/older version or an offline PC must never stop normal capture/recording.
+`cargo run --locked --example delta_stage -- BASE PATCH NEW_OUTPUT TARGET FROM TO TRUSTED_PATCH_SHA256` reconstructs an exact-base SVDELTA1 binary using Rust, with bounded zlib decompression, exact output hash, private patch snapshot and exclusive output publication. It uses existing locked crate versions and is deliberately an example, not a bundled executable or installed-app command. The expected patch hash must originate from a separately authenticated descriptor; the native example does not verify Ed25519 itself. Windows and Linux CI run interoperability tests against the Python generator (copy, compressed and literal blocks, wrong digest, wrong target, corrupted terminator and changed base). Use only in an isolated trusted staging directory. Native trust-anchor integration, installer detection/ownership, Windows and Linux activation/rollback, production signing and actual update artifacts remain release blockers for the update channel.
 
-If the manifest version is newer than the app's local version, Home shows a localized notification. The user may open Settings, where a button opens **only** `https://snapvere.com/download/tauri/`. No data or binary URLs from untrusted JSON are followed; malformed, nonofficial download URLs are rejected. The app does **not** download, execute or silently install a binary.
+## Native authentication boundary (isolated acceptance)
 
-Only the public feed is requested; no screenshots, recordings, file paths, personal settings, activation data or telemetry are sent by the update code. A normal HTTPS request may expose the device's IP address and generic HTTP client information to the server; disclose that in your website privacy notice.
+`tools/native-update-auth` verifies the exact signed descriptor bytes with strict Ed25519 verification, domain separation and an independently trusted SHA-256 pin of the DER public key. It checks version direction, platform/edition, lengths and digests before emitting the authenticated patch hash. It does not execute or apply anything. The isolated CI resolves a review-only lock, tests Linux and Windows and checks interoperability with OpenSSL. Its lock and RustSec review must be committed and accepted before integrating into the desktop or publishing any update. No trust anchor or production signing key is supplied. The existing stable release and desktop lock remain unchanged.
 
-## 3. Security and future in-app installation
+The isolated authentication lock is now committed from the successful Linux CI resolution. Subsequent builds use --locked and run a RustSec audit; acceptance is not equivalent to a production trust anchor or an installed updater.
 
-The endpoint is restricted by the WebView content-security policy to `https://update.snapvere.com`. Unit tests reject unexpected product IDs, malformed versions, oversized content and unexpected download domains. CI rejects any other network calls from the desktop source.
+The Linux quality job now joins the actual signed-delta generator, pinned native Ed25519 verifier and native Rust stager in one temporary-fixture acceptance test. It checks full reconstruction, tampered signatures/descriptors/payloads, wrong pin or edition, wrong base, refusal to overwrite and preservation of unrelated files. It does not activate the candidate, publish fixtures or imply installed-app rollback is complete.
 
-For a future **one-click in-app installer**, integrate Tauri's signed updater protocol: generate and protect an offline Ed25519 signing private key, embed its **public** key in the application, publish appropriately signed Windows updater bundles and signatures, and verify signatures before installing. Never commit the signing private key or use a plain version JSON alone as installer authenticity proof.
+## Isolated native transaction acceptance
 
-The current release packages' SHA-256 sums are useful integrity checks but are **not** a substitute for publisher code signatures.
+The existing `delta_stage` example now supports `workspace init ROOT`, `workspace prepare ROOT PATCH TARGET FROM TO TRUSTED_PATCH_SHA256`, `workspace status ROOT`, `workspace apply ROOT`, and `workspace rollback ROOT`. It only accepts a fresh marked workspace containing fixed `installed.bin` and transaction filenames. Preparation retains an independent hash-verified backup and durable journal, and activation uses same-filesystem replacement. Repeated apply/rollback operations classify exact live and backup identities instead of blindly overwriting. The signed-chain test exercises activation and restoration with the native verifier's authenticated digest. Unix directory sync is explicit; Windows directory durability and private ACL/reparse-point checks are not yet production-ready. Never use a real installation as this workspace, and never distribute this example as Update.exe. Production trust anchors, process shutdown, package-manager ownership, elevation and physical fault testing remain outstanding.
 
-## 4. Verification before publication
+## Production publication safety gate
 
-1. With v0.2.19 installed, upload a manifest also showing v0.2.19: the app should show **latest version**.
-2. Upload a manifest for a truly published newer Tauri release: Home/Settings should show the version and plain-text notes.
-3. Stop the server or block networking: the app should keep working, and Settings should show a retryable status.
-4. Check the site link, optional startup-check toggle and localizations in all twelve languages.
-5. Test on physical Windows 10/11 with 100%, 125%, 150%, 200% scaling and confirm no dialog is cropped.
+Windows CI exposed an incompatible comparison of Windows pathname and CRT descriptor inode metadata in the Python codec. The Windows path now opens the leaf using CreateFileW with no write/delete sharing and OPEN_REPARSE_POINT, checks regular-file attributes and hard-link count on that handle, and transfers ownership to the Python stream. This is a trusted-directory offline tool, not a general hostile-path resolver. Cross-platform regression checks include a hard-linked source. Production web staging deliberately refuses every nonempty catalog until authenticated production artifacts are available; a matching hash alone cannot turn arbitrary bytes into a valid updater. The PHP routing acceptance fixture is constructed in a temporary test directory only.
 
-## 5. Corner notification after a new website release
+## Signed native differential package construction
 
-Version 0.2.25 moves the existing Home update notice to the **bottom-right
-of the app window** (not a system-wide Windows toast while Snapvere is hidden
-in the tray). When the user closes a notice, that exact version is remembered
-locally; a later published version can notify again. The Settings toggle and
-Home now synchronize through browser storage events. Users can still check
-manually from Settings and open the same official download page.
+`tools/build_signed_update.py` creates only exact-base incremental artifacts. Windows names are `Snapvere-Update.exe` and `Snapvere-Pro-Update.exe` (native PE runner plus signed delta envelope and bounded footer); Linux names are `Snapvere-Linux-Update.svpatch` and `Snapvere-Pro-Linux-Update.svpatch` (signed envelope only). The runner is built with `SNAPVERE_UPDATE_KEY_PIN` independently provisioned by the release operator. It checks Ed25519, exact descriptor/header agreement, platform/edition, base and reconstructed hashes, and refuses existing outputs. Full-package fallback is forbidden, including runner overhead. The shared Rust decoder and authentication library avoid separate divergent implementations. The runner only reconstructs into new output; it is not an installed-app activation tool. The current CI builds temporary Free/Pro fixtures on both operating systems and exports a review-only dependency lock, never production executables. Production use requires locked dependencies, security audit, actual release base/target packages, trusted signing key, Windows execution trust and installed-app/package-manager lifecycle acceptance. The production web packager remains fail-closed until these are verified.
 
-**Deployment is a two-step publication**, never inferred from a changed web page:
-(1) publish and verify the signed/trusted Windows installer(s) and site links;
-(2) generate `stable.json` with `python tools/generate_update_manifest.py
---version <published-version> --out stable.json`, then upload that file
-atomically to `https://update.snapvere.com/stable.json` with JSON MIME and
-CORS. Until step 2, existing installations do not know a new version exists.
-A version-only manifest never authorizes executing remote installers.
+## Authenticated production catalog boundary
 
-This in-app notice is opt-out: disable automatic checks under Settings → About.
-It performs no tracking, telemetry, screenshot upload or unattended install.
+The installed desktop path and PHP update catalog now reject any unsigned nonempty catalog. The signed envelope has exactly `signed` (the UTF-8 JSON catalog) and `signature` (128 lowercase hex characters, Ed25519 over `Snapvere signed catalog v1\n` followed by the exact payload). The desktop uses an independently provisioned build-time raw public key (`VITE_SNAPVERE_UPDATE_PUBLIC_KEY`); the PHP site uses a build-provisioned `UPDATE_PUBLIC_KEY_HEX` and sodium. Neither is populated with a production key. No key from a downloaded envelope is trusted. The unsigned empty catalog remains informational. Visual CI uses an ephemeral preview key only. This authenticates metadata, not browser-downloaded executable bytes or Windows Authenticode; production publishing remains blocked until runner/installer lifecycle verification and a trusted release key are supplied.
 
-### Focus synchronization and opt-out reliability
+## Stable distribution and update trust
 
-Home and Settings read the shared local update-check preferences on window focus,
-in addition to ordinary `storage` events. Some WebView2 installations do not
-relay `storage` to another Tauri window consistently. When the user opts out
-in Settings, Home aborts an in-flight check and clears stale notification data
-when it regains focus. Re-enabling checks triggers exactly one immediate request
-via the existing effect. The version dismissal is also reconciled on focus.
-
-
-## Current preview policy
-
-v0.2.36 is an unsigned preview. The version-only sample manifest is not authorization to publish a production stable feed. The client rejects non-JSON media types, invalid content lengths and malformed versions, caps streaming storage at 8192 bytes, and aborts on completion or rejection. A GitHub release label is not proof of publisher authenticity.
+Verified Windows/Linux Free/Pro application releases are published as stable (`draft=false`, `prerelease=false`) even if the operating-system binaries are unsigned. Signing status must remain explicit. This does not bypass the cryptographic authenticity requirements of remote differential packages. Main release automation additionally waits for exact-revision native authentication, differential fixture and web deployment checks. No test-key artifact is a public updater.

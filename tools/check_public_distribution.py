@@ -38,7 +38,7 @@ assert "https://brendigo.com" not in settings_source, "External UI links must be
 feed_source = (APP / "src/lib/updateFeed.ts").read_text(encoding="utf-8")
 assert "https://update.snapvere.com/stable.json" in feed_source
 assert "https://snapvere.com/download/tauri/" in feed_source
-assert "https://update.snapvere.com;" in config["app"]["security"]["csp"]
+assert "https://update.snapvere.com https://snpv.re;" in config["app"]["security"]["csp"]
 
 for base, suffixes in ((SITE, {".html", ".js", ".css"}), (APP / "src", {".html", ".ts", ".tsx", ".css"})):
     for file in base.rglob("*"):
@@ -59,7 +59,7 @@ for base, suffixes in ((SITE, {".html", ".js", ".css"}), (APP / "src", {".html",
 # 127.0.0.1/asset.localhost/ipc.localhost are development/native media origins,
 # not navigable public support/download links.
 allowed_app_hosts = {
-    "snapvere.com", "update.snapvere.com",
+    "snapvere.com", "update.snapvere.com", "snpv.re",
     "127.0.0.1", "asset.localhost", "ipc.localhost",
 }
 for source_file in (APP / "src").rglob("*"):

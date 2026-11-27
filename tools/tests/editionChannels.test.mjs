@@ -22,5 +22,9 @@ test("WinUI and Tauri distribution channels do not cross-install", () => {
   assert.ok(frontend.includes('https://snapvere.com/download/tauri/'));
   assert.ok(!frontend.includes('https://snapvere.com/download/"'));
   assert.ok(generator.includes('https://snapvere.com/download/tauri/'));
-  assert.equal(JSON.parse(example).download_url, "https://snapvere.com/download/tauri/");
+  const catalog = JSON.parse(example);
+  assert.equal(catalog.product, "snapvere-installed-delta-v1");
+  assert.equal(catalog.channel, "stable");
+  assert.deepEqual(catalog.packages, []);
+  assert.equal(catalog.download_url, undefined);
 });

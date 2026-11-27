@@ -39,6 +39,7 @@ import { readCollections, readExportProfiles, saveCollection, saveExportProfile,
 import { formatMediaSize } from "../lib/mediaFormatting";
 import Viewer from "../components/Viewer";
 import CaptureCard from "../components/home/CaptureCard";
+import ShareCaptureDialog from "../components/ShareCaptureDialog";
 import EmptyGallery from "../components/home/EmptyGallery";
 import UpdateNotice from "../components/UpdateNotice";
 import { quarantineCopy } from "../lib/quarantineCopy";
@@ -82,6 +83,7 @@ export default function Home() {
   }, []);
   /** Otvoren u pregledniku (id, ne indeks — lista se osvježava ispod njega). */
   const [viewId, setViewId] = useState<string | null>(null);
+  const [shareCapture, setShareCapture] = useState<Screenshot | null>(null);
   const galleryRequest = useRef(0);
   const pagingBusy = useRef(false);
   const pagingToken = useRef(0);
@@ -400,7 +402,7 @@ export default function Home() {
       setToast(t("Cannot open capture folder:"));
     }
   };
-  const openSettings = async (tab: "capture" | "recording" = "capture") => {
+  const openSettings = async (tab: "capture" | "recording" | "about" = "capture") => {
     try {
       const existing = await WebviewWindow.getByLabel("settings");
       if (existing) {
@@ -812,6 +814,7 @@ export default function Home() {
                 onOpen={() => setViewId(s.id)}
                 onReveal={() => void reveal(s)}
                 onCopyPath={() => void copyPath(s)}
+                onShare={() => setShareCapture(s)}
                 onDelete={() => void onDelete(s)}
                 selected={proSelected.has(s.id)}
                 onToggleSelect={IS_PRO && proBatchMode && !proExportBusy ? () => toggleProItem(s.id) : undefined}
@@ -835,8 +838,9 @@ export default function Home() {
         )}
       </main>
 
-      <UpdateNotice mode="home" onAction={openSettings} raised={toast !== null} />
+      <UpdateNotice mode="home" onAction={() => openSettings("about")} raised={toast !== null} />
 
+      {shareCapture && <ShareCaptureDialog shot={shareCapture} language={language} onClose={() => setShareCapture(null)} />}
       {viewId && (
         <Viewer
           items={visible}

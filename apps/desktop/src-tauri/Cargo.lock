@@ -4225,12 +4225,13 @@ dependencies = [
 
 [[package]]
 name = "snapvere"
-version = "0.2.38"
+version = "0.2.39"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
  "cc",
  "chrono",
+ "flate2",
  "gif",
  "image",
  "libc",
@@ -4238,6 +4239,8 @@ dependencies = [
  "rusqlite",
  "rustix 1.1.6",
  "serde",
+ "serde_json",
+ "sha2 0.10.9",
  "tauri",
  "tauri-build",
  "tauri-plugin-autostart",

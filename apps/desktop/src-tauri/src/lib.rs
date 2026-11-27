@@ -6,6 +6,8 @@ mod commands;
 mod db;
 mod gallery_delete;
 mod logging;
+#[cfg(target_os = "macos")]
+mod macos_permissions;
 mod models;
 mod pinned_directory;
 mod record;
@@ -166,6 +168,7 @@ pub fn run() {
             commands::reveal_media,
             commands::copy_media_image,
             commands::copy_media_path,
+            commands::read_share_media,
             commands::pro_export_batch,
             commands::show_home,
             commands::log_file_path,

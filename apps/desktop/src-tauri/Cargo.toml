@@ -1,7 +1,7 @@
 # Snapvere by Brendigo
 [package]
 name = "snapvere"
-version = "0.2.38"
+version = "0.2.39"
 description = "Snapvere — brzi, privatni screenshot i screen-recording alat"
 authors = ["Brendigo <https://brendigo.com>"]
 edition = "2021"
@@ -28,6 +28,10 @@ tauri-plugin-clipboard-manager = "2"
 tauri-plugin-opener = "2"
 
 serde = { version = "1", features = ["derive"] }
+# Offline differential staging example uses versions already present in the lock.
+serde_json = "=1.0.154"
+sha2 = "=0.10.9"
+flate2 = "=1.1.11"
 
 # Capture ekrana (monitor / prozor). NAPOMENA: provjeri/uskladi verziju s `cargo update`.
 xcap = "0.9.10"
@@ -48,9 +52,11 @@ anyhow = "1"
 base64 = "0.23"
 tempfile = "3.27"
 
-[target.'cfg(target_os = "linux")'.dependencies]
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 libc = "0.2"
 rustix = { version = "1.1", features = ["fs"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
 wayland-client = { version = "=0.31.15", optional = true }
 wayland-protocols = { version = "=0.32.13", features = ["client", "unstable"], optional = true }
 

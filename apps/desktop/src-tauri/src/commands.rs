@@ -53,6 +53,15 @@ fn estr<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
 }
 
+fn capture_failure_toast(error: &str) -> &'static str {
+    #[cfg(target_os = "macos")]
+    if error == crate::macos_permissions::SCREEN_CAPTURE_DENIED {
+        return crate::macos_permissions::SCREEN_CAPTURE_DENIED;
+    }
+    let _ = error;
+    "Screen capture failed. Open Diagnostics for details."
+}
+
 pub(crate) fn require_window_label(label: &str, allowed: &[&str]) -> Result<(), String> {
     if allowed.contains(&label) {
         Ok(())
@@ -70,6 +79,7 @@ pub struct PlatformCapabilities {
     system_audio: bool,
     cursor_in_recordings: bool,
     linux_audio_picker: bool,
+    installed_update_eligible: bool,
 }
 
 /// Native platform contract; a shared React UI must not promise unsupported
@@ -88,6 +98,7 @@ fn platform_capabilities() -> PlatformCapabilities {
         system_audio: cfg!(windows),
         cursor_in_recordings: cfg!(windows),
         linux_audio_picker: cfg!(all(target_os = "linux", feature = "linux-native-media")),
+        installed_update_eligible: false,
     }
 }
 
@@ -96,7 +107,52 @@ pub fn get_platform_capabilities(
     window: tauri::WebviewWindow,
 ) -> Result<PlatformCapabilities, String> {
     require_window_label(window.label(), &["home", "settings", "overlay"])?;
-    Ok(platform_capabilities())
+    let mut capabilities = platform_capabilities();
+    capabilities.installed_update_eligible = installed_update_eligible(window.app_handle());
+    Ok(capabilities)
+}
+
+/// The installer includes a resource marker; standalone EXEs do not.
+/// Linux AppImages are explicitly excluded even though they contain resources.
+/// This is distribution classification, not authentication of an updater.
+fn installed_update_eligible(app: &AppHandle) -> bool {
+    if !cfg!(any(windows, target_os = "linux")) {
+        return false;
+    }
+    let Ok(exe) = std::env::current_exe() else {
+        return false;
+    };
+    #[cfg(windows)]
+    if !exe
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.eq_ignore_ascii_case("snapvere.exe"))
+    {
+        return false;
+    }
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("APPIMAGE").is_some()
+        || std::env::var_os("APPDIR").is_some()
+        || !matches!(
+            exe.to_str(),
+            Some("/usr/bin/snapvere" | "/usr/bin/snapvere-pro")
+        )
+    {
+        return false;
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    let _ = exe;
+    let Ok(resources) = app.path().resource_dir() else {
+        return false;
+    };
+    let marker = resources.join("update-install.marker");
+    let Ok(metadata) = fs::symlink_metadata(&marker) else {
+        return false;
+    };
+    metadata.is_file()
+        && !metadata.file_type().is_symlink()
+        && metadata.len() == 22
+        && fs::read(marker).is_ok_and(|bytes| bytes == b"snapvere-installed-v1\n")
 }
 
 /// Device discovery is available only in the explicitly enabled native Linux build.
@@ -803,9 +859,7 @@ fn open_editor_window(app: &AppHandle, file_path: &str) -> Result<(), String> {
     // file:// asset URLs would otherwise be blocked in the editor WebView.
     // Permit the exact saved file, never an arbitrary directory.
     let image = Path::new(file_path);
-    if !image.is_file() {
-        return Err("Saved screenshot is missing; cannot open editor".into());
-    }
+    let (_verified_file, _) = crate::pinned_directory::open_bounded_source(image, u64::MAX)?;
     app.asset_protocol_scope()
         .allow_file(image)
         .map_err(|e| format!("Cannot authorize screenshot for editor: {e}"))?;
@@ -911,10 +965,7 @@ pub fn dispatch_region_capture(app: &AppHandle, mode: CaptureMode) {
                     ));
                 }
                 log(&format!("Capture failed locally: {e}"));
-                let _ = app.emit(
-                    "snapvere:toast",
-                    "Screen capture failed. Open Diagnostics for details.",
-                );
+                let _ = app.emit("snapvere:toast", capture_failure_toast(&e));
             }
         });
 
@@ -928,6 +979,8 @@ pub fn dispatch_region_capture(app: &AppHandle, mode: CaptureMode) {
 /// Never write a transient frozen.png to disk or depend on asset:// grants:
 /// the overlay receives the pixels over a scoped Tauri IPC command.
 fn region_capture_blocking(app: &AppHandle, mode: CaptureMode) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    crate::macos_permissions::request_for_user_capture()?;
     let (cx, cy) = cursor_pos(app);
     let t = std::time::Instant::now();
     let token = Utc::now().timestamp_millis();
@@ -1204,10 +1257,7 @@ pub fn dispatch_capture_fullscreen(app: &AppHandle) {
                 }
                 Err(e) => {
                     log(&format!("Capture failed locally: {e}"));
-                    let _ = app.emit(
-                        "snapvere:toast",
-                        "Screen capture failed. Open Diagnostics for details.",
-                    );
+                    let _ = app.emit("snapvere:toast", capture_failure_toast(&e));
                 }
             }
         });
@@ -1791,21 +1841,25 @@ pub fn set_blur_regions(
     )
 }
 
-/// Sakrij UI snimanja (HUD + sloj za crtanje). Zove ga frontend kad snimanje završi.
+/// Close the completed recording's HUD and overlays, never a newer session.
 #[tauri::command]
-pub fn close_rec_hud(window: tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
+pub fn close_rec_hud(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    session_id: String,
+) -> Result<(), String> {
     require_window_label(window.label(), &["recbar"])?;
-    for label in ["recbar", "recdraw", "recframe"] {
-        if let Some(win) = app.get_webview_window(label) {
-            let _ = win.hide();
+    record::with_terminal_hud_session(&app, &session_id, || {
+        for label in ["recbar", "recdraw", "recframe"] {
+            if let Some(win) = app.get_webview_window(label) {
+                let _ = win.hide();
+            }
         }
-    }
-    *lock(&app.state::<AppState>().rec_frame) = None;
-    // Sljedeće snimanje kreće s čistim slojem.
-    if let Some(win) = app.get_webview_window("recdraw") {
-        let _ = win.set_ignore_cursor_events(true);
-    }
-    Ok(())
+        *lock(&app.state::<AppState>().rec_frame) = None;
+        if let Some(win) = app.get_webview_window("recdraw") {
+            let _ = win.set_ignore_cursor_events(true);
+        }
+    })
 }
 
 // ──────────────────────────────── galerija ────────────────────────────────
@@ -1859,7 +1913,7 @@ pub fn search_screenshots(
 #[tauri::command]
 pub fn open_media(window: tauri::WebviewWindow, app: AppHandle, id: String) -> Result<(), String> {
     require_window_label(window.label(), &["home"])?;
-    let path = media_path(&app, &id)?;
+    let (path, _verified_file) = media_path(&app, &id)?;
     app.opener()
         .open_path(path.to_string_lossy(), None::<&str>)
         .map_err(estr)
@@ -1873,7 +1927,7 @@ pub fn reveal_media(
     id: String,
 ) -> Result<(), String> {
     require_window_label(window.label(), &["home"])?;
-    let path = media_path(&app, &id)?;
+    let (path, _verified_file) = media_path(&app, &id)?;
     app.opener().reveal_item_in_dir(&path).map_err(estr)
 }
 
@@ -1885,7 +1939,7 @@ pub fn copy_media_path(
     id: String,
 ) -> Result<(), String> {
     require_window_label(window.label(), &["home"])?;
-    let path = media_path(&app, &id)?;
+    let (path, _verified_file) = media_path(&app, &id)?;
     app.clipboard()
         .write_text(path.to_string_lossy().into_owned())
         .map_err(estr)
@@ -1900,13 +1954,79 @@ pub async fn copy_media_image(
     id: String,
 ) -> Result<(), String> {
     require_window_label(window.label(), &["home"])?;
-    let path = media_path(&app, &id)?;
+    let (path, _verified_file) = media_path(&app, &id)?;
     tauri::async_runtime::spawn_blocking(move || {
         let img = decode_copy_image(&path)?;
         copy_rgba_to_clipboard(&app, &img)
     })
     .await
     .map_err(|e| format!("copy task: {e}"))?
+}
+
+/// Read only a registered gallery item, never a caller-provided filesystem path.
+#[tauri::command]
+pub async fn read_share_media(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    id: String,
+) -> Result<Response, String> {
+    require_window_label(window.label(), &["home"])?;
+    tauri::async_runtime::spawn_blocking(move || {
+        use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+
+        // Hold the local media operation guard, not the database mutex,
+        // during the native consent dialog. Bind consent to the same handle.
+        let _guard = image_export::SaveAsGuard::acquire()?;
+        let state = app.state::<AppState>();
+        let shot = lock(&state.db)
+            .get(&id)
+            .map_err(estr)?
+            .ok_or("This capture is no longer in the gallery")?;
+        let path = PathBuf::from(&shot.file_path);
+        let source = gallery_helpers::ShareSource::open(&path, shot.size_bytes)?;
+        let language = get_app_language(window.clone(), app.clone())?;
+        let labels = crate::tray_locale::sharing_labels(&language);
+        let name: String = shot
+            .name
+            .chars()
+            .filter(|ch| {
+                !ch.is_control()
+                    && !matches!(*ch, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
+            })
+            .take(200)
+            .collect();
+        let confirmed = app
+            .dialog()
+            .message(format!(
+                "\"{name}\" — {:.2} MiB\n\n{}",
+                shot.size_bytes as f64 / 1048576.0,
+                labels[1]
+            ))
+            .title(labels[0])
+            .kind(MessageDialogKind::Warning)
+            .buttons(MessageDialogButtons::OkCancelCustom(
+                labels[2].to_owned(),
+                labels[3].to_owned(),
+            ))
+            .parent(&window)
+            .blocking_show();
+        if !confirmed {
+            return Err("Share cancelled".into());
+        }
+        let current = lock(&state.db)
+            .get(&id)
+            .map_err(estr)?
+            .ok_or("This capture is no longer in the gallery")?;
+        if current.file_path != shot.file_path
+            || current.size_bytes != shot.size_bytes
+            || current.format != shot.format
+        {
+            return Err("Gallery item changed during confirmation".into());
+        }
+        Ok(Response::new(source.read_confirmed(&path)?))
+    })
+    .await
+    .map_err(estr)?
 }
 
 #[tauri::command]

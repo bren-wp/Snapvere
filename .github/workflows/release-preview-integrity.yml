@@ -1,4 +1,4 @@
-name: Audit unsigned Snapvere release preview labels
+name: Audit Snapvere release channel metadata
 on:
   workflow_dispatch:
   workflow_run:
@@ -16,35 +16,30 @@ concurrency:
   cancel-in-progress: false
 jobs:
   audit-unsigned-preview-metadata:
-    name: Reconcile unsigned Tauri preview release labels
+    name: Verify stable-channel metadata for new releases
     if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch'))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
-      contents: write
+      contents: read
     steps:
-      - name: Require prerelease metadata for Tauri preview channel
+      - name: Require stable metadata for verified new distributions
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           [[ "$GITHUB_REF" == refs/heads/main ]] || { echo "::error::Use main for release reconciliation"; exit 1; }
-          # v0.2.25 and later are preview-only until a reviewed signed-release
-          # policy replaces this conservative boundary. Never edit drafts or
-          # the legacy WinUI/.NET channel. Do not infer trust from release notes.
+          # Starting with v0.2.39, stable denotes the distribution channel,
+          # not publisher signing or physical-device certification.
+          # Historical releases and all drafts remain untouched.
           releases="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[]')"
-          candidates="$(jq -rs '.[] | select(.draft == false) | select(.tag_name | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) | select((.tag_name[1:] | split(".") | map(tonumber)) >= [0,2,25]) | .id' <<< "$releases")"
+          candidates="$(jq -rs '.[] | select(.draft == false) | select(.tag_name | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) | select((.tag_name[1:] | split(".") | map(tonumber)) >= [0,2,39]) | .id' <<< "$releases")"
           while IFS= read -r id; do
             [[ -n "$id" ]] || continue
             release="$(gh api "repos/$GITHUB_REPOSITORY/releases/$id")"
             tag="$(jq -r '.tag_name' <<< "$release")"
             [[ "$(jq -r '.draft' <<< "$release")" == false ]] || continue
-            if [[ "$(jq -r '.prerelease' <<< "$release")" != true ]]; then
-              echo "::warning::Unsigned preview $tag is incorrectly marked stable"
-              gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$id" -F prerelease=true --silent
-            fi
-            verified="$(gh api "repos/$GITHUB_REPOSITORY/releases/$id")"
-            jq -e --arg tag "$tag" '.tag_name == $tag and .draft == false and .prerelease == true' <<< "$verified" >/dev/null
-            echo "$tag: preview status verified"
+            jq -e --arg tag "$tag" '.tag_name == $tag and .draft == false and .prerelease == false' <<< "$release" >/dev/null
+            echo "$tag: stable distribution status verified"
           done <<< "$candidates"

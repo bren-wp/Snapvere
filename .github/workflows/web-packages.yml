@@ -1,0 +1,49 @@
+name: Snapvere English web deployment packages
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+  release:
+    types: [published, released]
+  workflow_run:
+    workflows: [Snapvere Windows and Linux preview release]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: snapvere-web-packages-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  package:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Fetch current published stable release metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api repos/bren-wp/Snapvere/releases/latest > "$RUNNER_TEMP/snapvere-release.json"
+      - name: Build both domain-root packages
+        run: python tools/build_web_packages.py --release-json "$RUNNER_TEMP/snapvere-release.json" --out web-packages
+      - name: Verify PHP and archive inventory
+        run: |
+          php -l deploy/snpv.re/index.php
+          php -l deploy/snpv.re/service.php
+          php -l deploy/snpv.re/resume.php
+
+          python tools/test_update_site.py
+          unzip -t web-packages/snpv.re-English.zip
+          unzip -t web-packages/update.snapvere.com-English.zip
+          python tools/test_web_packages.py web-packages
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Snapvere-English-domain-root-packages
+          path: web-packages/*.zip
+          if-no-files-found: error
+          retention-days: 30
