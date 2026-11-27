@@ -1,7 +1,7 @@
 // Snapvere by Brendigo
 import assert from "node:assert/strict";
 import test from "node:test";
-import { shareToken, shareMime, revokeCapture, recoverCapture, requestShareGrant } from "../src/lib/shareCapture.ts";
+import { shareToken, shareMime, revokeCapture, recoverCapture, requestShareGrant, uploadOrRecoverCapture } from "../src/lib/shareCapture.ts";
 const token="a".repeat(43), link="https://snpv.re/"+token;
 test("share URLs cannot select an external host, credentials, query or path",()=>{
  assert.equal(shareToken(link),token);
@@ -61,4 +61,50 @@ test("automatic grant sends no capture or credentials",async(t)=>{
  assert.equal(await requestShareGrant(signal),grant);
  mock.mock.mockImplementation(async()=>Response.json({grant:"bad"},{status:201}));
  await assert.rejects(requestShareGrant(signal));
+});
+
+test("lost upload acknowledgement recovers without retransmitting capture",async(t)=>{
+ const grant="1700003600000."+"a".repeat(32)+"."+"b".repeat(43);
+ const signal=new AbortController().signal;
+ const bytes=new Uint8Array([1,2,3]).buffer;
+ const urls=[];
+ const mock=t.mock.method(globalThis,"fetch",async(url,options)=>{
+  urls.push(url);
+  assert.equal(options.headers.Authorization,"Bearer "+grant);
+  if(url.endsWith("/recover")){
+   assert.equal(options.body,undefined);
+   return Response.json({url:link,expiresAt:1700003600000,revocation:token});
+  }
+  assert.equal(options.body,bytes);
+  throw new TypeError("Connection lost after request");
+ });
+ assert.equal((await uploadOrRecoverCapture(bytes,"png",grant,3600,signal)).url,link);
+ assert.deepEqual(urls,["https://snpv.re/api/v1/shares","https://snpv.re/api/v1/shares/recover"]);
+ mock.mock.mockImplementation(async()=>new Response(null,{status:503}));
+ await assert.rejects(uploadOrRecoverCapture(bytes,"png",grant,3600,signal),/Share rejected/);
+ assert.equal(mock.mock.callCount(),4);
+ const cancelled=new AbortController();
+ mock.mock.mockImplementation(async()=>{cancelled.abort();throw new Error("Cancelled");});
+ await assert.rejects(uploadOrRecoverCapture(bytes,"png",grant,3600,cancelled.signal),/Cancelled/);
+ assert.equal(mock.mock.callCount(),5);
+});
+
+test("sharing responses enforce a bounded UTF-8 JSON object",async(t)=>{
+ const signal=new AbortController().signal;
+ const grant="1700003600000."+"a".repeat(32)+"."+"b".repeat(43);
+ const mock=t.mock.method(globalThis,"fetch",async()=>Response.json({grant},{status:201}));
+ assert.equal(await requestShareGrant(signal),grant);
+ for(const body of [null,[],{grant:"x".repeat(5000)}]){
+  mock.mock.mockImplementation(async()=>Response.json(body,{status:201}));
+  await assert.rejects(requestShareGrant(signal));
+ }
+ mock.mock.mockImplementation(async()=>new Response(JSON.stringify({grant}),{status:201,headers:{"Content-Type":"text/html"}}));
+ await assert.rejects(requestShareGrant(signal));
+ mock.mock.mockImplementation(async()=>new Response(JSON.stringify({grant}),{status:201,headers:{"Content-Type":"application/json","Content-Length":"1"}}));
+ await assert.rejects(requestShareGrant(signal));
+ mock.mock.mockImplementation(async()=>new Response(new Uint8Array([0xff,0xfe]),{status:201,headers:{"Content-Type":"application/json"}}));
+ await assert.rejects(requestShareGrant(signal));
+ const huge=new ReadableStream({start(controller){controller.enqueue(new Uint8Array(4097));controller.close();}});
+ mock.mock.mockImplementation(async()=>new Response(huge,{status:201,headers:{"Content-Type":"application/json"}}));
+ await assert.rejects(requestShareGrant(signal),/too large/);
 });

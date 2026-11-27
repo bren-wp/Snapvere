@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Share2 } from "lucide-react";
 import { ipc } from "../lib/ipc";
-import { requestShareGrant, recoverCapture, revokeCapture, shareActionCopy, shareCopy, shareMime, shareRecoveryCopy, uploadCapture } from "../lib/shareCapture";
+import { requestShareGrant, recoverCapture, revokeCapture, shareActionCopy, shareCopy, shareMime, shareRecoveryCopy, uploadOrRecoverCapture } from "../lib/shareCapture";
 import type { Screenshot } from "../lib/types";
 
 export default function ShareCaptureDialog({shot,language,onClose}:{shot:Screenshot;language:string;onClose:()=>void}) {
@@ -20,7 +20,7 @@ export default function ShareCaptureDialog({shot,language,onClose}:{shot:Screens
  const [confirmRevoke,setConfirmRevoke]=useState(false);
  const [revoked,setRevoked]=useState(false);
  const [recovered,setRecovered]=useState(false);
- const [result,setResult]=useState<Awaited<ReturnType<typeof uploadCapture>>|null>(null);
+ const [result,setResult]=useState<Awaited<ReturnType<typeof uploadOrRecoverCapture>>|null>(null);
  const supported=Boolean(shareMime(shot.format)) && shot.sizeBytes <= 16*1024*1024;
  useEffect(()=>{dialog.current?.showModal();return()=>controller.current?.abort();},[]);
  async function submit(){
@@ -33,7 +33,7 @@ export default function ShareCaptureDialog({shot,language,onClose}:{shot:Screens
    timeout=setTimeout(()=>abort.abort(),60000);
    const code=await requestShareGrant(abort.signal);
    setGrant(code);
-   const shared=await uploadCapture(bytes,shot.format,code,ttl,abort.signal);
+   const shared=await uploadOrRecoverCapture(bytes,shot.format,code,ttl,abort.signal);
    setResult(shared);setGrant("");
   }catch(error){
    if(abort.signal.aborted)setNotice(actions.cancelled);

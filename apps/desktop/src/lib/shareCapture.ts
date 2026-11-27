@@ -1,5 +1,6 @@
 // Snapvere by Brendigo
 const SHARE_ENDPOINT = "https://snpv.re/api/v1/shares";
+const MAX_SHARE_RESPONSE_BYTES = 4096;
 const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
 const grantPattern = /^\d{13}\.[A-Za-z0-9_-]{32}\.[A-Za-z0-9_-]{43}$/;
 const mime: Record<string, string> = { png:"image/png", jpg:"image/jpeg", jpeg:"image/jpeg", webp:"image/webp", gif:"image/gif", mp4:"video/mp4" };
@@ -22,13 +23,46 @@ export async function revokeCapture(url: string, secret: string, signal: AbortSi
   });
   if (response.status !== 204) throw new Error("Revocation not confirmed");
 }
+/** Bound an untrusted service response before allocating or decoding JSON. */
+async function readShareJson(response: Response): Promise<unknown> {
+  const type = response.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase();
+  const length = response.headers.get("content-length");
+  if (type !== "application/json" || !response.body ||
+      (length !== null && (!/^\d+$/.test(length) || Number(length) > MAX_SHARE_RESPONSE_BYTES))) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error("Invalid sharing response");
+  }
+  const reader = response.body.getReader();
+  const bytes = new Uint8Array(MAX_SHARE_RESPONSE_BYTES);
+  let size = 0;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (value.byteLength > MAX_SHARE_RESPONSE_BYTES - size) {
+        void reader.cancel().catch(() => {});
+        throw new Error("Sharing response too large");
+      }
+      bytes.set(value, size);
+      size += value.byteLength;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  if (length !== null && response.headers.get("content-encoding") === null && Number(length) !== size) {
+    throw new Error("Incomplete sharing response");
+  }
+  const data: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, size)));
+  if (data === null || typeof data !== "object" || Array.isArray(data)) throw new Error("Invalid sharing response");
+  return data;
+}
 export async function requestShareGrant(signal: AbortSignal): Promise<string> {
   const response = await fetch(SHARE_ENDPOINT + "/grant", {
     method: "POST", credentials: "omit", redirect: "error", cache: "no-store",
     referrerPolicy: "no-referrer", signal,
   });
   if (response.status !== 201) throw new Error("Share service unavailable");
-  const data = await response.json() as { grant?: unknown };
+  const data = await readShareJson(response) as { grant?: unknown };
   if (typeof data.grant !== "string" || !grantPattern.test(data.grant)) throw new Error("Invalid grant");
   return data.grant;
 }
@@ -54,8 +88,27 @@ export async function recoverCapture(grant: string, signal: AbortSignal) {
   if (response.status !== 200) throw new Error("No recoverable share");
   return parseShareResponse(response);
 }
+/**
+ * A lost upload acknowledgement may hide a committed link. Recover with the
+ * same one-use grant, never resend media or issue a second grant. Respect
+ * cancellation and retain the original failure if recovery is unavailable.
+ */
+export async function uploadOrRecoverCapture(bytes: ArrayBuffer, format: string, grant: string, ttl: number, signal: AbortSignal) {
+  try {
+    return await uploadCapture(bytes, format, grant, ttl, signal);
+  } catch (originalError) {
+    if (signal.aborted || !shareMime(format) || !grantPattern.test(grant) ||
+        bytes.byteLength < 1 || bytes.byteLength > 16 * 1024 * 1024 ||
+        ![3600,86400,604800].includes(ttl)) throw originalError;
+    try {
+      return await recoverCapture(grant, signal);
+    } catch {
+      throw originalError;
+    }
+  }
+}
 async function parseShareResponse(response: Response) {
-  const data = await response.json() as { url?: unknown; expiresAt?: unknown; revocation?: unknown };
+  const data = await readShareJson(response) as { url?: unknown; expiresAt?: unknown; revocation?: unknown };
   if (typeof data.url !== "string" || typeof data.expiresAt !== "number" || !Number.isSafeInteger(data.expiresAt) || typeof data.revocation !== "string" || !tokenPattern.test(data.revocation)) throw new Error("Invalid share response");
   const token = shareToken(data.url);
   return { url: "https://snpv.re/" + token, expiresAt: data.expiresAt, revocation: data.revocation };

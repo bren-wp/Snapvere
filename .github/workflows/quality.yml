@@ -13,7 +13,10 @@ on:
   workflow_dispatch:
 concurrency:
   group: snapvere-quality-${{ github.ref }}
-  cancel-in-progress: true
+  # Preserve the active native build instead of cancelling it on every edit.
+  # GitHub keeps only the latest pending run for this concurrency group.
+  # Only checks for the exact final commit count toward release acceptance.
+  cancel-in-progress: false
 permissions:
   contents: read
 
