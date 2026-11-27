@@ -1,0 +1,44 @@
+# Snapvere by Brendigo
+name: Native differential package acceptance
+on:
+  pull_request:
+    paths:
+      - 'tools/native-updater/**'
+      - 'tools/native-update-auth/**'
+      - 'tools/build_signed_update.py'
+      - 'tools/test_signed_update_packages.py'
+      - 'tools/delta_patch.py'
+      - 'tools/signed_delta.py'
+      - 'apps/desktop/src-tauri/examples/**'
+      - '.github/workflows/native-updater-packages.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.90.0
+        with:
+          components: clippy
+      - name: Resolve isolated package runner lock for review
+        working-directory: tools/native-updater
+        run: cargo generate-lockfile
+      - name: Check native package runner
+        working-directory: tools/native-updater
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Test real differential packaging with temporary signing keys
+        run: python tools/test_signed_update_packages.py
+      - name: Export dependency resolution for review only
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-updater-lock-review
+          path: tools/native-updater/Cargo.lock
+          retention-days: 7
+          if-no-files-found: error
