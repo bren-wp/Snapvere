@@ -122,6 +122,28 @@ async function readManifestBounded(response: Response): Promise<string> {
   return new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, size));
 }
 
+/** The unsigned empty catalog is informational only. A nonempty installed
+ * catalog must be authenticated against an independently provisioned key.
+ * The signature binds the exact UTF-8 payload, not a reserialized object. */
+export async function authenticateUpdateCatalog(raw: unknown, keyHex: string | undefined): Promise<unknown> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Invalid update catalog");
+  const envelope = raw as Record<string, unknown>;
+  if (envelope.signed === undefined && envelope.signature === undefined) {
+    if (envelope.product === PATCH_PRODUCT && Array.isArray(envelope.packages) && envelope.packages.length === 0) return raw;
+    throw new Error("Unsigned update catalog");
+  }
+  if (Object.keys(envelope).length !== 2 || typeof envelope.signed !== "string" ||
+      envelope.signed.length > MAX_MANIFEST_BYTES || typeof envelope.signature !== "string" ||
+      !/^[0-9a-f]{128}$/.test(envelope.signature) || !keyHex || !/^[0-9a-f]{64}$/.test(keyHex)) {
+    throw new Error("Update catalog has no trusted signature");
+  }
+  const bytes = (hex: string) => Uint8Array.from(hex.match(/../g) ?? [], part => Number.parseInt(part, 16));
+  const key = await crypto.subtle.importKey("raw", bytes(keyHex), {name:"Ed25519"}, false, ["verify"]);
+  const message = new TextEncoder().encode("Snapvere signed catalog v1\n" + envelope.signed);
+  if (!await crypto.subtle.verify({name:"Ed25519"}, key, bytes(envelope.signature), message)) throw new Error("Invalid update catalog signature");
+  return JSON.parse(envelope.signed) as unknown;
+}
+
 export async function checkForUpdates(
   currentVersion: string,
   cancelSignal?: AbortSignal,
@@ -152,7 +174,9 @@ export async function checkForUpdates(
       throw new Error("Unexpected update response");
     }
     const text = await readManifestBounded(response);
-    return parseUpdateManifest(JSON.parse(text) as unknown, currentVersion, target);
+    const raw: unknown = JSON.parse(text);
+    const catalog = target ? await authenticateUpdateCatalog(raw, import.meta.env?.VITE_SNAPVERE_UPDATE_PUBLIC_KEY) : raw;
+    return parseUpdateManifest(catalog, currentVersion, target);
   } finally {
     controller.abort();
     clearTimeout(timeout);

@@ -173,3 +173,26 @@ test("delta catalog isolates installed editions, platforms and exact base versio
   assert.throws(()=>parseUpdateManifest({...manifest,packages:packages.map((p,i)=>i===0?{...p,name:"Snapvere-Setup.exe"}:p)},"0.2.38",targets[0]));
   assert.equal(parseUpdateManifest(manifest,"0.2.39",targets[0]),null);
 });
+
+test("installed update feed authenticates exact catalog bytes and fails closed without a provisioned key", async () => {
+  const {authenticateUpdateCatalog, PATCH_PRODUCT}=await import('../src/lib/updateFeed.ts');
+  const keys=await crypto.subtle.generateKey("Ed25519",true,["sign","verify"]);
+  const key=Buffer.from(await crypto.subtle.exportKey("raw",keys.publicKey)).toString("hex");
+  const catalog={product:PATCH_PRODUCT,version:"0.2.40",channel:"stable",packages:[
+    {name:"Snapvere-Update.exe",kind:"delta",size:500000,sha256:"a".repeat(64),from:"0.2.39"}]};
+  const signed=JSON.stringify(catalog);
+  const signature=Buffer.from(await crypto.subtle.sign("Ed25519",keys.privateKey,new TextEncoder().encode("Snapvere signed catalog v1\n"+signed))).toString("hex");
+  const envelope={signed,signature};
+  assert.deepEqual(await authenticateUpdateCatalog(envelope,key),catalog);
+  await assert.rejects(authenticateUpdateCatalog(envelope,undefined));
+  await assert.rejects(authenticateUpdateCatalog(catalog,key));
+  await assert.rejects(authenticateUpdateCatalog({...envelope,signed:signed+" "},key));
+  await assert.rejects(authenticateUpdateCatalog({...envelope,signature:"0".repeat(128)},key));
+  await assert.rejects(authenticateUpdateCatalog({...envelope,packages:catalog.packages},key));
+  assert.deepEqual(await authenticateUpdateCatalog({...catalog,packages:[]},undefined),{...catalog,packages:[]});
+  const prior=globalThis.fetch;
+  try{
+    globalThis.fetch=async()=>Response.json(catalog);
+    await assert.rejects(checkForUpdates("0.2.39",undefined,{os:"windows",edition:"free"}),/Unsigned/);
+  }finally{globalThis.fetch=prior;}
+});

@@ -7,14 +7,27 @@ function update_names(): array {
 function update_version(mixed $v): bool {
     return is_string($v) && preg_match('/\A(?:0|[1-9][0-9]{0,5})\.(?:0|[1-9][0-9]{0,5})\.(?:0|[1-9][0-9]{0,5})\z/',$v)===1;
 }
-function update_catalog(string $path): ?array {
+// Provisioned only by an accepted production package build, never by a download.
+const UPDATE_PUBLIC_KEY_HEX = '';
+function update_catalog(string $path,string $trustedKey=UPDATE_PUBLIC_KEY_HEX): ?array {
     if (!is_file($path)||is_link($path)) return null;
     $raw=@file_get_contents($path,false,null,0,8193);
     if ($raw===false||strlen($raw)>8192) return null;
     $d=json_decode($raw,true,16);
+    if (!is_array($d)) return null;
+    $authenticated=false;
+    if (array_key_exists('signed',$d)||array_key_exists('signature',$d)) {
+        if (count($d)!==2||!is_string($d['signed']??null)||strlen($d['signed'])>8192||
+            !is_string($d['signature']??null)||!preg_match('/\A[0-9a-f]{128}\z/',$d['signature'])||
+            !preg_match('/\A[0-9a-f]{64}\z/',$trustedKey)||!function_exists('sodium_crypto_sign_verify_detached')) return null;
+        if (!sodium_crypto_sign_verify_detached(hex2bin($d['signature']),"Snapvere signed catalog v1\n".$d['signed'],hex2bin($trustedKey))) return null;
+        $d=json_decode($d['signed'],true,16);
+        $authenticated=true;
+    }
     if (!is_array($d)||($d['product']??'')!=='snapvere-installed-delta-v1'||
         ($d['channel']??'')!=='stable'||!update_version($d['version']??null)||
         !is_array($d['packages']??null)||count($d['packages'])>4) return null;
+    if ($d['packages']!==[]&&!$authenticated) return null;
     $remaining=array_fill_keys(update_names(),true);
     foreach ($d['packages'] as $p) {
         if (!is_array($p)||!is_string($p['name']??null)||!isset($remaining[$p['name']])||

@@ -4,6 +4,9 @@
 from pathlib import Path
 from base64 import b64encode
 import json
+import os
+import subprocess
+import tempfile
 from shutil import copyfile
 from playwright.sync_api import sync_playwright
 from PIL import Image, ImageChops
@@ -21,15 +24,10 @@ TAURI_PREVIEW = r"""
     if (resource === "https://update.snapvere.com/stable.json") {
       window.__SNAPVERE_TEST_UPDATE_REQUESTS = (window.__SNAPVERE_TEST_UPDATE_REQUESTS || 0) + 1;
       const scenario = new URL(window.location.href).searchParams.has("previewUpdate");
-      return Promise.resolve(new Response(JSON.stringify({
-        product: "snapvere-installed-delta-v1",
-        version: scenario ? "999.0.0" : "0.0.0",
-        channel: "stable",
-        packages: ["Snapvere", "Snapvere-Pro"].flatMap(prefix =>
-          ["-Update.exe", "-Linux-Update.svpatch"]
-            .map(suffix => ({name:prefix+suffix,size:1500000,sha256:"a".repeat(64),kind:"delta",from:"__INSTALLED_VERSION__"}))),
-        notes: scenario ? "Preview of the update-notification design" : ""
-      }), { status: 200, headers: { "content-type": "application/json" } }));
+      const catalog = scenario ? __SIGNED_UPDATE_CATALOG__ : {
+        product: "snapvere-installed-delta-v1", version: "0.0.0", channel: "stable", packages: []
+      };
+      return Promise.resolve(new Response(JSON.stringify(catalog), { status: 200, headers: { "content-type": "application/json" } }));
     }
     return realFetch(resource, options);
   };
@@ -164,6 +162,20 @@ TAURI_PREVIEW = r"""
 })();
 """
 
+def signed_preview_catalog():
+    installed=json.loads((ROOT / "apps/desktop/package.json").read_text(encoding="utf-8"))["version"]
+    catalog={"product":"snapvere-installed-delta-v1","version":"999.0.0","channel":"stable",
+             "packages":[{"name":prefix+suffix,"size":1500000,"sha256":"a"*64,"kind":"delta","from":installed}
+                         for prefix in ("Snapvere","Snapvere-Pro") for suffix in ("-Update.exe","-Linux-Update.svpatch")],
+             "notes":"Preview of the update-notification design"}
+    signed=json.dumps(catalog,separators=(",",":"))
+    with tempfile.TemporaryDirectory() as work:
+        message=Path(work)/"message"
+        message.write_bytes(b"Snapvere signed catalog v1\n"+signed.encode("utf-8"))
+        signature=subprocess.check_output(["openssl","pkeyutl","-sign","-rawin","-inkey",
+                                           os.environ["SNAPVERE_PREVIEW_PRIVATE_KEY"],"-in",str(message)])
+    return json.dumps({"signed":signed,"signature":signature.hex()})
+
 def english_screenshot(page, **kwargs):
     page.wait_for_function("() => document.documentElement.lang === 'en'", timeout=10000)
     return page.screenshot(**kwargs)
@@ -178,7 +190,7 @@ with sync_playwright() as p:
     assert editor_source.is_file(), "SNAPVERE editor preview fixture is missing"
     editor_uri = "data:image/png;base64," + b64encode(editor_source.read_bytes()).decode("ascii")
     app.add_init_script("window.__SNAPVERE_EDITOR_IMAGE = " + json.dumps(editor_uri))
-    app.add_init_script(TAURI_PREVIEW.replace("__INSTALLED_VERSION__", json.loads((ROOT / "apps/desktop/package.json").read_text(encoding="utf-8"))["version"]))
+    app.add_init_script(TAURI_PREVIEW.replace("__SIGNED_UPDATE_CATALOG__", signed_preview_catalog()))
     page = app.new_page()
     page.goto("http://127.0.0.1:1420/", wait_until="networkidle")
     page.get_by_role("banner").get_by_role("button", name="Capture region").wait_for(timeout=30000)
