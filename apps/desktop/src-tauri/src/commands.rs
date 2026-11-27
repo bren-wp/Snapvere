@@ -70,6 +70,7 @@ pub struct PlatformCapabilities {
     system_audio: bool,
     cursor_in_recordings: bool,
     linux_audio_picker: bool,
+    installed_update_eligible: bool,
 }
 
 /// Native platform contract; a shared React UI must not promise unsupported
@@ -88,6 +89,7 @@ fn platform_capabilities() -> PlatformCapabilities {
         system_audio: cfg!(windows),
         cursor_in_recordings: cfg!(windows),
         linux_audio_picker: cfg!(all(target_os = "linux", feature = "linux-native-media")),
+        installed_update_eligible: false,
     }
 }
 
@@ -96,7 +98,49 @@ pub fn get_platform_capabilities(
     window: tauri::WebviewWindow,
 ) -> Result<PlatformCapabilities, String> {
     require_window_label(window.label(), &["home", "settings", "overlay"])?;
-    Ok(platform_capabilities())
+    let mut capabilities = platform_capabilities();
+    capabilities.installed_update_eligible = installed_update_eligible(window.app_handle());
+    Ok(capabilities)
+}
+
+/// The installer includes a resource marker; standalone EXEs do not.
+/// Linux AppImages are explicitly excluded even though they contain resources.
+/// This is distribution classification, not authentication of an updater.
+fn installed_update_eligible(app: &AppHandle) -> bool {
+    if !cfg!(any(windows, target_os = "linux")) {
+        return false;
+    }
+    let Ok(exe) = std::env::current_exe() else {
+        return false;
+    };
+    #[cfg(windows)]
+    if !exe
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.eq_ignore_ascii_case("snapvere.exe"))
+    {
+        return false;
+    }
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("APPIMAGE").is_some()
+        || std::env::var_os("APPDIR").is_some()
+        || !matches!(exe.to_str(), Some("/usr/bin/snapvere" | "/usr/bin/snapvere-pro"))
+    {
+        return false;
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    let _ = exe;
+    let Ok(resources) = app.path().resource_dir() else {
+        return false;
+    };
+    let marker = resources.join("update-install.marker");
+    let Ok(metadata) = fs::symlink_metadata(&marker) else {
+        return false;
+    };
+    metadata.is_file()
+        && !metadata.file_type().is_symlink()
+        && metadata.len() == 22
+        && fs::read(marker).is_ok_and(|bytes| bytes == b"snapvere-installed-v1\n")
 }
 
 /// Device discovery is available only in the explicitly enabled native Linux build.

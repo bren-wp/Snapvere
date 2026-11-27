@@ -22,12 +22,12 @@ TAURI_PREVIEW = r"""
       window.__SNAPVERE_TEST_UPDATE_REQUESTS = (window.__SNAPVERE_TEST_UPDATE_REQUESTS || 0) + 1;
       const scenario = new URL(window.location.href).searchParams.has("previewUpdate");
       return Promise.resolve(new Response(JSON.stringify({
-        product: "snapvere-tauri-windows",
+        product: "snapvere-installed-delta-v1",
         version: scenario ? "999.0.0" : "0.0.0",
         channel: "stable",
         packages: ["Snapvere", "Snapvere-Pro"].flatMap(prefix =>
-          ["-Setup.exe", "-Setup.msi", "-Portable.exe", "-Linux-amd64.deb", "-Linux-x86_64.AppImage"]
-            .map(suffix => ({name:prefix+suffix,size:1500000,sha256:"a".repeat(64)}))),
+          ["-Update.exe", "-Linux-Update.svpatch"]
+            .map(suffix => ({name:prefix+suffix,size:1500000,sha256:"a".repeat(64),kind:"delta",from:"__INSTALLED_VERSION__"}))),
         notes: scenario ? "Preview of the update-notification design" : ""
       }), { status: 200, headers: { "content-type": "application/json" } }));
     }
@@ -86,7 +86,8 @@ TAURI_PREVIEW = r"""
           mp4: !linux,
           microphone: !linux,
           systemAudio: !linux,
-          cursorInRecordings: !linux
+          cursorInRecordings: !linux,
+          installedUpdateEligible: !new URL(window.location.href).searchParams.has("previewPortable")
         };
       }
       if (command === "get_app_language") return "en";
@@ -177,7 +178,7 @@ with sync_playwright() as p:
     assert editor_source.is_file(), "SNAPVERE editor preview fixture is missing"
     editor_uri = "data:image/png;base64," + b64encode(editor_source.read_bytes()).decode("ascii")
     app.add_init_script("window.__SNAPVERE_EDITOR_IMAGE = " + json.dumps(editor_uri))
-    app.add_init_script(TAURI_PREVIEW)
+    app.add_init_script(TAURI_PREVIEW.replace("__INSTALLED_VERSION__", json.loads((ROOT / "apps/desktop/package.json").read_text(encoding="utf-8"))["version"]))
     page = app.new_page()
     page.goto("http://127.0.0.1:1420/", wait_until="networkidle")
     page.get_by_role("banner").get_by_role("button", name="Capture region").wait_for(timeout=30000)
@@ -417,7 +418,7 @@ with sync_playwright() as p:
                                 device_scale_factor=1, color_scheme="light", reduced_motion="reduce")
     light.add_init_script("try { localStorage.setItem('snapvere-theme', 'light'); } catch {}")
     light.add_init_script("window.__SNAPVERE_EDITOR_IMAGE = " + json.dumps(editor_uri))
-    light.add_init_script(TAURI_PREVIEW)
+    light.add_init_script(TAURI_PREVIEW.replace("__INSTALLED_VERSION__", json.loads((ROOT / "apps/desktop/package.json").read_text(encoding="utf-8"))["version"]))
     light_home = light.new_page()
     light_home.goto("http://127.0.0.1:1420/", wait_until="networkidle")
     light_home.get_by_role("group", name="Capture actions").get_by_role(
@@ -480,7 +481,7 @@ with sync_playwright() as p:
     app.close()
     compact = browser.new_context(viewport={"width": 920, "height": 650},
                                   device_scale_factor=1, color_scheme="dark", reduced_motion="reduce")
-    compact.add_init_script(TAURI_PREVIEW)
+    compact.add_init_script(TAURI_PREVIEW.replace("__INSTALLED_VERSION__", json.loads((ROOT / "apps/desktop/package.json").read_text(encoding="utf-8"))["version"]))
     compact_page = compact.new_page()
     compact_page.goto("http://127.0.0.1:1420/", wait_until="networkidle")
     compact_page.get_by_role("banner").get_by_role("button", name="Capture region").wait_for(timeout=30000)
@@ -502,7 +503,7 @@ with sync_playwright() as p:
                     "localStorage.setItem('snapvere-theme', " + json.dumps(theme) + ")"
                 )
                 context.add_init_script("window.__SNAPVERE_EDITOR_IMAGE = " + json.dumps(editor_uri))
-                context.add_init_script(TAURI_PREVIEW)
+                context.add_init_script(TAURI_PREVIEW.replace("__INSTALLED_VERSION__", json.loads((ROOT / "apps/desktop/package.json").read_text(encoding="utf-8"))["version"]))
                 gallery = context.new_page()
                 gallery.goto(
                     f"http://127.0.0.1:{port}/?previewGalleryParity=1"
@@ -621,7 +622,7 @@ with sync_playwright() as p:
         viewport={"width": 1440, "height": 900}, device_scale_factor=1,
         color_scheme="dark"
     )
-    selection.add_init_script(TAURI_PREVIEW)
+    selection.add_init_script(TAURI_PREVIEW.replace("__INSTALLED_VERSION__", json.loads((ROOT / "apps/desktop/package.json").read_text(encoding="utf-8"))["version"]))
     selection.add_init_script("window.__SNAPVERE_PREVIEW_FRAME_URL = " + json.dumps(preview_frame))
     capture_page = selection.new_page()
     capture_page.goto("http://127.0.0.1:1420/#overlay", wait_until="networkidle")
@@ -670,7 +671,7 @@ with sync_playwright() as p:
             scaled.add_init_script(
                 "localStorage.setItem('snapvere-theme', " + json.dumps(theme) + ")"
             )
-            scaled.add_init_script(TAURI_PREVIEW)
+            scaled.add_init_script(TAURI_PREVIEW.replace("__INSTALLED_VERSION__", json.loads((ROOT / "apps/desktop/package.json").read_text(encoding="utf-8"))["version"]))
             for screen, address in (("home", "/"), ("settings", "/#settings")):
                 view = scaled.new_page()
                 view.goto("http://127.0.0.1:1420" + address, wait_until="networkidle")

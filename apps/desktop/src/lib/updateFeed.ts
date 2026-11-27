@@ -9,6 +9,7 @@
 export const UPDATE_FEED_URL = "https://update.snapvere.com/stable.json";
 export const OFFICIAL_DOWNLOAD_URL = "https://snapvere.com/download/tauri/";
 export const UPDATE_PRODUCT = "snapvere-tauri-windows";
+export const PATCH_PRODUCT = "snapvere-installed-delta-v1";
 /** A Windows-only release feed must never advertise Windows installers on Linux. */
 export function canCheckWindowsUpdates(os: string | null): boolean {
   return os === "windows";
@@ -18,20 +19,20 @@ const TIMEOUT_MS = 6500;
 
 type Version = readonly [number, number, number];
 export type UpdateTarget = Readonly<{ os: "windows" | "linux"; edition: "free" | "pro" }>;
-export type UpdatePackage = Readonly<{ name: string; size: number; sha256: string }>;
+export type UpdatePackage = Readonly<{ name: string; size: number; sha256: string; from: string; kind: "delta" }>;
 export type AvailableUpdate = Readonly<{ version: string; notes: string; packages?: readonly UpdatePackage[] }>;
-export function updateTarget(os: string | null, pro: boolean): UpdateTarget | null {
-  return os === "windows" || os === "linux" ? { os, edition: pro ? "pro" : "free" } : null;
+export function updateTarget(os: string | null, pro: boolean, installed: boolean): UpdateTarget | null {
+  return installed && (os === "windows" || os === "linux") ? { os, edition: pro ? "pro" : "free" } : null;
 }
 export function packageNames(target: UpdateTarget): string[] {
   const prefix = target.edition === "pro" ? "Snapvere-Pro" : "Snapvere";
   return target.os === "windows"
-    ? ["-Setup.exe", "-Setup.msi", "-Portable.exe"].map(s => prefix+s)
-    : ["-Linux-amd64.deb", "-Linux-x86_64.AppImage"].map(s => prefix+s);
+    ? [prefix+"-Update.exe"]
+    : [prefix+"-Linux-Update.svpatch"];
 }
-export function updateDownloadUrl(version: string, name: string, target: UpdateTarget): string {
-  if (!parseVersion(version) || !packageNames(target).includes(name)) throw new Error("Invalid update package");
-  return "https://update.snapvere.com/download.php?" + new URLSearchParams({version, package:name}).toString();
+export function updateDownloadUrl(version: string, name: string, target: UpdateTarget, from: string): string {
+  if (!isNewerVersion(version, from) || !packageNames(target).includes(name)) throw new Error("Invalid update package");
+  return "https://update.snapvere.com/download.php?" + new URLSearchParams({version, from, package:name}).toString();
 }
 
 export function parseVersion(value: string): Version | null {
@@ -59,7 +60,7 @@ export function parseUpdateManifest(raw: unknown, currentVersion: string, target
     throw new Error("Invalid update manifest");
   }
   const record = raw as Record<string, unknown>;
-  if (record.product !== UPDATE_PRODUCT || typeof record.version !== "string" ||
+  if (record.product !== (target ? PATCH_PRODUCT : UPDATE_PRODUCT) || typeof record.version !== "string" ||
       !parseVersion(record.version)) {
     throw new Error("Update manifest does not describe the official release channel");
   }
@@ -73,7 +74,7 @@ export function parseUpdateManifest(raw: unknown, currentVersion: string, target
   if (!isNewerVersion(record.version, currentVersion)) return null;
   const result = { version: record.version, notes: (record.notes as string | undefined) ?? "" };
   if (!target) return result;
-  if (!Array.isArray(record.packages) || record.packages.length !== 10 || record.channel !== "stable") {
+  if (!Array.isArray(record.packages) || record.packages.length > 4 || record.channel !== "stable") {
     throw new Error("No verified package catalog");
   }
   const names = new Set([
@@ -85,11 +86,13 @@ export function parseUpdateManifest(raw: unknown, currentVersion: string, target
     if (!rawPackage || typeof rawPackage !== "object" || Array.isArray(rawPackage)) throw new Error("Invalid package");
     const item = rawPackage as Record<string, unknown>;
     if (typeof item.name !== "string" || !names.delete(item.name) ||
-        typeof item.size !== "number" || !Number.isSafeInteger(item.size) || item.size < 1000000 ||
-        typeof item.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(item.sha256)) throw new Error("Invalid package");
-    packages.push({name:item.name,size:item.size,sha256:item.sha256});
+        typeof item.size !== "number" || !Number.isSafeInteger(item.size) || item.size < 1 || item.size > 536870912 ||
+        typeof item.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(item.sha256) ||
+        item.kind !== "delta" || typeof item.from !== "string" || !isNewerVersion(record.version,item.from)) throw new Error("Invalid package");
+    packages.push({name:item.name,size:item.size,sha256:item.sha256,from:item.from,kind:"delta"});
   }
-  const matching = packageNames(target).map(name => packages.find(item => item.name === name)!);
+  const matching = packages.filter(item => packageNames(target).includes(item.name) && item.from === currentVersion);
+  if (!matching.length) throw new Error("No compatible update package");
   return {...result, packages:matching};
 }
 

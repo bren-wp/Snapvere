@@ -82,6 +82,7 @@ export interface PlatformCapabilities {
   cursorInRecordings: boolean;
   /** Only opt-in Linux builds may display the native device picker. */
   linuxAudioPicker?: boolean;
+  installedUpdateEligible?: boolean;
 }
 
 // ── snimanje ekrana ──

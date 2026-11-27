@@ -15,7 +15,7 @@ type TextSet = Readonly<{
 const en: TextSet = {
   available: "New Snapvere version available", check: "Check for updates",
   checking: "Checking for updates…", upToDate: "You have the latest version.",
-  unreachable: "Update server is unavailable. Try again later.",
+  unreachable: "No compatible update is available, or the update server is unavailable.",
   download: "Download update", settings: "View update in Settings", close: "Dismiss",
   automatic: "Check automatically on startup",
   disabled: "Automatic checks are off. Use Check for updates to check manually.",
@@ -23,47 +23,47 @@ const en: TextSet = {
 const words: Partial<Record<Language, TextSet>> = {
   hr: { available: "Dostupna je nova verzija Snapverea", check: "Provjeri ažuriranja",
     checking: "Provjeravam ažuriranja…", upToDate: "Imate najnoviju verziju.",
-    unreachable: "Poslužitelj za ažuriranja nije dostupan. Pokušajte poslije.",
+    unreachable: "Nema kompatibilnog ažuriranja ili poslužitelj nije dostupan.",
     download: "Preuzmi ažuriranje", settings: "Pogledaj ažuriranje u postavkama", close: "Zatvori", automatic: "Provjeri automatski pri pokretanju", disabled: "Automatska provjera je isključena. Ažuriranja možete provjeriti ručno." },
   de: { available: "Neue Snapvere-Version verfügbar", check: "Auf Updates prüfen",
     checking: "Suche nach Updates…", upToDate: "Sie haben die neueste Version.",
-    unreachable: "Update-Server nicht erreichbar. Später erneut versuchen.",
+    unreachable: "Kein kompatibles Update verfügbar oder Update-Server nicht erreichbar.",
     download: "Update herunterladen", settings: "Update in Einstellungen ansehen", close: "Schließen", automatic: "Beim Start automatisch prüfen", disabled: "Automatische Updatesuche ist aus. Nutzen Sie die manuelle Prüfung." },
   es: { available: "Nueva versión de Snapvere disponible", check: "Buscar actualizaciones",
     checking: "Buscando actualizaciones…", upToDate: "Tienes la última versión.",
-    unreachable: "Servidor de actualizaciones no disponible. Inténtalo más tarde.",
+    unreachable: "No hay una actualización compatible o el servidor no está disponible.",
     download: "Descargar actualización", settings: "Ver actualización en Ajustes", close: "Cerrar", automatic: "Comprobar automáticamente al iniciar", disabled: "La búsqueda automática está desactivada. Puede comprobar manualmente." },
   fr: { available: "Nouvelle version de Snapvere disponible", check: "Rechercher des mises à jour",
     checking: "Recherche de mises à jour…", upToDate: "Vous avez la dernière version.",
-    unreachable: "Serveur de mises à jour indisponible. Réessayez plus tard.",
+    unreachable: "Aucune mise à jour compatible ou serveur indisponible.",
     download: "Télécharger la mise à jour", settings: "Voir la mise à jour dans Paramètres", close: "Fermer", automatic: "Vérifier automatiquement au démarrage", disabled: "La vérification automatique est désactivée. Vérifiez manuellement." },
   it: { available: "Nuova versione di Snapvere disponibile", check: "Controlla aggiornamenti",
     checking: "Ricerca aggiornamenti…", upToDate: "Hai l'ultima versione.",
-    unreachable: "Server degli aggiornamenti non disponibile. Riprova più tardi.",
+    unreachable: "Nessun aggiornamento compatibile o server non disponibile.",
     download: "Scarica aggiornamento", settings: "Visualizza aggiornamento in Impostazioni", close: "Chiudi", automatic: "Controlla automaticamente all'avvio", disabled: "La verifica automatica è disattivata. Controlla manualmente." },
   pt: { available: "Nova versão do Snapvere disponível", check: "Procurar atualizações",
     checking: "A procurar atualizações…", upToDate: "Tem a versão mais recente.",
-    unreachable: "Servidor de atualizações indisponível. Tente mais tarde.",
+    unreachable: "Não há atualização compatível ou o servidor está indisponível.",
     download: "Descarregar atualização", settings: "Ver atualização nas Definições", close: "Fechar", automatic: "Verificar automaticamente ao iniciar", disabled: "A verificação automática está desativada. Verifique manualmente." },
   nl: { available: "Nieuwe Snapvere-versie beschikbaar", check: "Controleren op updates",
     checking: "Updates controleren…", upToDate: "Je hebt de nieuwste versie.",
-    unreachable: "Updateserver niet beschikbaar. Probeer het later opnieuw.",
+    unreachable: "Geen compatibele update beschikbaar of updateserver niet bereikbaar.",
     download: "Update downloaden", settings: "Update in Instellingen bekijken", close: "Sluiten", automatic: "Automatisch controleren bij starten", disabled: "Automatisch controleren staat uit. Controleer handmatig." },
   pl: { available: "Dostępna jest nowa wersja Snapvere", check: "Sprawdź aktualizacje",
     checking: "Sprawdzanie aktualizacji…", upToDate: "Masz najnowszą wersję.",
-    unreachable: "Serwer aktualizacji jest niedostępny. Spróbuj później.",
+    unreachable: "Brak zgodnej aktualizacji lub serwer jest niedostępny.",
     download: "Pobierz aktualizację", settings: "Pokaż aktualizację w Ustawieniach", close: "Zamknij", automatic: "Sprawdzaj automatycznie przy uruchomieniu", disabled: "Automatyczne sprawdzanie jest wyłączone. Sprawdź ręcznie." },
   cs: { available: "Je dostupná nová verze Snapvere", check: "Zkontrolovat aktualizace",
     checking: "Kontrola aktualizací…", upToDate: "Máte nejnovější verzi.",
-    unreachable: "Aktualizační server není dostupný. Zkuste to později.",
+    unreachable: "Není dostupná kompatibilní aktualizace nebo server.",
     download: "Stáhnout aktualizaci", settings: "Zobrazit aktualizaci v Nastavení", close: "Zavřít", automatic: "Automaticky kontrolovat při spuštění", disabled: "Automatická kontrola je vypnutá. Zkontrolujte ručně." },
   sk: { available: "Je dostupná nová verzia Snapvere", check: "Skontrolovať aktualizácie",
     checking: "Kontrola aktualizácií…", upToDate: "Máte najnovšiu verziu.",
-    unreachable: "Aktualizačný server nie je dostupný. Skúste to neskôr.",
+    unreachable: "Kompatibilná aktualizácia alebo server nie sú dostupné.",
     download: "Stiahnuť aktualizáciu", settings: "Zobraziť aktualizáciu v Nastaveniach", close: "Zavrieť", automatic: "Automaticky kontrolovať pri spustení", disabled: "Automatická kontrola je vypnutá. Skontrolujte ručne." },
   sl: { available: "Na voljo je nova različica Snapvere", check: "Preveri posodobitve",
     checking: "Preverjanje posodobitev…", upToDate: "Imate najnovejšo različico.",
-    unreachable: "Strežnik za posodobitve ni dosegljiv. Poskusite pozneje.",
+    unreachable: "Združljiva posodobitev ali strežnik nista na voljo.",
     download: "Prenesi posodobitev", settings: "Poglej posodobitev v nastavitvah", close: "Zapri", automatic: "Samodejno preveri ob zagonu", disabled: "Samodejno preverjanje je izklopljeno. Preverite ročno." },
 };
 
@@ -94,11 +94,15 @@ export default function UpdateNotice({
     catch { return false; }
   });
   const [platformOs, setPlatformOs] = useState<string | null>(null);
+  const [installed, setInstalled] = useState(false);
   useEffect(() => {
     let mounted = true;
     // Fail closed until the trusted native platform has been identified.
     void ipc.getPlatformCapabilities().then((caps) => {
-      if (mounted) setPlatformOs(caps.os);
+      if (mounted) {
+        setPlatformOs(caps.os);
+        setInstalled(caps.installedUpdateEligible === true);
+      }
     }).catch((error) => {
       // A missing native bridge must not initiate networking or leak diagnostic details.
       void error;
@@ -109,7 +113,7 @@ export default function UpdateNotice({
   const lastAttemptAt = useRef(0);
 
   const check = useCallback(async () => {
-    if (!updateTarget(platformOs, IS_PRO)) {
+    if (!updateTarget(platformOs, IS_PRO, installed)) {
       controller.current?.abort();
       setAvailable(null);
       setState("idle");
@@ -121,7 +125,7 @@ export default function UpdateNotice({
     controller.current = active;
     setState("checking");
     try {
-      const target = updateTarget(platformOs, IS_PRO);
+      const target = updateTarget(platformOs, IS_PRO, installed);
       if (!target) return;
       const info = await checkForUpdates(installedVersion, active.signal, target);
       if (!active.signal.aborted) {
@@ -138,9 +142,9 @@ export default function UpdateNotice({
         setState("error");
       }
     }
-  }, [platformOs]);
+  }, [platformOs, installed]);
   useEffect(() => {
-    if (!updateTarget(platformOs, IS_PRO)) {
+    if (!updateTarget(platformOs, IS_PRO, installed)) {
       controller.current?.abort();
       setAvailable(null);
       setState("idle");
@@ -182,7 +186,7 @@ export default function UpdateNotice({
       window.clearInterval(interval);
       window.removeEventListener("focus", onFocus);
     };
-  }, [platformOs, autoEnabled, check]);
+  }, [platformOs, installed, autoEnabled, check]);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -219,7 +223,7 @@ export default function UpdateNotice({
   };
 
   // Only an explicitly supported native platform may use the release catalog.
-  if (!updateTarget(platformOs, IS_PRO)) return null;
+  if (!updateTarget(platformOs, IS_PRO, installed)) return null;
   if (mode === "home" && !shouldShowReleaseNotice(available, dismissedVersion)) return null;
   return (
     <section
@@ -244,9 +248,9 @@ export default function UpdateNotice({
             </select>
           )}
           <button type="button" disabled={mode === "settings" && !selectedPackage} onClick={() => {
-              const target = updateTarget(platformOs, IS_PRO);
+              const target = updateTarget(platformOs, IS_PRO, installed);
               if (mode === "home") void onAction();
-              else if (target && selectedPackage) void onAction(updateDownloadUrl(available.version, selectedPackage, target));
+              else if (target && selectedPackage) void onAction(updateDownloadUrl(available.version, selectedPackage, target, installedVersion));
             }}
             className="rounded-lg bg-accent px-3 py-2 font-semibold text-white focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
             {mode === "settings" ? w.download : w.settings}
