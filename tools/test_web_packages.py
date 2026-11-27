@@ -78,11 +78,39 @@ def main(directory):
             code, _, body = request(api+"/grant", "POST", origin, b"")
             assert code == 201
             grant = json.loads(body)["grant"]
-            original_key = (tmp / "private/key").read_bytes()
+            private = tmp / "private"
+            original_key = (private / "key").read_bytes()
+            # Simulate known expired data, a current share, unknown extra
+            # content, malformed metadata and old/recent replay markers.
+            now = int(time.time()*1000)
+            fixture = b"retention fixture"
+            def fixture_share(letter, expiry, extra=False, malformed=False):
+                folder = private / (letter * 64)
+                folder.mkdir(mode=0o700)
+                (folder/"media").write_bytes(fixture)
+                metadata = {"type":"image/png","size":len(fixture),"expiresAt":expiry,
+                            "sha256":hashlib.sha256(fixture).hexdigest(),"grant":"1"*64,"revoke":"2"*64}
+                (folder/"meta.json").write_text("invalid" if malformed else json.dumps(metadata))
+                if extra:
+                    (folder/"unknown").write_bytes(b"keep")
+                return folder
+            expired = fixture_share("a", now-1000)
+            active = fixture_share("b", now+3600000)
+            unknown = fixture_share("c", now-1000, extra=True)
+            malformed = fixture_share("d", now-1000, malformed=True)
+            old_marker=private/("used-"+"e"*64)
+            current_marker=private/("used-"+"f"*64)
+            old_marker.write_text(str(now-91000000))
+            current_marker.write_text(str(now))
             for _ in range(3):
                 assert request(api+"/grant", "POST", origin, b"")[0] == 201
             assert request(api+"/grant", "POST", origin, b"")[0] == 429
-            assert (tmp / "private/key").read_bytes() == original_key
+            assert not expired.exists() and not old_marker.exists()
+            assert (active/"media").read_bytes()==fixture
+            assert (unknown/"unknown").read_bytes()==b"keep"
+            assert (malformed/"meta.json").read_text()=="invalid"
+            assert current_marker.read_text()==str(now)
+            assert (private/"key").read_bytes() == original_key
             png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jR1sAAAAASUVORK5CYII=")
             headers = {"Authorization": "Bearer " + grant, "Content-Type": "image/png", "X-Share-TTL": "3600"}
             assert request(api, "POST", {**headers, "Authorization": "Bearer bad"}, png)[0] == 401

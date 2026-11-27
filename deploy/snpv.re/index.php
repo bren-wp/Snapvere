@@ -49,6 +49,7 @@ try {
         try {
             $used=$root.'/used-'.hash('sha256',$bearer);
             if (file_exists($used)||file_exists($dir)) fail_share(409);
+            maintain_expired($root,milliseconds());
             if (storage_bytes($root)+$size+4096>QUOTA || disk_free_space($root)<$size+67108864) fail_share(507);
             $pending=$root.'/pending-'.bin2hex(random_bytes(16));
             if (!mkdir($pending,0700)) throw new RuntimeException();

@@ -64,6 +64,8 @@ function issue_grant(string $root,string $key): string {
             if ($old['hour']===$bucket) $rate=$old;
         }
         if ($rate['total']>=60||($rate['clients'][$id]??0)>=4) { header('Retry-After: 3600'); fail_share(429); }
+        // The exclusive upload lock also serializes bounded retention cleanup.
+        maintain_expired($root,milliseconds());
         if (storage_bytes($root)+4096>QUOTA || disk_free_space($root)<67108864) fail_share(507);
         $rate['total']++; $rate['clients'][$id]=($rate['clients'][$id]??0)+1;
         $tmp=$root.'/rate-'.bin2hex(random_bytes(12)).'.tmp';
@@ -111,10 +113,48 @@ function storage_bytes(string $root): int {
     foreach ($it as $entry) { if (++$count>100000||$it->getDepth()>3||$entry->isLink()) throw new RuntimeException(); if ($entry->isFile()) $bytes+=$entry->getSize(); elseif (!$entry->isDir()) throw new RuntimeException(); }
     return $bytes;
 }
+// Called only under the exclusive storage lock. Never recursively delete an
+// unrecognized directory or remove an unexpired or malformed share. A reader
+// with an already-open handle may finish after expiry or revocation.
+function maintain_expired(string $root,int $now): void {
+    $removed=0; $scanned=0;
+    $entries=new FilesystemIterator($root,FilesystemIterator::SKIP_DOTS);
+    foreach ($entries as $entry) {
+        if (++$scanned>100000 || $removed>=16) break;
+        $name=$entry->getFilename(); $path=$entry->getPathname();
+        if ($entry->isLink()) continue;
+        if ($entry->isDir() && preg_match('/\A[0-9a-f]{64}\z/',$name)) {
+            $m=metadata($path);
+            if (!$m || $m['expiresAt']<1 || $m['expiresAt']>$now) continue;
+            $names=scandir($path);
+            if ($names!==['.','..','media','meta.json']) continue;
+            $retired=$root.'/retired-'.bin2hex(random_bytes(16));
+            if (file_exists($retired)||is_link($retired)) continue;
+            if (!rename($path,$retired)) continue;
+            remove_pending($retired);
+            $removed++;
+        } elseif ($entry->isFile() && preg_match('/\Aused-[0-9a-f]{64}\z/',$name)) {
+            $info=lstat($path);
+            if (!$info||$info['nlink']!==1||$info['size']!==13) continue;
+            $value=file_get_contents($path,false,null,0,14);
+            // Legacy markers store consumption time. The verifier accepts a
+            // maximum 24-hour future expiry, so keep markers for 25 hours.
+            if (!is_string($value)||!preg_match('/\A[0-9]{13}\z/',$value)||(int)$value<1||(int)$value>$now-90000000) continue;
+            if (unlink($path)) $removed++;
+        }
+    }
+}
 function remove_pending(string $dir): void {
     if (is_link($dir)||!is_dir($dir)) return;
     foreach (scandir($dir)?:[] as $name) if (!in_array($name,['.','..','media','meta.json'],true)) return;
-    foreach (['media','meta.json'] as $name) { $p=$dir.'/'.$name; if (is_link($p)|| (file_exists($p)&&!is_file($p))) return; }
+    foreach (['media','meta.json'] as $name) {
+        $p=$dir.'/'.$name;
+        if (is_link($p)) return;
+        if (file_exists($p)) {
+            $info=lstat($p);
+            if (!$info||($info['mode']&0170000)!==0100000||$info['nlink']!==1) return;
+        }
+    }
     foreach (['media','meta.json'] as $name) { $p=$dir.'/'.$name; if (is_file($p)) unlink($p); }
     rmdir($dir);
 }
