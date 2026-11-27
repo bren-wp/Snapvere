@@ -231,6 +231,13 @@ with sync_playwright() as p:
     update_preview.get_by_role("button", name="View update in Settings").wait_for(timeout=10000)
     update_preview.screenshot(path=str(OUTPUT / "home-update-available.png"))
     update_preview.close()
+    # Opt-in saved settings must not enable update requests in portable builds.
+    portable = app.new_page()
+    portable.add_init_script("localStorage.setItem('snapvere-auto-update-check', 'true')")
+    portable.goto("http://127.0.0.1:1420/?previewPortable=1&previewUpdate=1", wait_until="networkidle")
+    portable.get_by_role("banner").get_by_role("button", name="Capture region").wait_for(timeout=10000)
+    assert portable.evaluate("() => (window.__SNAPVERE_TEST_UPDATE_REQUESTS || 0) === 0")
+    portable.close()
 
     # Linux shares the update catalog, but must remain offline by default
     # and must not expose unsupported native recording features.
@@ -430,7 +437,7 @@ with sync_playwright() as p:
                                 device_scale_factor=1, color_scheme="light", reduced_motion="reduce")
     light.add_init_script("try { localStorage.setItem('snapvere-theme', 'light'); } catch {}")
     light.add_init_script("window.__SNAPVERE_EDITOR_IMAGE = " + json.dumps(editor_uri))
-    light.add_init_script(TAURI_PREVIEW.replace("__INSTALLED_VERSION__", json.loads((ROOT / "apps/desktop/package.json").read_text(encoding="utf-8"))["version"]))
+    light.add_init_script(TAURI_PREVIEW.replace("__SIGNED_UPDATE_CATALOG__", signed_preview_catalog()))
     light_home = light.new_page()
     light_home.goto("http://127.0.0.1:1420/", wait_until="networkidle")
     light_home.get_by_role("group", name="Capture actions").get_by_role(
@@ -493,7 +500,7 @@ with sync_playwright() as p:
     app.close()
     compact = browser.new_context(viewport={"width": 920, "height": 650},
                                   device_scale_factor=1, color_scheme="dark", reduced_motion="reduce")
-    compact.add_init_script(TAURI_PREVIEW.replace("__INSTALLED_VERSION__", json.loads((ROOT / "apps/desktop/package.json").read_text(encoding="utf-8"))["version"]))
+    compact.add_init_script(TAURI_PREVIEW.replace("__SIGNED_UPDATE_CATALOG__", signed_preview_catalog()))
     compact_page = compact.new_page()
     compact_page.goto("http://127.0.0.1:1420/", wait_until="networkidle")
     compact_page.get_by_role("banner").get_by_role("button", name="Capture region").wait_for(timeout=30000)
@@ -515,7 +522,7 @@ with sync_playwright() as p:
                     "localStorage.setItem('snapvere-theme', " + json.dumps(theme) + ")"
                 )
                 context.add_init_script("window.__SNAPVERE_EDITOR_IMAGE = " + json.dumps(editor_uri))
-                context.add_init_script(TAURI_PREVIEW.replace("__INSTALLED_VERSION__", json.loads((ROOT / "apps/desktop/package.json").read_text(encoding="utf-8"))["version"]))
+                context.add_init_script(TAURI_PREVIEW.replace("__SIGNED_UPDATE_CATALOG__", signed_preview_catalog()))
                 gallery = context.new_page()
                 gallery.goto(
                     f"http://127.0.0.1:{port}/?previewGalleryParity=1"
@@ -634,7 +641,7 @@ with sync_playwright() as p:
         viewport={"width": 1440, "height": 900}, device_scale_factor=1,
         color_scheme="dark"
     )
-    selection.add_init_script(TAURI_PREVIEW.replace("__INSTALLED_VERSION__", json.loads((ROOT / "apps/desktop/package.json").read_text(encoding="utf-8"))["version"]))
+    selection.add_init_script(TAURI_PREVIEW.replace("__SIGNED_UPDATE_CATALOG__", signed_preview_catalog()))
     selection.add_init_script("window.__SNAPVERE_PREVIEW_FRAME_URL = " + json.dumps(preview_frame))
     capture_page = selection.new_page()
     capture_page.goto("http://127.0.0.1:1420/#overlay", wait_until="networkidle")
@@ -683,7 +690,7 @@ with sync_playwright() as p:
             scaled.add_init_script(
                 "localStorage.setItem('snapvere-theme', " + json.dumps(theme) + ")"
             )
-            scaled.add_init_script(TAURI_PREVIEW.replace("__INSTALLED_VERSION__", json.loads((ROOT / "apps/desktop/package.json").read_text(encoding="utf-8"))["version"]))
+            scaled.add_init_script(TAURI_PREVIEW.replace("__SIGNED_UPDATE_CATALOG__", signed_preview_catalog()))
             for screen, address in (("home", "/"), ("settings", "/#settings")):
                 view = scaled.new_page()
                 view.goto("http://127.0.0.1:1420" + address, wait_until="networkidle")

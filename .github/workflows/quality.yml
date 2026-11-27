@@ -75,6 +75,16 @@ jobs:
         run: python tools/check_rust_modules.py
       - name: Audit duplicate maintained desktop and QA source files
         run: python tools/audit_duplicate_sources.py
+      - name: Inventory structural clone candidates across maintained code
+        run: |
+          python tools/test_semantic_clone_audit.py
+          python tools/audit_semantic_clones.py --out audit-evidence/structural-clones.json
+      - name: Preserve clone-review evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Snapvere-structural-clone-review
+          path: audit-evidence/structural-clones.json
+          if-no-files-found: error
       - name: Enforce production-only TypeScript module reachability
         working-directory: apps/desktop
         run: node ../../tools/check_dead_code.mjs

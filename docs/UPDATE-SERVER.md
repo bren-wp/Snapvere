@@ -49,3 +49,7 @@ Windows CI exposed an incompatible comparison of Windows pathname and CRT descri
 ## Authenticated production catalog boundary
 
 The installed desktop path and PHP update catalog now reject any unsigned nonempty catalog. The signed envelope has exactly `signed` (the UTF-8 JSON catalog) and `signature` (128 lowercase hex characters, Ed25519 over `Snapvere signed catalog v1\n` followed by the exact payload). The desktop uses an independently provisioned build-time raw public key (`VITE_SNAPVERE_UPDATE_PUBLIC_KEY`); the PHP site uses a build-provisioned `UPDATE_PUBLIC_KEY_HEX` and sodium. Neither is populated with a production key. No key from a downloaded envelope is trusted. The unsigned empty catalog remains informational. Visual CI uses an ephemeral preview key only. This authenticates metadata, not browser-downloaded executable bytes or Windows Authenticode; production publishing remains blocked until runner/installer lifecycle verification and a trusted release key are supplied.
+
+## Stable distribution and update trust
+
+Verified Windows/Linux Free/Pro application releases are published as stable (`draft=false`, `prerelease=false`) even if the operating-system binaries are unsigned. Signing status must remain explicit. This does not bypass the cryptographic authenticity requirements of remote differential packages. Main release automation additionally waits for exact-revision native authentication, differential fixture and web deployment checks. No test-key artifact is a public updater.

@@ -28,7 +28,13 @@ def main():
         pin = key_fingerprint(public)
         env = dict(os.environ, SNAPVERE_UPDATE_KEY_PIN=pin, CARGO_TARGET_DIR=str(root/"cargo"))
         subprocess.run(["cargo","build","--locked","--release"],cwd=PROJECT,env=env,check=True)
-        runner = root/"cargo/release"/("snapvere-native-updater.exe" if os.name=="nt" else "snapvere-native-updater")
+        built = root/"cargo/release"/("snapvere-native-updater.exe" if os.name=="nt" else "snapvere-native-updater")
+        # Cargo can use hardlinks for its executable outputs. Stage a separate
+        # regular file without weakening the codec's single-link policy.
+        runner = root / built.name
+        shutil.copyfile(built, runner)
+        if os.name != "nt":
+            runner.chmod(0o700)
         platform = "windows" if os.name == "nt" else "linux"
         for edition in ("free","pro"):
             target = platform+"-"+edition

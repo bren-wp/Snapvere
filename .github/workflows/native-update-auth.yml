@@ -1,6 +1,8 @@
 # Snapvere by Brendigo
 name: Native update authentication acceptance
 on:
+  push:
+    branches: [main]
   pull_request:
     paths:
       - 'tools/native-update-auth/**'
@@ -18,6 +20,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@1.90.0
         with:
           components: rustfmt, clippy

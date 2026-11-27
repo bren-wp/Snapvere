@@ -72,7 +72,7 @@ jobs:
   release-gate:
     needs: release-preflight
     if: needs.release-preflight.outputs.build == 'true'
-    name: Require successful quality and visual checks for this main commit
+    name: Require successful exact-revision quality, visual, update and web checks
     runs-on: ubuntu-24.04
     timeout-minutes: 185
     permissions:
@@ -88,7 +88,7 @@ jobs:
           [[ "$GITHUB_REF" == refs/heads/main ]] || { echo "::error::Releases require main"; exit 1; }
           for attempt in $(seq 1 360); do
             ready=true
-            for workflow in quality.yml screenshots.yml; do
+            for workflow in quality.yml screenshots.yml native-update-auth.yml native-updater-packages.yml web-packages.yml; do
               runs="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs" -f head_sha="$GITHUB_SHA" -f branch=main -f event=push -F per_page=100)"
               run="$(jq -c --arg sha "$GITHUB_SHA" '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == "main" and .event == "push")] | max_by(.id) // {}' <<< "$runs")"
               status="$(jq -r '.status // "missing"' <<< "$run")"
@@ -100,7 +100,7 @@ jobs:
               fi
             done
             if [[ "$ready" == true ]]; then
-              echo "Quality and frontend visual checks passed for $GITHUB_SHA"
+              echo "Quality, visual, native update authentication, package fixtures and web checks passed for $GITHUB_SHA"
               exit 0
             fi
             sleep 30
