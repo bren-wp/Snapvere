@@ -4,6 +4,7 @@ import { Share2 } from "lucide-react";
 import { ipc } from "../lib/ipc";
 import { requestShareGrant, recoverCapture, revokeCapture, shareActionCopy, shareCopy, shareMime, shareRecoveryCopy, uploadOrRecoverCapture } from "../lib/shareCapture";
 import type { Screenshot } from "../lib/types";
+import ShareVaultPanel from "./ShareVaultPanel";
 
 export default function ShareCaptureDialog({shot,language,onClose}:{shot:Screenshot;language:string;onClose:()=>void}) {
  const t=shareCopy(language);
@@ -82,6 +83,7 @@ export default function ShareCaptureDialog({shot,language,onClose}:{shot:Screens
     <button type="button" disabled={!grant.trim()||busy} onClick={()=>void recover()} className="snapvere-btn-secondary mt-2 rounded-full px-4 py-2 text-sm disabled:opacity-50">{recovery.recover}</button>
    </details>
   </form>}
+  <ShareVaultPanel language={language} result={result} disabled={busy} onSelect={record=>{setResult(record);setRecovered(true);setRevoked(false);setConfirmRevoke(false);setCopied(false);setError(false);setNotice("");}}/>
   {notice&&<p role="status" className="mt-3 text-sm text-muted">{notice}</p>}
   {busy&&!result&&<button type="button" onClick={()=>controller.current?.abort()} className="snapvere-btn-secondary mt-3 rounded-full px-4 py-2 text-sm">{actions.cancel}</button>}
   {(error||(!supported&&!result&&!revoked))&&<p role="alert" className="mt-3 text-sm text-danger">{t.failed}</p>}
