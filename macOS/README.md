@@ -19,7 +19,7 @@ This checks the shared frontend and unit suite, and compiles both editions (incl
 | Area | Current evidence | Required native work |
 |---|---|---|
 | Shared UI, gallery, editor, themes, locales | Shared source exists | WKWebView, Retina, keyboard, accessibility and native screenshots |
-| Screenshot and GIF capture | Shared xcap/GIF code exists; macOS unverified | Screen recording permission, multiple displays, window selection and actual capture tests |
+| Screenshot and GIF capture | Shared xcap/GIF code plus native CoreGraphics permission preflight, user-initiated request and permission recheck before/after capture | Native permission grant/revocation, multiple displays, window selection, Retina coordinates and real capture tests |
 | MP4, microphone, system audio | Windows-specific backend; no macOS MP4 encoder | ScreenCaptureKit / AVFoundation / CoreAudio as appropriate to supported OS versions; encode/decode and sync |
 | Recording privacy and controls | Shared session model | Native exclusion, cursor, overlay positioning and frame privacy verification |
 | File identity and recovery | Descriptor-relative, bounded read-only media access and native device/inode identity implemented; CI acceptance pending | Safe directory mutation, APFS durability, non-destructive journal recovery and asset-protocol race acceptance |

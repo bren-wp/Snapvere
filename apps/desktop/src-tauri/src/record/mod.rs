@@ -298,6 +298,8 @@ pub fn start(
         return Err("Snimanje je već u tijeku".into());
     }
     validate_audio_options(&opts)?;
+    #[cfg(target_os = "macos")]
+    crate::macos_permissions::require_screen_capture()?;
     #[cfg(all(target_os = "linux", feature = "linux-native-media"))]
     if opts.format == RecordFormat::Mp4 && opts.capture_cursor {
         return Err("Experimental Linux MP4 requires cursor capture to be disabled".into());

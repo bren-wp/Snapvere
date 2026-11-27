@@ -33,4 +33,6 @@ cargo check --locked --all-targets --target "$host"
 cargo check --locked --all-targets --target "$host" --features pro
 cargo test --locked --target "$host" --lib pinned_directory::macos_read::tests
 cargo test --locked --target "$host" --lib --features pro pinned_directory::macos_read::tests
+cargo test --locked --target "$host" --lib macos_permissions::tests
+cargo test --locked --target "$host" --lib --features pro macos_permissions::tests
 printf '%s\n' 'Compile and targeted filesystem tests passed. Native permissions, capture, recovery, parity and distribution remain unverified.'

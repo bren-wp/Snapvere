@@ -53,6 +53,15 @@ fn estr<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
 }
 
+fn capture_failure_toast(error: &str) -> &'static str {
+    #[cfg(target_os = "macos")]
+    if error == crate::macos_permissions::SCREEN_CAPTURE_DENIED {
+        return crate::macos_permissions::SCREEN_CAPTURE_DENIED;
+    }
+    let _ = error;
+    "Screen capture failed. Open Diagnostics for details."
+}
+
 pub(crate) fn require_window_label(label: &str, allowed: &[&str]) -> Result<(), String> {
     if allowed.contains(&label) {
         Ok(())
@@ -958,7 +967,7 @@ pub fn dispatch_region_capture(app: &AppHandle, mode: CaptureMode) {
                 log(&format!("Capture failed locally: {e}"));
                 let _ = app.emit(
                     "snapvere:toast",
-                    "Screen capture failed. Open Diagnostics for details.",
+                    capture_failure_toast(&e),
                 );
             }
         });
@@ -973,6 +982,8 @@ pub fn dispatch_region_capture(app: &AppHandle, mode: CaptureMode) {
 /// Never write a transient frozen.png to disk or depend on asset:// grants:
 /// the overlay receives the pixels over a scoped Tauri IPC command.
 fn region_capture_blocking(app: &AppHandle, mode: CaptureMode) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    crate::macos_permissions::request_for_user_capture()?;
     let (cx, cy) = cursor_pos(app);
     let t = std::time::Instant::now();
     let token = Utc::now().timestamp_millis();
@@ -1251,7 +1262,7 @@ pub fn dispatch_capture_fullscreen(app: &AppHandle) {
                     log(&format!("Capture failed locally: {e}"));
                     let _ = app.emit(
                         "snapvere:toast",
-                        "Screen capture failed. Open Diagnostics for details.",
+                        capture_failure_toast(&e),
                     );
                 }
             }

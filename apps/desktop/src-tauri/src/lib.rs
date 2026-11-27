@@ -6,6 +6,8 @@ mod commands;
 mod db;
 mod gallery_delete;
 mod logging;
+#[cfg(target_os = "macos")]
+mod macos_permissions;
 mod models;
 mod pinned_directory;
 mod record;

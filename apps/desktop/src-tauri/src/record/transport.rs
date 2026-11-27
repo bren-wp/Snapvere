@@ -26,6 +26,8 @@ pub(super) enum Source {
 
 impl Source {
     pub(super) fn open(target: &RecordTarget) -> Result<Self, String> {
+        #[cfg(target_os = "macos")]
+        crate::macos_permissions::require_screen_capture()?;
         #[cfg(windows)]
         {
             match dxgi::DxgiGrabber::new(target.monitor_x, target.monitor_y) {
@@ -66,10 +68,14 @@ impl Source {
                 buf,
                 target,
             } => {
+                #[cfg(target_os = "macos")]
+                crate::macos_permissions::require_screen_capture()?;
                 verify_monitor(monitor, target)?;
                 let img = monitor
                     .capture_image()
                     .map_err(|e| format!("xcap capture: {e}"))?;
+                #[cfg(target_os = "macos")]
+                crate::macos_permissions::require_screen_capture()?;
                 // A changed monitor geometry invalidates crop and redaction
                 // coordinates. Stop rather than encode pixels from a different
                 // region or silently pad a partial frame.

@@ -92,22 +92,31 @@ pub fn monitor_at(x: i32, y: i32) -> Result<MonitorInfo> {
 /// Uhvati JEDAN monitor — onaj koji sadrži točku (x,y) (poziciju miša). Fallback: primarni, pa prvi.
 /// Jedan monitor = jedan capture + jedan transfer = brzo i malo RAM-a, bez paralelnih dretvi.
 pub fn capture_at(x: i32, y: i32) -> Result<(MonitorInfo, RgbaImage)> {
+    #[cfg(target_os = "macos")]
+    crate::macos_permissions::request_for_user_capture().map_err(anyhow::Error::msg)?;
     let m = monitor_containing(x, y)?;
     let info = monitor_info(&m)?;
     let img = m.capture_image().map_err(|e| anyhow!("capture: {e}"))?;
+    #[cfg(target_os = "macos")]
+    crate::macos_permissions::require_screen_capture().map_err(anyhow::Error::msg)?;
     Ok((info, img))
 }
 
 /// Uhvati cijeli primarni ekran (Capture Full Screen).
 pub fn capture_primary() -> Result<RgbaImage> {
+    #[cfg(target_os = "macos")]
+    crate::macos_permissions::request_for_user_capture().map_err(anyhow::Error::msg)?;
     let monitors = Monitor::all().map_err(|e| anyhow!("xcap monitors: {e}"))?;
     let primary = monitors
         .into_iter()
         .find(|m| m.is_primary().unwrap_or(false))
         .ok_or_else(|| anyhow!("nema primarnog monitora"))?;
-    primary
+    let image = primary
         .capture_image()
-        .map_err(|e| anyhow!("capture primary: {e}"))
+        .map_err(|e| anyhow!("capture primary: {e}"))?;
+    #[cfg(target_os = "macos")]
+    crate::macos_permissions::require_screen_capture().map_err(anyhow::Error::msg)?;
+    Ok(image)
 }
 
 /// Izreži pravokutnik iz slike (clamp na granice slike).
