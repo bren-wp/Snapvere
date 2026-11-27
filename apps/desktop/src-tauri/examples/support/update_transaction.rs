@@ -15,14 +15,15 @@ const TRANSACTION: &str = "transaction";
 const CANDIDATE: &str = "candidate.bin";
 const BACKUP: &str = "previous.bin";
 
+#[cfg(unix)]
 fn create_private(path: &Path) -> io::Result<()> {
-    let mut builder = fs::DirBuilder::new();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::DirBuilderExt;
-        builder.mode(0o700);
-    }
-    builder.create(path)
+    use std::os::unix::fs::DirBuilderExt;
+    fs::DirBuilder::new().mode(0o700).create(path)
+}
+
+#[cfg(not(unix))]
+fn create_private(path: &Path) -> io::Result<()> {
+    fs::create_dir(path)
 }
 
 fn private_dir(path: &Path) -> io::Result<PathBuf> {
@@ -65,7 +66,11 @@ fn initialize(path: &Path) -> io::Result<()> {
     write_new(&path.join("workspace.marker"), MARKER)?;
     write_new(&path.join("lock"), b"snapvere transaction lock\n")?;
     sync_dir(path)?;
-    sync_dir(path.parent().unwrap_or_else(|| Path::new(".")))
+    sync_dir(
+        path.parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new(".")),
+    )
 }
 
 fn open_workspace(path: &Path) -> io::Result<(PathBuf, File)> {

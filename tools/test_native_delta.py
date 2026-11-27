@@ -49,7 +49,54 @@ def main():
         assert run(bad).returncode != 0 and not bad.exists()
         assert base.read_bytes() == b"X" + original[1:]
         assert new.read_bytes() == updated
-    print("Native Rust staging interoperates with Python SVDELTA1 and rejects invalid input")
+        base.write_bytes(original)
+
+        def workspace_command(workspace, action, *args, ok=True):
+            result = subprocess.run(
+                [str(executable), "workspace", action, str(workspace), *map(str, args)],
+                capture_output=True, timeout=60)
+            assert (result.returncode == 0) == ok, result.stderr.decode(errors="replace")
+            return result.stdout.decode().strip()
+
+        workspace = root / "transaction"
+        workspace_command(workspace, "init")
+        live = workspace / "installed.bin"
+        live.write_bytes(original)
+        gallery = workspace / "gallery.sqlite"
+        gallery.write_bytes(b"untouched gallery")
+        workspace_command(workspace, "prepare", patch, target, old, version, digest)
+        assert workspace_command(workspace, "status") == "prepared"
+        assert live.read_bytes() == original
+        tx = workspace / "transaction"
+        backup = tx / "previous.bin"
+        assert backup.read_bytes() == original
+        live.write_bytes(b"unexpected change")
+        workspace_command(workspace, "apply", ok=False)
+        assert live.read_bytes() == b"unexpected change"
+        live.write_bytes(original)
+        # Simulate interruption immediately after the activation rename.
+        (tx / "candidate.bin").replace(live)
+        assert workspace_command(workspace, "status") == "applied"
+        assert workspace_command(workspace, "apply") == "applied"
+        assert live.read_bytes() == updated
+        backup.write_bytes(b"corrupted backup")
+        workspace_command(workspace, "rollback", ok=False)
+        assert live.read_bytes() == updated
+        backup.write_bytes(original)
+        assert workspace_command(workspace, "rollback") == "rolled-back"
+        assert workspace_command(workspace, "rollback") == "rolled-back"
+        assert live.read_bytes() == original and backup.read_bytes() == original
+        assert gallery.read_bytes() == b"untouched gallery"
+        workspace_command(workspace, "init", ok=False)
+        second = root / "second"
+        workspace_command(second, "init")
+        (second / "installed.bin").write_bytes(original)
+        workspace_command(second, "prepare", patch, target, old, version, digest)
+        assert workspace_command(second, "apply") == "applied"
+        assert (second / "installed.bin").read_bytes() == updated
+        assert workspace_command(second, "rollback") == "rolled-back"
+        assert (second / "installed.bin").read_bytes() == original
+    print("Native Rust staging and isolated transaction tests passed")
 
 if __name__ == "__main__":
     main()

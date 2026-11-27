@@ -130,6 +130,7 @@ fn validate_header(header: &Header, target: &str, from: &str, to: &str) -> io::R
         || !(1..=MAX_BYTES).contains(&header.new_size)
         || !valid_digest(&header.base_sha256)
         || !valid_digest(&header.new_sha256)
+        || header.base_sha256 == header.new_sha256
     {
         return Err(invalid("Invalid delta identity"));
     }
