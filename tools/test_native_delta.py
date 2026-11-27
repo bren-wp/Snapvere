@@ -29,6 +29,22 @@ def main():
         new.write_bytes(updated)
         target, old, version = "windows-pro", "0.2.38", "0.2.39"
         build(base, new, patch, target, old, version)
+        # Cross-platform file identity check uses the opened native handle.
+        from delta_patch import open_source
+        with open_source(base) as source:
+            assert source.read() == original
+        alias = root / "hardlink"
+        import os
+        os.link(base, alias)
+        try:
+            try:
+                open_source(alias).close()
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("Hard-linked source accepted")
+        finally:
+            alias.unlink()
         digest = hashlib.sha256(patch.read_bytes()).hexdigest()
         def run(output, expected_digest=digest, edition=target):
             return subprocess.run([str(executable), str(base), str(patch), str(output), edition, old, version, expected_digest],

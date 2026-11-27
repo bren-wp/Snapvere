@@ -15,9 +15,13 @@ DIRECTORIES = (
     ROOT / "apps/desktop/src",
     ROOT / "apps/desktop/src-tauri/src",
     ROOT / "apps/desktop/src-tauri/native",
+    ROOT / "apps/desktop/src-tauri/examples",
+    ROOT / "deploy",
+    ROOT / "snpv.re",
+    ROOT / "site",
     ROOT / "tools",
 )
-EXTENSIONS = {".rs", ".ts", ".tsx", ".c", ".h", ".mjs", ".py", ".css", ".sh"}
+EXTENSIONS = {".rs", ".ts", ".tsx", ".c", ".h", ".mjs", ".py", ".css", ".sh", ".php", ".js"}
 files = sorted({
     path for directory in DIRECTORIES for path in directory.rglob("*")
     if path.is_file() and path.suffix in EXTENSIONS

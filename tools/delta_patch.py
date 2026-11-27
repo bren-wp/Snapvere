@@ -33,12 +33,77 @@ def exact(stream, size):
     return value
 
 
+def open_windows_source(path):
+    """Pin a Windows leaf by handle, not mixed stat/lstat inode representations."""
+    import ctypes
+    from ctypes import wintypes
+    import msvcrt
+
+    class FileInformation(ctypes.Structure):
+        _fields_ = [
+            ("attributes", wintypes.DWORD),
+            ("created", wintypes.FILETIME),
+            ("accessed", wintypes.FILETIME),
+            ("modified", wintypes.FILETIME),
+            ("volume", wintypes.DWORD),
+            ("size_high", wintypes.DWORD),
+            ("size_low", wintypes.DWORD),
+            ("links", wintypes.DWORD),
+            ("index_high", wintypes.DWORD),
+            ("index_low", wintypes.DWORD),
+        ]
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    open_file = kernel.CreateFileW
+    open_file.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD,
+                          wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    open_file.restype = wintypes.HANDLE
+    info_file = kernel.GetFileInformationByHandle
+    info_file.argtypes = [wintypes.HANDLE, ctypes.POINTER(FileInformation)]
+    info_file.restype = wintypes.BOOL
+    close = kernel.CloseHandle
+    close.argtypes = [wintypes.HANDLE]
+    close.restype = wintypes.BOOL
+    # GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, OPEN_REPARSE_POINT.
+    # No write/delete sharing while this handle is owned by the stream.
+    handle = open_file(str(path.absolute()), 0x80000000, 1, None, 3, 0x00200000, None)
+    if handle == ctypes.c_void_p(-1).value:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        info = FileInformation()
+        if not info_file(handle, ctypes.byref(info)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        size = (info.size_high << 32) | info.size_low
+        if info.attributes & (0x10 | 0x400) or info.links != 1 or not 1 <= size <= MAX_BYTES:
+            raise ValueError("Expected bounded regular single-link source")
+        fd = msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)
+        handle = None  # Ownership transferred to the CRT descriptor.
+        try:
+            stream = os.fdopen(fd, "rb")
+        except BaseException:
+            os.close(fd)
+            raise
+        try:
+            actual = os.fstat(stream.fileno())
+            if not stat.S_ISREG(actual.st_mode) or actual.st_size != size:
+                raise ValueError("Source identity changed")
+            return stream
+        except BaseException:
+            stream.close()
+            raise
+    finally:
+        if handle is not None:
+            close(handle)
+
+
 def open_source(path):
     path = Path(path)
+    if os.name == "nt":
+        return open_windows_source(path)
     before = path.lstat()
     if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or not 1 <= before.st_size <= MAX_BYTES:
         raise ValueError("Expected bounded regular single-link source")
-    fd = os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
     stream = os.fdopen(fd, "rb")
     try:
         current = os.fstat(fd)
@@ -98,7 +163,9 @@ def stage(path, writer):
     path = Path(path)
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
     fd = os.open(path, flags, 0o600)
-    created = os.fstat(fd)
+    # Compare like-for-like pathname metadata during cleanup on Windows.
+    # The exclusive output parent must be controlled by the operator.
+    created = path.lstat() if os.name == "nt" else os.fstat(fd)
     try:
         with os.fdopen(fd, "wb") as stream:
             result = writer(stream)

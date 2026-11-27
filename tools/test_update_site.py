@@ -24,7 +24,19 @@ with tempfile.TemporaryDirectory() as temp:
     source.parent.mkdir(parents=True);source.write_bytes(payload)
     data["packages"]=[{"name":name,"kind":"delta","from":"0.2.38","size":len(payload),"sha256":hashlib.sha256(payload).hexdigest()}]
     manifest.write_text(json.dumps(data))
-    verified=root/"verified";prepare(manifest,verified,root/"patches")
+    # Production packager must refuse arbitrary payloads, even matching hashes.
+    try: prepare(manifest,root/"blocked",root/"patches")
+    except ValueError: pass
+    else: raise AssertionError("Unsigned payload accepted")
+    try: prepare(manifest,root/"blocked-empty-source")
+    except ValueError: pass
+    else: raise AssertionError("Nonempty production catalog accepted")
+    # Exercise PHP catalog routing in a temporary fixture only.
+    import shutil
+    verified=root/"verified";shutil.copytree(out,verified)
+    (verified/"stable.json").write_bytes(manifest.read_bytes())
+    fixture=verified/"patches/0.2.39/0.2.38"/name
+    fixture.parent.mkdir(parents=True);fixture.write_bytes(payload)
     subprocess.run(["php","-r", """
 require $argv[1];
 $d=update_catalog($argv[2]);
