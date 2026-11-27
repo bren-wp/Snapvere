@@ -158,3 +158,9 @@ delete_source = commands.split("pub async fn delete_screenshot(", 1)[1].split("#
 assert ".blocking_show()" in delete_source and "if !confirmed" in delete_source
 assert delete_source.index("if !confirmed") < delete_source.index("crate::gallery_delete::delete(")
 assert "dialog:allow-ask" not in home["permissions"]
+
+# Sharing original gallery bytes also requires trusted native confirmation.
+share_source = commands.split("pub async fn read_share_media(", 1)[1].split("#[tauri::command]", 1)[0]
+assert ".blocking_show()" in share_source and "if !confirmed" in share_source
+assert share_source.index("if !confirmed") < share_source.index("source.read_confirmed(")
+assert "ShareSource::open(&path, shot.size_bytes)" in share_source

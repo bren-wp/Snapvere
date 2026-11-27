@@ -37,6 +37,83 @@ pub(super) fn media_path(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
 }
 
 pub(super) const MAX_CLIPBOARD_FILE_BYTES: u64 = 200 * 1024 * 1024;
+const MAX_SHARE_BYTES: u64 = 16 * 1024 * 1024;
+
+/// Retain a read handle across native consent and recheck the selected path.
+/// This is a bounded snapshot, not a persisted capture-authenticity proof.
+pub(super) struct ShareSource {
+    file: fs::File,
+    identity: String,
+    metadata: fs::Metadata,
+    size: u64,
+}
+
+fn share_metadata_matches(before: &fs::Metadata, after: &fs::Metadata) -> Result<bool, String> {
+    let same = before.is_file()
+        && after.is_file()
+        && before.len() == after.len()
+        && before.modified().map_err(estr)? == after.modified().map_err(estr)?;
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::MetadataExt;
+        Ok(same
+            && after.nlink() == 1
+            && before.ctime() == after.ctime()
+            && before.ctime_nsec() == after.ctime_nsec())
+    }
+    #[cfg(not(target_os = "linux"))]
+    Ok(same)
+}
+
+impl ShareSource {
+    pub(super) fn open(path: &Path, gallery_size: u64) -> Result<Self, String> {
+        let (file, size) =
+            crate::pinned_directory::open_bounded_source(path, MAX_SHARE_BYTES)?;
+        if size != gallery_size {
+            return Err("Gallery file size changed".into());
+        }
+        let identity = crate::pinned_directory::file_identity(&file)?;
+        let metadata = file.metadata().map_err(estr)?;
+        Ok(Self {
+            file,
+            identity,
+            metadata,
+            size,
+        })
+    }
+
+    fn verify_path(&self, path: &Path) -> Result<(), String> {
+        let (current, size) =
+            crate::pinned_directory::open_bounded_source(path, MAX_SHARE_BYTES)?;
+        if size != self.size
+            || crate::pinned_directory::file_identity(&current)? != self.identity
+            || !share_metadata_matches(&self.metadata, &current.metadata().map_err(estr)?)?
+            || !share_metadata_matches(&self.metadata, &self.file.metadata().map_err(estr)?)?
+        {
+            return Err("Share source changed".into());
+        }
+        Ok(())
+    }
+
+    pub(super) fn read_confirmed(mut self, path: &Path) -> Result<Vec<u8>, String> {
+        use std::io::Read;
+
+        self.verify_path(path)?;
+        let size = usize::try_from(self.size).map_err(estr)?;
+        let mut bytes = Vec::new();
+        bytes
+            .try_reserve_exact(size)
+            .map_err(|_| "Not enough memory to share capture".to_string())?;
+        bytes.resize(size, 0);
+        self.file.read_exact(&mut bytes).map_err(estr)?;
+        let mut extra = [0_u8; 1];
+        if self.file.read(&mut extra).map_err(estr)? != 0 {
+            return Err("Share source changed size".into());
+        }
+        self.verify_path(path)?;
+        Ok(bytes)
+    }
+}
 
 pub(super) fn can_copy_image(file_bytes: u64, width: u32, height: u32) -> bool {
     file_bytes <= MAX_CLIPBOARD_FILE_BYTES
@@ -95,6 +172,46 @@ pub(super) fn decode_copy_image(path: &Path) -> Result<image::RgbaImage, String>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(any(windows, target_os = "linux"))]
+    #[test]
+    fn share_snapshot_checks_registered_size_and_returns_exact_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("capture.png");
+        fs::write(&path, b"capture data").unwrap();
+        assert!(ShareSource::open(&path, 1).is_err());
+        let source = ShareSource::open(&path, 12).unwrap();
+        assert_eq!(source.read_confirmed(&path).unwrap(), b"capture data");
+    }
+
+    #[cfg(any(windows, target_os = "linux"))]
+    #[test]
+    fn share_snapshot_rejects_different_same_size_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("capture.png");
+        let other = dir.path().join("other.png");
+        fs::write(&path, b"original").unwrap();
+        fs::write(&other, b"replaced").unwrap();
+        let source = ShareSource::open(&path, 8).unwrap();
+        assert!(source.read_confirmed(&other).is_err());
+        assert_eq!(fs::read(&path).unwrap(), b"original");
+        assert_eq!(fs::read(&other).unwrap(), b"replaced");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn share_snapshot_rejects_path_replacement_during_consent() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("capture.png");
+        let saved = dir.path().join("original.png");
+        fs::write(&path, b"original").unwrap();
+        let source = ShareSource::open(&path, 8).unwrap();
+        fs::rename(&path, &saved).unwrap();
+        fs::write(&path, b"replaced").unwrap();
+        assert!(source.read_confirmed(&path).is_err());
+        assert_eq!(fs::read(&saved).unwrap(), b"original");
+        assert_eq!(fs::read(&path).unwrap(), b"replaced");
+    }
 
     #[test]
     fn clipboard_decodes_regular_image_and_rejects_hard_links() {

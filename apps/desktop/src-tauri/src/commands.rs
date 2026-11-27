@@ -1922,28 +1922,51 @@ pub async fn read_share_media(
 ) -> Result<Response, String> {
     require_window_label(window.label(), &["home"])?;
     tauri::async_runtime::spawn_blocking(move || {
-        use std::io::Read;
-        const MAX_SHARE_BYTES: u64 = 16 * 1024 * 1024;
+        use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+
+        // Hold the local media operation guard, not the database mutex,
+        // during the native consent dialog. Bind consent to the same handle.
         let _guard = image_export::SaveAsGuard::acquire()?;
-        let path = media_path(&app, &id)?;
-        let (mut file, expected) =
-            crate::pinned_directory::open_bounded_source(&path, MAX_SHARE_BYTES)?;
-        let before = file.metadata().map_err(estr)?;
-        let mut bytes = Vec::new();
-        bytes
-            .try_reserve_exact(expected as usize)
-            .map_err(|_| "Not enough memory to share capture".to_string())?;
-        bytes.resize(expected as usize, 0);
-        file.read_exact(&mut bytes).map_err(estr)?;
-        let mut extra = [0_u8; 1];
-        let after = file.metadata().map_err(estr)?;
-        if file.read(&mut extra).map_err(estr)? != 0
-            || after.len() != expected
-            || before.modified().map_err(estr)? != after.modified().map_err(estr)?
-        {
-            return Err("Share source changed during reading".into());
+        let state = app.state::<AppState>();
+        let shot = lock(&state.db)
+            .get(&id)
+            .map_err(estr)?
+            .ok_or("This capture is no longer in the gallery")?;
+        let path = PathBuf::from(&shot.file_path);
+        let source = gallery_helpers::ShareSource::open(&path, shot.size_bytes)?;
+        let language = get_app_language(window.clone(), app.clone())?;
+        let labels = crate::tray_locale::sharing_labels(&language);
+        let name: String = shot
+            .name
+            .chars()
+            .filter(|ch| !ch.is_control() && !matches!(*ch, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'))
+            .take(200)
+            .collect();
+        let confirmed = app
+            .dialog()
+            .message(format!("\"{name}\" — {:.2} MiB\n\n{}", shot.size_bytes as f64 / 1048576.0, labels[1]))
+            .title(labels[0])
+            .kind(MessageDialogKind::Warning)
+            .buttons(MessageDialogButtons::OkCancelCustom(
+                labels[2].to_owned(),
+                labels[3].to_owned(),
+            ))
+            .parent(&window)
+            .blocking_show();
+        if !confirmed {
+            return Err("Share cancelled".into());
         }
-        Ok(Response::new(bytes))
+        let current = lock(&state.db)
+            .get(&id)
+            .map_err(estr)?
+            .ok_or("This capture is no longer in the gallery")?;
+        if current.file_path != shot.file_path
+            || current.size_bytes != shot.size_bytes
+            || current.format != shot.format
+        {
+            return Err("Gallery item changed during confirmation".into());
+        }
+        Ok(Response::new(source.read_confirmed(&path)?))
     })
     .await
     .map_err(estr)?

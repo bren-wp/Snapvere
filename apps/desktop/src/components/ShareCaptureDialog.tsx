@@ -26,13 +26,17 @@ export default function ShareCaptureDialog({shot,language,onClose}:{shot:Screens
  async function submit(){
   if(controller.current||!supported)return;
   const abort=new AbortController();controller.current=abort;setBusy(true);setError(false);setNotice("");
-  const timeout=setTimeout(()=>abort.abort(),60000);
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try{
    const bytes=await ipc.readShareMedia(shot.id);
    if(abort.signal.aborted)throw new Error("Cancelled");
+   timeout=setTimeout(()=>abort.abort(),60000);
    const shared=await uploadCapture(bytes,shot.format,grant.trim(),ttl,abort.signal);
    setResult(shared);setGrant("");
-  }catch{if(abort.signal.aborted)setNotice(actions.cancelled);else setError(true);}
+  }catch(error){
+   if(abort.signal.aborted)setNotice(actions.cancelled);
+   else if(String(error)!=="Share cancelled")setError(true);
+  }
   finally{clearTimeout(timeout);controller.current=null;setBusy(false);}
  }
  async function recover(){
