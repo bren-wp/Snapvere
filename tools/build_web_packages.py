@@ -36,10 +36,11 @@ def release_catalog(release):
                 for a in assets if a["name"] in PACKAGE_NAMES]
     if any(p["size"] < 1000000 for p in packages):
         raise ValueError("Unexpectedly small binary")
-    return {"product": "snapvere-tauri-windows", "version": tag[1:],
-            "download_url": "https://snapvere.com/download/tauri/",
-            "notes": "Latest published Windows and Linux release.",
-            "channel": "stable", "packages": packages}
+    # Full-release inventory is verified above, but none of those binaries
+    # are incremental updates. Never advertise a full/portable package here.
+    return {"product": "snapvere-installed-delta-v1", "version": tag[1:],
+            "notes": "Latest published release. Dedicated updates are not yet published.",
+            "channel": "stable", "packages": []}
 
 def archive(path, files):
     if path.exists():

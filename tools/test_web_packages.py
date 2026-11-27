@@ -107,15 +107,12 @@ def main(directory):
         try:
             manifest = json.loads(request(base + "/stable.json")[2])
             page = request(base + "/")[2].decode()
-            assert len(manifest["packages"]) == 10
+            assert manifest["product"] == "snapvere-installed-delta-v1"
+            assert manifest["packages"] == []
+            assert "No compatible update available" in page
             version = manifest["version"]
-            for package in manifest["packages"]:
-                name = package["name"]
-                assert name in page
-                code, headers, _ = request(base + "/download.php?version=" + version + "&package=" + name)
-                assert code == 302 and headers["Location"] == f"https://github.com/bren-wp/Snapvere/releases/download/v{version}/{name}"
-            assert request(base + "/download.php?version=0.0.0&package=Snapvere-Setup.exe")[0] == 404
-            assert request(base + "/download.php?version=" + version + "&package=../bad")[0] == 404
+            for name in ["Snapvere-Setup.exe","Snapvere-Pro-Setup.exe","Snapvere-Portable.exe","Snapvere-Pro-Linux-x86_64.AppImage","Snapvere-Linux-amd64.deb","Snapvere-Pro-Update.exe"]:
+                assert request(base + "/download.php?version=" + version + "&from=0.0.0&package=" + name)[0] == 404
         finally:
             stop(proc)
     print("Both deployment ZIPs passed local HTTP lifecycle acceptance")
