@@ -59,6 +59,7 @@ jobs:
         run: |
           python tools/test_delta_patch.py
           python tools/test_signed_delta.py
+          python tools/test_update_transaction.py
       - name: Lint PHP shared-host sharing service
         run: |
           php -l deploy/snpv.re/index.php
