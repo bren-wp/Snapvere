@@ -124,7 +124,10 @@ fn installed_update_eligible(app: &AppHandle) -> bool {
     #[cfg(target_os = "linux")]
     if std::env::var_os("APPIMAGE").is_some()
         || std::env::var_os("APPDIR").is_some()
-        || !matches!(exe.to_str(), Some("/usr/bin/snapvere" | "/usr/bin/snapvere-pro"))
+        || !matches!(
+            exe.to_str(),
+            Some("/usr/bin/snapvere" | "/usr/bin/snapvere-pro")
+        )
     {
         return false;
     }

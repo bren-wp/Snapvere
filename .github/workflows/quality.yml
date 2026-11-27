@@ -55,6 +55,8 @@ jobs:
         run: node --test snpv.re/server.test.mjs
       - name: Verify update website and all edition download routes
         run: python tools/test_update_site.py
+      - name: Verify differential update reconstruction and rejection of corrupted patches
+        run: python tools/test_delta_patch.py
       - name: Lint PHP shared-host sharing service
         run: |
           php -l deploy/snpv.re/index.php
