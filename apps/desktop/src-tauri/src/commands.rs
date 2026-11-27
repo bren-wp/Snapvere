@@ -965,10 +965,7 @@ pub fn dispatch_region_capture(app: &AppHandle, mode: CaptureMode) {
                     ));
                 }
                 log(&format!("Capture failed locally: {e}"));
-                let _ = app.emit(
-                    "snapvere:toast",
-                    capture_failure_toast(&e),
-                );
+                let _ = app.emit("snapvere:toast", capture_failure_toast(&e));
             }
         });
 
@@ -1260,10 +1257,7 @@ pub fn dispatch_capture_fullscreen(app: &AppHandle) {
                 }
                 Err(e) => {
                     log(&format!("Capture failed locally: {e}"));
-                    let _ = app.emit(
-                        "snapvere:toast",
-                        capture_failure_toast(&e),
-                    );
+                    let _ = app.emit("snapvere:toast", capture_failure_toast(&e));
                 }
             }
         });
