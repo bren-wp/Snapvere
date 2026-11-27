@@ -18,8 +18,8 @@ pub(super) fn open_bounded_source(source: &Path, max: u64) -> Result<(File, u64)
         match component {
             Component::RootDir => {}
             Component::Normal(name) => {
-                directory =
-                    openat(&directory, name, flags, Mode::empty()).map_err(|error| error.to_string())?;
+                directory = openat(&directory, name, flags, Mode::empty())
+                    .map_err(|error| error.to_string())?;
             }
             _ => return Err("Invalid directory component".into()),
         }
@@ -31,14 +31,11 @@ pub(super) fn open_bounded_source(source: &Path, max: u64) -> Result<(File, u64)
         openat(&directory, name, flags, Mode::empty()).map_err(|error| error.to_string())?;
     let reader = File::from(descriptor);
     let metadata = reader.metadata().map_err(|error| error.to_string())?;
-    if !metadata.is_file()
-        || metadata.nlink() != 1
-        || metadata.len() == 0
-        || metadata.len() > max
-    {
+    let size = metadata.len();
+    if !metadata.is_file() || metadata.nlink() != 1 || size == 0 || size > max {
         return Err("Invalid, linked or oversized gallery file".into());
     }
-    Ok((reader, metadata.len()))
+    Ok((reader, size))
 }
 
 #[cfg(test)]
