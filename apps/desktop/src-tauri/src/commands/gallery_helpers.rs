@@ -12,8 +12,7 @@ pub(super) fn allow_media_dirs(app: &AppHandle, items: &[Screenshot]) {
             let path = Path::new(path_str);
             // Never authorize missing, redirected, non-regular or hard-linked
             // files. Keep the read handle during scope registration.
-            let Ok((_file, size)) =
-                crate::pinned_directory::open_bounded_source(path, u64::MAX)
+            let Ok((_file, size)) = crate::pinned_directory::open_bounded_source(path, u64::MAX)
             else {
                 continue;
             };
