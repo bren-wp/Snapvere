@@ -107,6 +107,67 @@ export async function uploadOrRecoverCapture(bytes: ArrayBuffer, format: string,
     }
   }
 }
+const RESUME_BLOCK = 262144;
+type ResumeAction = "begin" | "status" | "chunk" | "finish" | "abort";
+async function resumeRequest(action: ResumeAction, grant: string, signal: AbortSignal, headers: Record<string,string> = {}, body?: ArrayBuffer): Promise<Response> {
+  if (!grantPattern.test(grant)) throw new Error("Invalid upload code");
+  signal.throwIfAborted();
+  const response = await fetch(SHARE_ENDPOINT + "/resume/" + action, {
+    method:"POST", credentials:"omit", redirect:"error", cache:"no-store",
+    referrerPolicy:"no-referrer", signal,
+    headers:{...headers,Authorization:"Bearer "+grant}, body,
+  });
+  return response;
+}
+async function resumeOffset(response: Response, size: number): Promise<number> {
+  if (response.status !== 200) throw new Error("Resume request rejected");
+  const data = await readShareJson(response) as {offset?:unknown;size?:unknown;blockSize?:unknown};
+  if (data.size!==size || data.blockSize!==RESUME_BLOCK || typeof data.offset!=="number" ||
+      !Number.isSafeInteger(data.offset) || data.offset<0 || data.offset>size ||
+      (data.offset!==size && data.offset%RESUME_BLOCK!==0)) throw new Error("Invalid upload offset");
+  return data.offset;
+}
+/** Only the explicit, confirmed snapshot is transmitted. Re-entering with
+ * the same grant and identical content resumes at the committed offset. */
+export async function uploadResumableCapture(bytes:ArrayBuffer,format:string,grant:string,ttl:number,signal:AbortSignal,onProgress:(offset:number,total:number)=>void) {
+  const type=shareMime(format),size=bytes.byteLength;
+  if (!type||size<1||size>16*1024*1024||!grantPattern.test(grant)||![3600,86400,604800].includes(ttl)) throw new Error("Invalid share request");
+  signal.throwIfAborted();
+  const digest=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),x=>x.toString(16).padStart(2,"0")).join("");
+  const begin=await resumeRequest("begin",grant,signal,{"X-Share-Type":type,"X-Share-Size":String(size),"X-Share-TTL":String(ttl),"X-Share-SHA256":digest});
+  if(begin.status===409) return recoverCapture(grant,signal);
+  let offset=await resumeOffset(begin,size);
+  onProgress(offset,size);
+  while(offset<size){
+    signal.throwIfAborted();
+    const end=Math.min(size,offset+RESUME_BLOCK);
+    let next:number;
+    try{
+      next=await resumeOffset(await resumeRequest("chunk",grant,signal,{"Content-Type":"application/octet-stream","X-Share-Offset":String(offset)},bytes.slice(offset,end)),size);
+    }catch(error){
+      signal.throwIfAborted();
+      // A committed chunk may have lost its response. Query without sending
+      // any data. If it was not committed, return control to the user.
+      next=await resumeOffset(await resumeRequest("status",grant,signal),size);
+      if(next!==end)throw error;
+    }
+    if(next!==end)throw new Error("Unexpected upload offset");
+    offset=next;onProgress(offset,size);
+  }
+  try{
+    const finish=await resumeRequest("finish",grant,signal);
+    if(finish.status!==201)throw new Error("Upload not finalized");
+    return await parseShareResponse(finish);
+  }catch(error){
+    signal.throwIfAborted();
+    try{return await recoverCapture(grant,signal);}catch{throw error;}
+  }
+}
+export async function abortResumableCapture(grant:string,signal:AbortSignal){
+  const response=await resumeRequest("abort",grant,signal);
+  if(response.status!==204)throw new Error("Abort not confirmed");
+}
+
 async function parseShareResponse(response: Response) {
   const data = await readShareJson(response) as { url?: unknown; expiresAt?: unknown; revocation?: unknown };
   if (typeof data.url !== "string" || typeof data.expiresAt !== "number" || !Number.isSafeInteger(data.expiresAt) || typeof data.revocation !== "string" || !tokenPattern.test(data.revocation)) throw new Error("Invalid share response");
@@ -168,4 +229,23 @@ const recoveryLabels: Record<string, readonly [string,string,string]> = {
 export function shareRecoveryCopy(language:string){
  const [recover,explanation,failed]=recoveryLabels[language]??recoveryLabels.en;
  return {recover,explanation,failed};
+}
+
+const resumeLabels: Record<string, readonly [string,string,string,string]> = {
+ en:["Resume upload","Discard unfinished upload","Discard confirmed","Upload paused. Resume with the same capture before the code expires."],
+ hr:["Nastavi prijenos","Odbaci nedovršeni prijenos","Odbacivanje potvrđeno","Prijenos je zaustavljen. Nastavite s istom snimkom prije isteka koda."],
+ de:["Upload fortsetzen","Unfertigen Upload verwerfen","Verwerfen bestätigt","Upload pausiert. Vor Ablauf des Codes dieselbe Aufnahme erneut auswählen."],
+ es:["Reanudar subida","Descartar subida incompleta","Descarte confirmado","Subida pausada. Reanuda con la misma captura antes de que caduque el código."],
+ fr:["Reprendre l’envoi","Abandonner l’envoi incomplet","Abandon confirmé","Envoi suspendu. Reprenez avec la même capture avant expiration du code."],
+ it:["Riprendi caricamento","Scarta caricamento incompleto","Eliminazione confermata","Caricamento in pausa. Riprendi con la stessa cattura prima della scadenza."],
+ pt:["Retomar envio","Descartar envio incompleto","Descarte confirmado","Envio pausado. Retome com a mesma captura antes de o código expirar."],
+ nl:["Upload hervatten","Onvoltooide upload verwijderen","Verwijdering bevestigd","Upload gepauzeerd. Hervat met dezelfde opname voordat de code verloopt."],
+ pl:["Wznów przesyłanie","Odrzuć niedokończone przesyłanie","Odrzucenie potwierdzone","Przesyłanie wstrzymane. Wznów z tym samym zrzutem przed wygaśnięciem kodu."],
+ cs:["Pokračovat v nahrávání","Zahodit nedokončené nahrávání","Zahození potvrzeno","Nahrávání pozastaveno. Pokračujte se stejným snímkem před vypršením kódu."],
+ sk:["Pokračovať v nahrávaní","Zahodiť nedokončené nahrávanie","Zahodenie potvrdené","Nahrávanie pozastavené. Pokračujte s rovnakou snímkou pred vypršaním kódu."],
+ sl:["Nadaljuj nalaganje","Zavrzi nedokončano nalaganje","Zavrnitev potrjena","Nalaganje je zaustavljeno. Nadaljujte z istim posnetkom pred potekom kode."],
+};
+export function shareResumeCopy(language:string){
+ const [resume,discard,discarded,paused]=resumeLabels[language]??resumeLabels.en;
+ return {resume,discard,discarded,paused};
 }

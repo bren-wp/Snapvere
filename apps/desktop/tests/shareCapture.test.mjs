@@ -1,7 +1,7 @@
 // Snapvere by Brendigo
 import assert from "node:assert/strict";
 import test from "node:test";
-import { shareToken, shareMime, revokeCapture, recoverCapture, requestShareGrant, uploadOrRecoverCapture } from "../src/lib/shareCapture.ts";
+import { shareToken, shareMime, revokeCapture, recoverCapture, requestShareGrant, uploadOrRecoverCapture, uploadResumableCapture, abortResumableCapture } from "../src/lib/shareCapture.ts";
 const token="a".repeat(43), link="https://snpv.re/"+token;
 test("share URLs cannot select an external host, credentials, query or path",()=>{
  assert.equal(shareToken(link),token);
@@ -107,4 +107,46 @@ test("sharing responses enforce a bounded UTF-8 JSON object",async(t)=>{
  const huge=new ReadableStream({start(controller){controller.enqueue(new Uint8Array(4097));controller.close();}});
  mock.mock.mockImplementation(async()=>new Response(huge,{status:201,headers:{"Content-Type":"application/json"}}));
  await assert.rejects(requestShareGrant(signal),/too large/);
+});
+
+test("resumable upload resumes from committed offset and recovers lost chunk acknowledgement",async(t)=>{
+ const grant="1700003600000."+"a".repeat(32)+"."+"b".repeat(43),size=262144*2+9;
+ const bytes=new Uint8Array(size).fill(7).buffer;
+ const signal=new AbortController().signal;
+ const progress=[],calls=[];
+ let offset=262144;
+ const mock=t.mock.method(globalThis,"fetch",async(url,options)=>{
+  const action=url.split("/").pop();calls.push(action);
+  assert.equal(options.headers.Authorization,"Bearer "+grant);
+  assert.equal(options.credentials,"omit");assert.equal(options.redirect,"error");
+  if(action==="begin"){
+   assert.equal(options.body,undefined);
+   assert.equal(options.headers["X-Share-Size"],String(size));
+   assert.match(options.headers["X-Share-SHA256"],/^[0-9a-f]{64}$/);
+  }
+  if(action==="chunk"){
+   assert.equal(Number(options.headers["X-Share-Offset"]),offset);
+   offset+=options.body.byteLength;
+   if(offset===262144*2)throw new TypeError("lost response");
+  }
+  if(action==="finish")return Response.json({url:link,expiresAt:1700003600000,revocation:token},{status:201});
+  if(action==="abort")return new Response(null,{status:204});
+  return Response.json({offset,size,blockSize:262144});
+ });
+ const result=await uploadResumableCapture(bytes,"png",grant,3600,signal,(n,total)=>progress.push([n,total]));
+ assert.equal(result.url,link);
+ assert.deepEqual(calls,["begin","chunk","status","chunk","finish"]);
+ assert.deepEqual(progress,[[262144,size],[524288,size],[size,size]]);
+ await abortResumableCapture(grant,signal);
+ assert.equal(mock.mock.callCount(),6);
+});
+test("resumable upload rejects unaligned offsets and does not send media after cancellation",async(t)=>{
+ const grant="1700003600000."+"a".repeat(32)+"."+"b".repeat(43),bytes=new ArrayBuffer(300000);
+ const controller=new AbortController();
+ const mock=t.mock.method(globalThis,"fetch",async()=>Response.json({offset:1,size:bytes.byteLength,blockSize:262144}));
+ await assert.rejects(uploadResumableCapture(bytes,"png",grant,3600,controller.signal,()=>{}),/offset/);
+ assert.equal(mock.mock.callCount(),1);
+ controller.abort();
+ await assert.rejects(uploadResumableCapture(bytes,"png",grant,3600,controller.signal,()=>{}));
+ assert.equal(mock.mock.callCount(),1);
 });
