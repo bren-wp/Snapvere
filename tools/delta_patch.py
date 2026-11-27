@@ -38,11 +38,11 @@ def open_source(path):
     before = path.lstat()
     if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or not 1 <= before.st_size <= MAX_BYTES:
         raise ValueError("Expected bounded regular single-link source")
-    fd = os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0))
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
     stream = os.fdopen(fd, "rb")
     try:
         current = os.fstat(fd)
-        if (before.st_dev, before.st_ino, before.st_size) != (current.st_dev, current.st_ino, current.st_size):
+        if not stat.S_ISREG(current.st_mode) or fingerprint(before) != fingerprint(current):
             raise ValueError("Source identity changed")
         return stream
     except BaseException:
@@ -67,7 +67,8 @@ def fingerprint(info):
 
 def validate_header(h):
     fields = {"target", "from", "to", "base_size", "new_size", "base_sha256", "new_sha256"}
-    if not isinstance(h, dict) or set(h) != fields or h["target"] not in TARGETS:
+    if (not isinstance(h, dict) or set(h) != fields
+            or not isinstance(h["target"], str) or h["target"] not in TARGETS):
         raise ValueError("Invalid delta identity")
     for key in ("from", "to"):
         if not isinstance(h[key], str) or not VERSION.fullmatch(h[key]):

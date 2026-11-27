@@ -56,7 +56,9 @@ jobs:
       - name: Verify update website and all edition download routes
         run: python tools/test_update_site.py
       - name: Verify differential update reconstruction and rejection of corrupted patches
-        run: python tools/test_delta_patch.py
+        run: |
+          python tools/test_delta_patch.py
+          python tools/test_signed_delta.py
       - name: Lint PHP shared-host sharing service
         run: |
           php -l deploy/snpv.re/index.php
