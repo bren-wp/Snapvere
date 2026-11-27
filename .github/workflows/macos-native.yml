@@ -18,7 +18,7 @@ jobs:
   native-check:
     name: macOS ${{ matrix.arch }} Free and Pro compile probe
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -47,3 +47,39 @@ jobs:
           set -euo pipefail
           test "$(rustc -vV | sed -n 's/^host: //p')" = "$EXPECTED_RUST_HOST"
           bash macOS/check-native.sh
+      - name: Build native Free DMG preview
+        working-directory: apps/desktop
+        shell: bash
+        env:
+          RUST_HOST: ${{ matrix.host }}
+        run: |
+          set -euo pipefail
+          npm run tauri -- build --target "$RUST_HOST" --bundles dmg
+          mkdir -p "$RUNNER_TEMP/snapvere-dmg"
+          packages=(src-tauri/target/"$RUST_HOST"/release/bundle/dmg/*.dmg)
+          test "${#packages[@]}" -eq 1
+          test -f "${packages[0]}"
+          hdiutil verify "${packages[0]}"
+          mv "${packages[0]}" "$RUNNER_TEMP/snapvere-dmg/Snapvere-macOS-${{ matrix.arch }}.dmg"
+      - name: Build native Pro DMG preview
+        working-directory: apps/desktop
+        shell: bash
+        env:
+          RUST_HOST: ${{ matrix.host }}
+        run: |
+          set -euo pipefail
+          npm run tauri -- build --target "$RUST_HOST" --bundles dmg --features pro --config src-tauri/tauri.pro.conf.json
+          packages=(src-tauri/target/"$RUST_HOST"/release/bundle/dmg/*.dmg)
+          test "${#packages[@]}" -eq 1
+          test -f "${packages[0]}"
+          hdiutil verify "${packages[0]}"
+          mv "${packages[0]}" "$RUNNER_TEMP/snapvere-dmg/Snapvere-Pro-macOS-${{ matrix.arch }}.dmg"
+          cd "$RUNNER_TEMP/snapvere-dmg"
+          shasum -a 256 ./*.dmg > SHA256SUMS.txt
+      - name: Retain private CI preview packages (not a public release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapvere-macos-preview-${{ matrix.arch }}
+          path: ${{ runner.temp }}/snapvere-dmg/
+          if-no-files-found: error
+          retention-days: 14

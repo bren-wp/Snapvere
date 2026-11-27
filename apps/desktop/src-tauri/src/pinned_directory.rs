@@ -3,6 +3,9 @@
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
+#[cfg(target_os = "macos")]
+mod macos_read;
+
 // Hold each Linux directory by descriptor; do not follow any path-component
 // symlink. On Windows, hold ancestor directory handles without delete sharing
 // and reject reparse points. The picker and initial open are still separate.
@@ -108,6 +111,12 @@ impl PinnedDirectory {
 }
 
 /// Open a registered local media file without following redirected ancestors or leaf links.
+#[cfg(target_os = "macos")]
+pub(crate) fn open_bounded_source(source: &Path, max: u64) -> Result<(File, u64), String> {
+    macos_read::open_bounded_source(source, max)
+}
+
+#[cfg(not(target_os = "macos"))]
 pub(crate) fn open_bounded_source(source: &Path, max: u64) -> Result<(File, u64), String> {
     let parent = PinnedDirectory::open(source.parent().ok_or("Missing source directory")?)?;
     let name = source.file_name().ok_or("Missing source filename")?;
@@ -184,7 +193,13 @@ pub(crate) fn file_identity(file: &File) -> Result<String, String> {
             info.dwVolumeSerialNumber, info.nFileIndexHigh, info.nFileIndexLow
         ))
     }
-    #[cfg(not(any(target_os = "linux", windows)))]
+    #[cfg(target_os = "macos")]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let meta = file.metadata().map_err(|error| error.to_string())?;
+        Ok(format!("macos:{:x}:{:x}", meta.dev(), meta.ino()))
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
     {
         let _ = file;
         Err("Filesystem identity unsupported".into())

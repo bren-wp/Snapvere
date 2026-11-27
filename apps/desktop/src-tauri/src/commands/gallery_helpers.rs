@@ -68,7 +68,7 @@ fn share_metadata_matches(before: &fs::Metadata, after: &fs::Metadata) -> Result
         && after.is_file()
         && before.len() == after.len()
         && before.modified().map_err(estr)? == after.modified().map_err(estr)?;
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
         use std::os::unix::fs::MetadataExt;
         Ok(same
@@ -76,7 +76,7 @@ fn share_metadata_matches(before: &fs::Metadata, after: &fs::Metadata) -> Result
             && before.ctime() == after.ctime()
             && before.ctime_nsec() == after.ctime_nsec())
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     Ok(same)
 }
 
