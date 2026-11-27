@@ -467,6 +467,8 @@ jobs:
           cargo test --locked --example delta_stage
       - name: Verify native Rust delta staging against Python release codec
         run: python tools/test_native_delta.py
+      - name: Verify signed native delta end-to-end before any activation
+        run: python tools/test_signed_native_chain.py
       - name: Linux Clippy (warnings treated as errors)
         working-directory: apps/desktop/src-tauri
         run: cargo clippy --all-targets --locked -- -D warnings
