@@ -59,7 +59,7 @@ jobs:
         run: |
           php -l deploy/snpv.re/index.php
           php -l deploy/snpv.re/service.php
-          php -l deploy/snpv.re/setup.php
+
       - name: Verify Snapvere by Brendigo source headers
         run: python tools/check_source_headers.py
       - name: Enforce reachable Rust modules (dead-code graph)

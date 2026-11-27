@@ -22,6 +22,16 @@ export async function revokeCapture(url: string, secret: string, signal: AbortSi
   });
   if (response.status !== 204) throw new Error("Revocation not confirmed");
 }
+export async function requestShareGrant(signal: AbortSignal): Promise<string> {
+  const response = await fetch(SHARE_ENDPOINT + "/grant", {
+    method: "POST", credentials: "omit", redirect: "error", cache: "no-store",
+    referrerPolicy: "no-referrer", signal,
+  });
+  if (response.status !== 201) throw new Error("Share service unavailable");
+  const data = await response.json() as { grant?: unknown };
+  if (typeof data.grant !== "string" || !grantPattern.test(data.grant)) throw new Error("Invalid grant");
+  return data.grant;
+}
 export async function uploadCapture(bytes: ArrayBuffer, format: string, grant: string, ttl: number, signal: AbortSignal) {
   const type = shareMime(format);
   if (!type || bytes.byteLength < 1 || bytes.byteLength > 16 * 1024 * 1024 || !grantPattern.test(grant) || ![3600,86400,604800].includes(ttl)) throw new Error("Invalid share request");

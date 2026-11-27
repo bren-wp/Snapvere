@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Share2 } from "lucide-react";
 import { ipc } from "../lib/ipc";
-import { recoverCapture, revokeCapture, shareActionCopy, shareCopy, shareMime, shareRecoveryCopy, uploadCapture } from "../lib/shareCapture";
+import { requestShareGrant, recoverCapture, revokeCapture, shareActionCopy, shareCopy, shareMime, shareRecoveryCopy, uploadCapture } from "../lib/shareCapture";
 import type { Screenshot } from "../lib/types";
 
 export default function ShareCaptureDialog({shot,language,onClose}:{shot:Screenshot;language:string;onClose:()=>void}) {
@@ -31,7 +31,9 @@ export default function ShareCaptureDialog({shot,language,onClose}:{shot:Screens
    const bytes=await ipc.readShareMedia(shot.id);
    if(abort.signal.aborted)throw new Error("Cancelled");
    timeout=setTimeout(()=>abort.abort(),60000);
-   const shared=await uploadCapture(bytes,shot.format,grant.trim(),ttl,abort.signal);
+   const code=await requestShareGrant(abort.signal);
+   setGrant(code);
+   const shared=await uploadCapture(bytes,shot.format,code,ttl,abort.signal);
    setResult(shared);setGrant("");
   }catch(error){
    if(abort.signal.aborted)setNotice(actions.cancelled);
@@ -71,13 +73,14 @@ export default function ShareCaptureDialog({shot,language,onClose}:{shot:Screens
    <button type="button" disabled={busy} className="snapvere-btn-secondary rounded-full px-4 py-2 text-sm disabled:opacity-50" onClick={()=>setConfirmRevoke(true)}>{actions.revoke}</button>
    {confirmRevoke&&<div className="rounded-lg border border-border p-3 text-sm"><p>{actions.confirm}</p><div className="mt-2 flex gap-2"><button type="button" disabled={busy} className="snapvere-btn-secondary rounded-full px-3 py-2" onClick={()=>void revoke()}>{actions.revoke}</button><button type="button" disabled={busy} className="snapvere-btn-secondary rounded-full px-3 py-2" onClick={()=>setConfirmRevoke(false)}>{t.close}</button></div></div>}
   </div>:revoked?null:<form onSubmit={e=>{e.preventDefault();void submit();}} className="space-y-3">
-   <label className="block text-sm">{t.code}<input type="password" autoComplete="off" required maxLength={96} disabled={busy} value={grant} onChange={e=>setGrant(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-black/15 p-2"/></label>
    <label className="block text-sm">{t.expiry}<select disabled={busy} value={ttl} onChange={e=>setTtl(Number(e.target.value))} className="mt-1 w-full rounded-lg border border-border bg-elevated p-2"><option value={3600}>{t.hour}</option><option value={86400}>{t.day}</option><option value={604800}>{t.week}</option></select></label>
-   <button type="submit" disabled={!grant.trim()||busy||!supported} className="snapvere-btn-primary rounded-full px-4 py-2 text-sm disabled:opacity-50">{busy?t.busy:t.upload}</button>
-   <div className="border-t border-border pt-3">
-    <p className="mb-2 text-xs text-muted">{recovery.explanation}</p>
-    <button type="button" disabled={!grant.trim()||busy} onClick={()=>void recover()} className="snapvere-btn-secondary rounded-full px-4 py-2 text-sm disabled:opacity-50">{recovery.recover}</button>
-   </div>
+   <button type="submit" disabled={busy||!supported||Boolean(grant)} className="snapvere-btn-primary rounded-full px-4 py-2 text-sm disabled:opacity-50">{busy?t.busy:t.upload}</button>
+   <details className="border-t border-border pt-3" open={Boolean(grant)||undefined}>
+    <summary className="cursor-pointer text-sm text-muted">{recovery.recover}</summary>
+    <p className="my-2 text-xs text-muted">{recovery.explanation}</p>
+    <label className="block text-sm">{t.code}<input type="password" autoComplete="off" maxLength={96} disabled={busy} value={grant} onChange={e=>setGrant(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-black/15 p-2"/></label>
+    <button type="button" disabled={!grant.trim()||busy} onClick={()=>void recover()} className="snapvere-btn-secondary mt-2 rounded-full px-4 py-2 text-sm disabled:opacity-50">{recovery.recover}</button>
+   </details>
   </form>}
   {notice&&<p role="status" className="mt-3 text-sm text-muted">{notice}</p>}
   {busy&&!result&&<button type="button" onClick={()=>controller.current?.abort()} className="snapvere-btn-secondary mt-3 rounded-full px-4 py-2 text-sm">{actions.cancel}</button>}

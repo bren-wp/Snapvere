@@ -67,8 +67,7 @@ fn share_metadata_matches(before: &fs::Metadata, after: &fs::Metadata) -> Result
 
 impl ShareSource {
     pub(super) fn open(path: &Path, gallery_size: u64) -> Result<Self, String> {
-        let (file, size) =
-            crate::pinned_directory::open_bounded_source(path, MAX_SHARE_BYTES)?;
+        let (file, size) = crate::pinned_directory::open_bounded_source(path, MAX_SHARE_BYTES)?;
         if size != gallery_size {
             return Err("Gallery file size changed".into());
         }
@@ -83,8 +82,7 @@ impl ShareSource {
     }
 
     fn verify_path(&self, path: &Path) -> Result<(), String> {
-        let (current, size) =
-            crate::pinned_directory::open_bounded_source(path, MAX_SHARE_BYTES)?;
+        let (current, size) = crate::pinned_directory::open_bounded_source(path, MAX_SHARE_BYTES)?;
         if size != self.size
             || crate::pinned_directory::file_identity(&current)? != self.identity
             || !share_metadata_matches(&self.metadata, &current.metadata().map_err(estr)?)?

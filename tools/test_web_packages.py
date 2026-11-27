@@ -69,10 +69,20 @@ def main(directory):
         extract(directory, "snpv.re-English.zip", share)
         extract(directory, "update.snapvere.com-English.zip", update)
         env = dict(os.environ, SNAPVERE_SHARE_STORAGE=str(tmp / "private"))
-        grant = subprocess.check_output(["php", "setup.php"], cwd=share, env=env, text=True).strip()
+        assert not (share / "setup.php").exists()
         proc, base = start(share, env, "index.php")
         try:
             api = base + "/api/v1/shares"
+            assert request(api+"/grant", "POST", data=b"")[0] == 400
+            origin = {"Origin":"http://tauri.localhost"}
+            code, _, body = request(api+"/grant", "POST", origin, b"")
+            assert code == 201
+            grant = json.loads(body)["grant"]
+            original_key = (tmp / "private/key").read_bytes()
+            for _ in range(3):
+                assert request(api+"/grant", "POST", origin, b"")[0] == 201
+            assert request(api+"/grant", "POST", origin, b"")[0] == 429
+            assert (tmp / "private/key").read_bytes() == original_key
             png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jR1sAAAAASUVORK5CYII=")
             headers = {"Authorization": "Bearer " + grant, "Content-Type": "image/png", "X-Share-TTL": "3600"}
             assert request(api, "POST", {**headers, "Authorization": "Bearer bad"}, png)[0] == 401

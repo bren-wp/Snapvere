@@ -11,17 +11,22 @@ if ($method==='GET' && ($path==='/' || preg_match('~\A/[A-Za-z0-9_-]{43}\z~',(st
     header('Content-Type: text/html; charset=utf-8');
     readfile(__DIR__.'/viewer.html'); exit;
 }
-if (!is_string($path) || !preg_match('~\A/api/v1/shares(?:/(recover|[A-Za-z0-9_-]{43})(/media)?)?\z~',$path,$match)) fail_share(404);
+if (!is_string($path) || !preg_match('~\A/api/v1/shares(?:/(grant|recover|[A-Za-z0-9_-]{43})(/media)?)?\z~',$path,$match)) fail_share(404);
 if (parse_url($_SERVER['REQUEST_URI'],PHP_URL_QUERY)!==null) fail_share(404);
 $id=$match[1]??''; $media=isset($match[2]);
 if ($method==='OPTIONS') {
-    $expected=$id===''||$id==='recover'?'POST':(!$media?'DELETE':'GET');
+    $expected=$id===''||$id==='recover'||$id==='grant'?'POST':(!$media?'DELETE':'GET');
     if (!share_origin() || ($_SERVER['HTTP_ACCESS_CONTROL_REQUEST_METHOD']??'')!==$expected) fail_share(404);
     header('Access-Control-Allow-Methods: '.$expected);
     header('Access-Control-Allow-Headers: authorization, content-type, x-share-ttl');
     http_response_code(204); exit;
 }
 try {
+    if ($method==='POST' && $id==='grant' && !$media) {
+        if (!share_origin() || (int)($_SERVER['CONTENT_LENGTH']??0)!==0 || isset($_SERVER['HTTP_TRANSFER_ENCODING'])) fail_share(400);
+        [$root,$key]=initialize_storage();
+        share_json(201,['grant'=>issue_grant($root,$key)]);
+    }
     $root=share_storage(); $key=share_key($root);
     $bearer=share_bearer();
     if ($method==='POST' && ($id===''||$id==='recover')) {
@@ -59,7 +64,7 @@ try {
             share_json(201,['url'=>'https://snpv.re/'.$token,'expiresAt'=>$expiry,'revocation'=>$revocation]);
         } finally { if ($pending!==null) remove_pending($pending); flock($lock,LOCK_UN); fclose($lock); }
     }
-    if ($id===''||$id==='recover') fail_share(404);
+    if ($id===''||$id==='recover'||$id==='grant') fail_share(404);
     $dir=$root.'/'.hash('sha256',$id); $m=metadata($dir);
     if (!$m) fail_share(404);
     if ($method==='DELETE' && !$media) {

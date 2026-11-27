@@ -15,7 +15,64 @@ function share_headers(): void {
 }
 function share_json(int $status,array $body): never { http_response_code($status); header('Content-Type: application/json'); echo json_encode($body,JSON_THROW_ON_ERROR); exit; }
 function fail_share(int $status): never { share_json($status,['error'=>'Request unavailable']); }
-function storage_path(): string { return getenv('SNAPVERE_SHARE_STORAGE') ?: dirname(__DIR__).'/.snapvere-share-data-'.substr(hash('sha256',__DIR__),0,16); }
+function storage_path(): string {
+    $explicit=getenv('SNAPVERE_SHARE_STORAGE');
+    if (is_string($explicit)&&$explicit!=='') return $explicit;
+    // A subdomain may live beneath public_html: never assume its parent is private.
+    $home=getenv('HOME');
+    if (function_exists('posix_geteuid')&&function_exists('posix_getpwuid')) {
+        $account=posix_getpwuid(posix_geteuid());
+        if (is_array($account)&&is_string($account['dir']??null)) $home=$account['dir'];
+    }
+    $home=is_string($home)?realpath($home):false;
+    $web=realpath(__DIR__);
+    if (!$home||!$web||$home==='/'||!str_starts_with($web,$home.DIRECTORY_SEPARATOR)) throw new RuntimeException('Private home directory unavailable');
+    return $home.'/.snapvere-share-data-'.substr(hash('sha256',__DIR__),0,16);
+}
+function initialize_storage(): array {
+    $path=storage_path();
+    if (!is_dir($path)&&!@mkdir($path,0700)&&!is_dir($path)) throw new RuntimeException();
+    $root=share_storage();
+    $lock=fopen($root.'/lock','c');
+    if (!$lock||!flock($lock,LOCK_EX)) throw new RuntimeException();
+    try {
+        $keyPath=$root.'/key';
+        if (!file_exists($keyPath)&&!is_link($keyPath)) {
+            // An existing store without its original key must not be silently re-keyed.
+            foreach (scandir($root)?:[] as $entry) if (!in_array($entry,['.','..','lock'],true)) throw new RuntimeException();
+            write_new($keyPath,bin2hex(random_bytes(32)));
+        }
+        return [$root,share_key($root)];
+    } finally { flock($lock,LOCK_UN); fclose($lock); }
+}
+// Anonymous, short-lived one-use grant issuance. Origin is a browser boundary,
+// not identity. Limit by connection address and a global hourly budget.
+function issue_grant(string $root,string $key): string {
+    $address=$_SERVER['REMOTE_ADDR']??'';
+    if (!filter_var($address,FILTER_VALIDATE_IP)) fail_share(400);
+    $bucket=(int)floor(milliseconds()/3600000);
+    $id=hash_hmac('sha256','rate:'.$bucket.':'.$address,$key);
+    $lock=fopen($root.'/lock','c');
+    if (!$lock||!flock($lock,LOCK_EX|LOCK_NB)) fail_share(503);
+    try {
+        $p=$root.'/rate.json';
+        $rate=['hour'=>$bucket,'total'=>0,'clients'=>[]];
+        if (file_exists($p)||is_link($p)) {
+            if (is_link($p)||!is_file($p)||filesize($p)>16384) throw new RuntimeException();
+            $old=json_decode((string)file_get_contents($p),true,8,JSON_THROW_ON_ERROR);
+            if (!is_array($old)||!is_int($old['hour']??null)||!is_int($old['total']??null)||!is_array($old['clients']??null)||$old['hour']>$bucket) throw new RuntimeException();
+            if ($old['hour']===$bucket) $rate=$old;
+        }
+        if ($rate['total']>=60||($rate['clients'][$id]??0)>=4) { header('Retry-After: 3600'); fail_share(429); }
+        if (storage_bytes($root)+4096>QUOTA || disk_free_space($root)<67108864) fail_share(507);
+        $rate['total']++; $rate['clients'][$id]=($rate['clients'][$id]??0)+1;
+        $tmp=$root.'/rate-'.bin2hex(random_bytes(12)).'.tmp';
+        write_new($tmp,json_encode($rate,JSON_THROW_ON_ERROR));
+        if (!rename($tmp,$p)) throw new RuntimeException();
+        $payload=(milliseconds()+3600000).'.'.b64u(random_bytes(24));
+        return $payload.'.'.b64u(hash_hmac('sha256',$payload,$key,true));
+    } finally { flock($lock,LOCK_UN); fclose($lock); }
+}
 function share_storage(): string {
     $path=storage_path(); $root=realpath($path); $web=realpath(__DIR__);
     if (!$root||!$web||is_link($path)||!is_dir($root)||$root===$web||str_starts_with($root,$web.DIRECTORY_SEPARATOR)||str_starts_with($web,$root.DIRECTORY_SEPARATOR)||(fileperms($root)&0077)!==0) throw new RuntimeException('Private storage unavailable');

@@ -147,6 +147,7 @@ export async function createShareServer({storage,key,now=Date.now,quotaBytes=def
  if(!usedInfo.isDirectory()||usedInfo.isSymbolicLink()||(process.platform!=="win32"&&(usedInfo.mode&0o077)))throw Error("Invalid private grant storage");
  if(!Number.isSafeInteger(quotaBytes)||quotaBytes<1)throw Error("Invalid storage quota");
  let uploads=0,reads=0,reserved=0;
+ let grantHour=-1,grantTotal=0;const grantClients=new Map();
  // Serialize admission; in-flight bytes may be counted twice, deliberately
  // preferring rejection over exceeding the budget.
  let admission=Promise.resolve();
@@ -178,6 +179,9 @@ export async function createShareServer({storage,key,now=Date.now,quotaBytes=def
    const path=req.url;
    if(!path||!path.startsWith("/")||path.includes("?")||path.includes("#"))return unavailable(res);
    if(req.method==="OPTIONS"&&origins.has(origin)){
+    if(path==="/api/v1/shares/grant"&&req.headers["access-control-request-method"]==="POST"){
+     res.writeHead(204,{"Access-Control-Allow-Methods":"POST"});return res.end();
+    }
     if(path==="/api/v1/shares/recover"&&req.headers["access-control-request-method"]==="POST"){
      res.writeHead(204,{"Access-Control-Allow-Methods":"POST","Access-Control-Allow-Headers":"authorization"});return res.end();
     }
@@ -191,6 +195,17 @@ export async function createShareServer({storage,key,now=Date.now,quotaBytes=def
    }
    if(req.method==="GET"&&assets.has(path)){const [file,type]=assets.get(path);const data=await readFile(file);res.writeHead(200,{"Content-Type":type});return res.end(data);}
    if(req.method==="GET"&&(path==="/"||tokenRE.test(path.slice(1)))){const data=await readFile(join(here,"index.html"));res.writeHead(200,{"Content-Type":"text/html; charset=utf-8"});return res.end(data);}
+   if(req.method==="POST"&&path==="/api/v1/shares/grant"){
+    if(!origins.has(origin)||req.headers["transfer-encoding"]||Number(req.headers["content-length"]||0)!==0)return json(res,400,{error:"Invalid grant request"});
+    const hour=Math.floor(now()/3600000);
+    if(hour!==grantHour){grantHour=hour;grantTotal=0;grantClients.clear();}
+    const address=req.socket.remoteAddress;
+    if(!address)return unavailable(res);
+    const client=createHmac("sha256",key).update("rate:"+hour+":"+address).digest("hex");
+    if(grantTotal>=60||(grantClients.get(client)||0)>=4){res.setHeader("Retry-After","3600");return json(res,429,{error:"Try again later"});}
+    grantTotal++;grantClients.set(client,(grantClients.get(client)||0)+1);
+    return json(res,201,{grant:createGrant(key,now()+3600000)});
+   }
    if(req.method==="POST"&&path==="/api/v1/shares/recover"){
     const grant=req.headers.authorization?.startsWith("Bearer ")?req.headers.authorization.slice(7):"";
     if(!grantValid(key,grant,now()))return json(res,401,{error:"Valid upload code required"});

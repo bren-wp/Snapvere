@@ -1939,12 +1939,19 @@ pub async fn read_share_media(
         let name: String = shot
             .name
             .chars()
-            .filter(|ch| !ch.is_control() && !matches!(*ch, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'))
+            .filter(|ch| {
+                !ch.is_control()
+                    && !matches!(*ch, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
+            })
             .take(200)
             .collect();
         let confirmed = app
             .dialog()
-            .message(format!("\"{name}\" — {:.2} MiB\n\n{}", shot.size_bytes as f64 / 1048576.0, labels[1]))
+            .message(format!(
+                "\"{name}\" — {:.2} MiB\n\n{}",
+                shot.size_bytes as f64 / 1048576.0,
+                labels[1]
+            ))
             .title(labels[0])
             .kind(MessageDialogKind::Warning)
             .buttons(MessageDialogButtons::OkCancelCustom(
