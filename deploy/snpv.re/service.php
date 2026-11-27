@@ -135,11 +135,11 @@ function maintain_expired(string $root,int $now): void {
             $removed++;
         } elseif ($entry->isFile() && preg_match('/\Aused-[0-9a-f]{64}\z/',$name)) {
             $info=lstat($path);
-            if (!$info||$info['nlink']!==1||$info['size']!==13) continue;
-            $value=file_get_contents($path,false,null,0,14);
+            if (!$info||$info['nlink']!==1||!in_array($info['size'],[13,19],true)) continue;
+            $value=file_get_contents($path,false,null,0,20);
             // Legacy markers store consumption time. The verifier accepts a
             // maximum 24-hour future expiry, so keep markers for 25 hours.
-            if (!is_string($value)||!preg_match('/\A[0-9]{13}\z/',$value)||(int)$value<1||(int)$value>$now-90000000) continue;
+            if (!is_string($value)||!preg_match('/\A(?:abort:)?([0-9]{13})\z/',$value,$stamp)||(int)$stamp[1]<1||(int)$stamp[1]>$now-90000000) continue;
             if (unlink($path)) $removed++;
         }
     }

@@ -17,7 +17,7 @@ const copy: Record<string, readonly [string,string,string,string,string,string,s
  sl:["Shranjene povezave","Geslo trezorja (12+ znakov)","Odkleni zgodovino","Shrani trenutno povezavo","Odpri povezavo","Odstrani lokalni zapis","Odstranim lokalni zapis? Javna povezava ne bo preklicana.","Trezorja ni mogoče odpreti ali shraniti. Preverite geslo in prostor.","Ni shranjenih povezav","Zakleni zgodovino"],
 };
 
-export default function ShareVaultPanel({language,result,disabled,onSelect}:{language:string;result:SavedShare|null;disabled:boolean;onSelect:(record:SavedShare)=>void}) {
+export default function ShareVaultPanel({language,result,disabled,onBusy,onSelect}:{language:string;result:SavedShare|null;disabled:boolean;onBusy:(busy:boolean)=>void;onSelect:(record:SavedShare)=>void}) {
  const [title,password,unlock,save,open,remove,confirmText,failed,empty,lock]=copy[language]??copy.en;
  const [passphrase,setPassphrase]=useState("");
  const [records,setRecords]=useState<SavedShare[]|null>(null);
@@ -25,9 +25,10 @@ export default function ShareVaultPanel({language,result,disabled,onSelect}:{lan
  const [error,setError]=useState(false);
  const [pendingRemove,setPendingRemove]=useState<string|null>(null);
  const running=useRef(false);
+ const expanded=useRef(false);
  async function perform(kind:"unlock"|"save"|"remove", url?:string){
   if(running.current||disabled||passphrase.length<12)return;
-  running.current=true;setBusy(true);setError(false);
+  running.current=true;setBusy(true);onBusy(true);setError(false);
   const secret=passphrase;setPassphrase("");
   try{
    if(kind==="unlock"){
@@ -39,10 +40,10 @@ export default function ShareVaultPanel({language,result,disabled,onSelect}:{lan
     setRecords(await editShareVault(localStorage,secret,{kind:"remove",url}));
     setPendingRemove(null);
    }
-  }catch{setError(true);}
-  finally{running.current=false;setBusy(false);}
+  }catch{setError(true);setRecords(null);}
+  finally{if(!expanded.current){setRecords(null);setPassphrase("");setPendingRemove(null);setError(false);}running.current=false;setBusy(false);onBusy(false);}
  }
- return <details className="mt-4 border-t border-border pt-3" onToggle={e=>{if(!e.currentTarget.open&&!running.current){setRecords(null);setPassphrase("");setPendingRemove(null);setError(false);}}}>
+ return <details className="mt-4 border-t border-border pt-3" onToggle={e=>{expanded.current=e.currentTarget.open;if(!expanded.current){setRecords(null);setPassphrase("");setPendingRemove(null);setError(false);}}}>
   <summary className="cursor-pointer text-sm font-medium">{title}</summary>
   <div className="mt-3 space-y-3">
    <label className="block text-xs text-muted">{password}<input type="password" autoComplete="off" maxLength={256} value={passphrase} disabled={disabled||busy} onChange={e=>setPassphrase(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-black/15 p-2 text-sm text-text"/></label>

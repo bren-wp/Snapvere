@@ -10,6 +10,16 @@ pub(super) fn allow_media_dirs(app: &AppHandle, items: &[Screenshot]) {
     for shot in items {
         for path_str in std::iter::once(shot.file_path.as_str()).chain(shot.thumb_path.as_deref()) {
             let path = Path::new(path_str);
+            // Never authorize missing, redirected, non-regular or hard-linked
+            // files. Keep the read handle during scope registration.
+            let Ok((_file, size)) =
+                crate::pinned_directory::open_bounded_source(path, u64::MAX)
+            else {
+                continue;
+            };
+            if path_str == shot.file_path && size != shot.size_bytes {
+                continue;
+            }
             if !scope.is_allowed(path) {
                 if let Err(e) = scope.allow_file(path) {
                     log(&format!("asset scope {}: {e}", path.display()));
@@ -23,17 +33,23 @@ pub(super) fn allow_media_dirs(app: &AppHandle, items: &[Screenshot]) {
 // Komande primaju id zapisa, ne putanju: webview tako ne može otvoriti ni
 // kopirati ništa što nije u galeriji.
 
-pub(super) fn media_path(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
+pub(super) fn media_path(app: &AppHandle, id: &str) -> Result<(PathBuf, fs::File), String> {
     let state = app.state::<AppState>();
     let shot = lock(&state.db)
         .get(id)
         .map_err(estr)?
         .ok_or("This item is no longer in the gallery")?;
     let path = PathBuf::from(shot.file_path);
-    if !path.exists() {
-        return Err("The file was moved or deleted".into());
+    let file = verified_media_file(&path, shot.size_bytes)?;
+    Ok((path, file))
+}
+
+fn verified_media_file(path: &Path, expected_size: u64) -> Result<fs::File, String> {
+    let (file, size) = crate::pinned_directory::open_bounded_source(path, u64::MAX)?;
+    if size != expected_size {
+        return Err("Gallery file size changed".into());
     }
-    Ok(path)
+    Ok(file)
 }
 
 pub(super) const MAX_CLIPBOARD_FILE_BYTES: u64 = 200 * 1024 * 1024;
@@ -209,6 +225,20 @@ mod tests {
         assert!(source.read_confirmed(&path).is_err());
         assert_eq!(fs::read(&saved).unwrap(), b"original");
         assert_eq!(fs::read(&path).unwrap(), b"replaced");
+    }
+
+    #[test]
+    fn gallery_open_rejects_changed_size_and_hard_link() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("capture.png");
+        fs::write(&path, b"original").unwrap();
+        assert!(verified_media_file(&path, 8).is_ok());
+        assert!(verified_media_file(&path, 9).is_err());
+        let alias = dir.path().join("alias.png");
+        fs::hard_link(&path, &alias).unwrap();
+        assert!(verified_media_file(&path, 8).is_err());
+        assert!(verified_media_file(&alias, 8).is_err());
+        assert_eq!(fs::read(&path).unwrap(), b"original");
     }
 
     #[test]

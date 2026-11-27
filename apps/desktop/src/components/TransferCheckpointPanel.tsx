@@ -17,8 +17,8 @@ const labels:Record<string,readonly [string,string,string,string,string,string,s
  sk:["Pokračovať po zatvorení","Voliteľné heslo (12+ znakov)","Pred nahrávaním zadajte heslo na uloženie šifrovaného stavu. Obnovte s rovnakou snímkou. Po dokončení stav ručne odstráňte.","Uložiť stav","Obnoviť stav","Odstrániť stav","Stav aktualizovaný","Chýba zodpovedajúci stav, nesprávne heslo alebo nedostupné úložisko."],
  sl:["Nadaljuj po zaprtju","Izbirno geslo (12+ znakov)","Pred nalaganjem vnesite geslo za šifrirano shranjevanje stanja. Obnovite z istim posnetkom. Po koncu stanje ročno odstranite.","Shrani stanje","Obnovi stanje","Odstrani stanje","Stanje posodobljeno","Ni ustreznega stanja, napačno geslo ali nedostopna shramba."],
 };
-type Props={shot:Screenshot;language:string;checkpoint:TransferCheckpoint|null;password:string;setPassword:(value:string)=>void;disabled:boolean;onBusy:(busy:boolean)=>void;onRestore:(checkpoint:TransferCheckpoint)=>void};
-export default function TransferCheckpointPanel({shot,language,checkpoint,password,setPassword,disabled,onBusy,onRestore}:Props){
+type Props={shot:Screenshot;language:string;checkpoint:TransferCheckpoint|null;password:string;setPassword:(value:string)=>void;disabled:boolean;completed:boolean;onSaved:()=>void;onBusy:(busy:boolean)=>void;onRestore:(checkpoint:TransferCheckpoint)=>void};
+export default function TransferCheckpointPanel({shot,language,checkpoint,password,setPassword,disabled,completed,onSaved,onBusy,onRestore}:Props){
  const [title,pass,help,save,restore,remove,success,failure]=labels[language]??labels.en;
  const [busy,setBusy]=useState(false),[message,setMessage]=useState(""),[error,setError]=useState(false);
  const running=useRef(false);
@@ -27,8 +27,8 @@ export default function TransferCheckpointPanel({shot,language,checkpoint,passwo
   running.current=true;setBusy(true);onBusy(true);setMessage("");setError(false);
   const secret=password;setPassword("");
   try{
-   if(action==="save"&&checkpoint)await saveTransferCheckpoint(localStorage,secret,checkpoint);
-   else if(action==="restore"){
+   if(action==="save"&&checkpoint&&!completed){await saveTransferCheckpoint(localStorage,secret,checkpoint);onSaved();}
+   else if(action==="restore"&&!completed){
     const value=await loadTransferCheckpoint(localStorage,secret);
     if(!value||!checkpointMatchesCapture(value,shot))throw new Error("Checkpoint mismatch");
     onRestore(value);
@@ -42,8 +42,8 @@ export default function TransferCheckpointPanel({shot,language,checkpoint,passwo
   <p className="my-2 text-xs text-muted">{help}</p>
   <label className="block text-xs text-muted">{pass}<input type="password" autoComplete="off" maxLength={256} disabled={disabled||busy} value={password} onChange={e=>setPassword(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-black/15 p-2 text-sm text-text"/></label>
   <div className="mt-2 flex flex-wrap gap-2">
-   {checkpoint&&<button type="button" disabled={disabled||busy||password.length<12} onClick={()=>void act("save")} className="snapvere-btn-secondary rounded-full px-3 py-1 text-xs disabled:opacity-50">{save}</button>}
-   {!checkpoint&&<button type="button" disabled={disabled||busy||password.length<12} onClick={()=>void act("restore")} className="snapvere-btn-secondary rounded-full px-3 py-1 text-xs disabled:opacity-50">{restore}</button>}
+   {checkpoint&&!completed&&<button type="button" disabled={disabled||busy||password.length<12} onClick={()=>void act("save")} className="snapvere-btn-secondary rounded-full px-3 py-1 text-xs disabled:opacity-50">{save}</button>}
+   {!checkpoint&&!completed&&<button type="button" disabled={disabled||busy||password.length<12} onClick={()=>void act("restore")} className="snapvere-btn-secondary rounded-full px-3 py-1 text-xs disabled:opacity-50">{restore}</button>}
    <button type="button" disabled={disabled||busy||password.length<12} onClick={()=>void act("remove")} className="snapvere-btn-secondary rounded-full px-3 py-1 text-xs disabled:opacity-50">{remove}</button>
   </div>
   {message&&<p role={error?"alert":"status"} className={error?"mt-2 text-xs text-danger":"mt-2 text-xs text-muted"}>{message}</p>}

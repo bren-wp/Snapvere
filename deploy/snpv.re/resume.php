@@ -94,7 +94,23 @@ function resume_dispatch(string $action,string $method): never {
     if (!$lock||!flock($lock,LOCK_EX|LOCK_NB)) fail_share(503);
     try {
         if (!grant_ok($key,$grant)) fail_share(401);
-        if (file_exists($used)||is_link($used)||file_exists($published)||is_link($published)) fail_share(409);
+        if (file_exists($published)||is_link($published)) fail_share(409);
+        if ($action==='abort') {
+            // Reserve the grant even when begin never reached the server.
+            // A distinct tombstone makes lost abort acknowledgements retryable
+            // without treating previously published/revoked shares as aborted.
+            $marker=resume_read_file($used,19);
+            if (file_exists($used)||is_link($used)) {
+                if ($marker===null||!preg_match('/\Aabort:[0-9]{13}\z/',$marker)) fail_share(409);
+            }
+            $exists=file_exists($dir)||is_link($dir);
+            $m=$exists?resume_manifest($dir):null;
+            if ($exists&&(!$m||$m['grant']!==$hash||$m['deadline']!==(int)substr($grant,0,13)||resume_offset($dir,$m)===null)) fail_share(409);
+            if ($marker===null) write_new($used,'abort:'.milliseconds());
+            if ($exists&&!resume_remove($dir,$m)) fail_share(503);
+            http_response_code(204);exit;
+        }
+        if (file_exists($used)||is_link($used)) fail_share(409);
         if ($action==='begin') {
             $spec=resume_spec();
             $existing=resume_manifest($dir);
@@ -114,11 +130,6 @@ function resume_dispatch(string $action,string $method): never {
         $offset=resume_offset($dir,$m);
         if ($offset===null) fail_share(409);
         if ($action==='begin'||$action==='status') share_json(200,['offset'=>$offset,'size'=>$m['size'],'blockSize'=>RESUME_BLOCK]);
-        if ($action==='abort') {
-            write_new($used,(string)milliseconds());
-            if (!resume_remove($dir,$m)) fail_share(503);
-            http_response_code(204);exit;
-        }
         if ($action==='chunk') {
             $rawOffset=$_SERVER['HTTP_X_SHARE_OFFSET']??'';
             $rawLength=$_SERVER['CONTENT_LENGTH']??'';

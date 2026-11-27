@@ -850,9 +850,8 @@ fn open_editor_window(app: &AppHandle, file_path: &str) -> Result<(), String> {
     // file:// asset URLs would otherwise be blocked in the editor WebView.
     // Permit the exact saved file, never an arbitrary directory.
     let image = Path::new(file_path);
-    if !image.is_file() {
-        return Err("Saved screenshot is missing; cannot open editor".into());
-    }
+    let (_verified_file, _) =
+        crate::pinned_directory::open_bounded_source(image, u64::MAX)?;
     app.asset_protocol_scope()
         .allow_file(image)
         .map_err(|e| format!("Cannot authorize screenshot for editor: {e}"))?;
@@ -1910,7 +1909,7 @@ pub fn search_screenshots(
 #[tauri::command]
 pub fn open_media(window: tauri::WebviewWindow, app: AppHandle, id: String) -> Result<(), String> {
     require_window_label(window.label(), &["home"])?;
-    let path = media_path(&app, &id)?;
+    let (path, _verified_file) = media_path(&app, &id)?;
     app.opener()
         .open_path(path.to_string_lossy(), None::<&str>)
         .map_err(estr)
@@ -1924,7 +1923,7 @@ pub fn reveal_media(
     id: String,
 ) -> Result<(), String> {
     require_window_label(window.label(), &["home"])?;
-    let path = media_path(&app, &id)?;
+    let (path, _verified_file) = media_path(&app, &id)?;
     app.opener().reveal_item_in_dir(&path).map_err(estr)
 }
 
@@ -1936,7 +1935,7 @@ pub fn copy_media_path(
     id: String,
 ) -> Result<(), String> {
     require_window_label(window.label(), &["home"])?;
-    let path = media_path(&app, &id)?;
+    let (path, _verified_file) = media_path(&app, &id)?;
     app.clipboard()
         .write_text(path.to_string_lossy().into_owned())
         .map_err(estr)
@@ -1951,7 +1950,7 @@ pub async fn copy_media_image(
     id: String,
 ) -> Result<(), String> {
     require_window_label(window.label(), &["home"])?;
-    let path = media_path(&app, &id)?;
+    let (path, _verified_file) = media_path(&app, &id)?;
     tauri::async_runtime::spawn_blocking(move || {
         let img = decode_copy_image(&path)?;
         copy_rgba_to_clipboard(&app, &img)

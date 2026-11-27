@@ -163,6 +163,18 @@ def main(directory):
             assert request(resume+"finish","POST",bad_auth,b"")[0]==415
             assert request(resume+"abort","POST",bad_auth,b"")[0]==204
             assert request(resume+"begin","POST",{**spec,**bad_auth},b"")[0]==409
+            # Lost abort acknowledgement: retry is idempotent.
+            assert request(resume+"abort","POST",bad_auth,b"")[0]==204
+            # The grant may have been issued but begin never reached the server.
+            unused={"Authorization":"Bearer "+extra_grants[2]}
+            assert request(resume+"abort","POST",unused,b"")[0]==204
+            assert request(resume+"abort","POST",unused,b"")[0]==204
+            assert request(resume+"begin","POST",{**spec,**unused},b"")[0]==409
+            # A committed or previously revoked link must never be treated
+            # as a discarded unfinished upload.
+            assert request(resume+"abort","POST",auth,b"")[0]==409
+            assert request(resume+"abort","POST",{"Authorization":"Bearer "+grant},b"")[0]==409
+            assert request(api+"/"+committed["url"].rsplit("/",1)[1]+"/media")[2]==payload
         finally:
             stop(proc)
         proc, base = start(update, os.environ)
