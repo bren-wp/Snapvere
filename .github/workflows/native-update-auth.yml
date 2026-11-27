@@ -21,9 +21,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.90.0
         with:
           components: rustfmt, clippy
-      - name: Resolve isolated verifier lock for review
-        working-directory: tools/native-update-auth
-        run: cargo generate-lockfile
       - name: Compile and test locked verifier
         working-directory: tools/native-update-auth
         run: |
@@ -33,11 +30,9 @@ jobs:
       - name: OpenSSL signature interoperability
         if: runner.os == 'Linux'
         run: python tools/test_native_update_auth.py tools/native-update-auth/target/debug/snapvere-native-update-auth
-      - name: Export dependency resolution for review, not distribution
+      - name: Audit locked authentication dependencies
         if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-update-auth-lock-review
-          path: tools/native-update-auth/Cargo.lock
-          if-no-files-found: error
-          retention-days: 7
+        working-directory: tools/native-update-auth
+        run: |
+          cargo install cargo-audit --version 0.23.0 --locked
+          cargo audit --file Cargo.lock

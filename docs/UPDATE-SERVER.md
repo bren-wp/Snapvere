@@ -29,3 +29,5 @@ Desktop update checks require the native installed resource marker, expected exe
 ## Native authentication boundary (isolated acceptance)
 
 `tools/native-update-auth` verifies the exact signed descriptor bytes with strict Ed25519 verification, domain separation and an independently trusted SHA-256 pin of the DER public key. It checks version direction, platform/edition, lengths and digests before emitting the authenticated patch hash. It does not execute or apply anything. The isolated CI resolves a review-only lock, tests Linux and Windows and checks interoperability with OpenSSL. Its lock and RustSec review must be committed and accepted before integrating into the desktop or publishing any update. No trust anchor or production signing key is supplied. The existing stable release and desktop lock remain unchanged.
+
+The isolated authentication lock is now committed from the successful Linux CI resolution. Subsequent builds use --locked and run a RustSec audit; acceptance is not equivalent to a production trust anchor or an installed updater.
