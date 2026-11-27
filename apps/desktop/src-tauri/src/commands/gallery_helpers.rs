@@ -17,7 +17,7 @@ pub(super) fn allow_media_dirs(app: &AppHandle, items: &[Screenshot]) {
             else {
                 continue;
             };
-            if path_str == shot.file_path && size != shot.size_bytes {
+            if path_str == shot.file_path.as_str() && size != shot.size_bytes {
                 continue;
             }
             if !scope.is_allowed(path) {

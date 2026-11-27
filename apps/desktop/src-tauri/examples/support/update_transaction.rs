@@ -132,7 +132,9 @@ fn as_arg(path: &Path) -> io::Result<String> {
 
 fn prepare(root: &Path, args: &[String]) -> io::Result<()> {
     let [patch, target, from, to, digest] = args else {
-        return Err(invalid("Expected PATCH TARGET FROM TO TRUSTED_PATCH_SHA256"));
+        return Err(invalid(
+            "Expected PATCH TARGET FROM TO TRUSTED_PATCH_SHA256",
+        ));
     };
     let tx = root.join(TRANSACTION);
     create_private(&tx)?;

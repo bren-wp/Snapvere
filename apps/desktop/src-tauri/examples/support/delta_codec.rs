@@ -115,7 +115,12 @@ pub(crate) fn read_header(reader: &mut impl Read) -> io::Result<Header> {
     serde_json::from_slice(&data).map_err(|_| invalid("Invalid header"))
 }
 
-pub(crate) fn validate_header(header: &Header, target: &str, from: &str, to: &str) -> io::Result<()> {
+pub(crate) fn validate_header(
+    header: &Header,
+    target: &str,
+    from: &str,
+    to: &str,
+) -> io::Result<()> {
     let allowed = ["windows-free", "windows-pro", "linux-free", "linux-pro"];
     let valid_versions = matches!((version(from), version(to)), (Some(a), Some(b)) if a < b);
     if !allowed.contains(&target)

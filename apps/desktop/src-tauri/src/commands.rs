@@ -850,8 +850,7 @@ fn open_editor_window(app: &AppHandle, file_path: &str) -> Result<(), String> {
     // file:// asset URLs would otherwise be blocked in the editor WebView.
     // Permit the exact saved file, never an arbitrary directory.
     let image = Path::new(file_path);
-    let (_verified_file, _) =
-        crate::pinned_directory::open_bounded_source(image, u64::MAX)?;
+    let (_verified_file, _) = crate::pinned_directory::open_bounded_source(image, u64::MAX)?;
     app.asset_protocol_scope()
         .allow_file(image)
         .map_err(|e| format!("Cannot authorize screenshot for editor: {e}"))?;
