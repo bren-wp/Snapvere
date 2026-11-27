@@ -28,6 +28,10 @@ tauri-plugin-clipboard-manager = "2"
 tauri-plugin-opener = "2"
 
 serde = { version = "1", features = ["derive"] }
+# Offline differential staging example uses versions already present in the lock.
+serde_json = "=1.0.154"
+sha2 = "=0.10.9"
+flate2 = "=1.1.11"
 
 # Capture ekrana (monitor / prozor). NAPOMENA: provjeri/uskladi verziju s `cargo update`.
 xcap = "0.9.10"

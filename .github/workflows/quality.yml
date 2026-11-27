@@ -251,7 +251,11 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Run Rust tests with locked dependencies
         working-directory: apps/desktop/src-tauri
-        run: cargo test --locked
+        run: |
+          cargo test --locked
+          cargo test --locked --example delta_stage
+      - name: Verify native Rust delta staging against Python release codec
+        run: python tools/test_native_delta.py
       - name: Enforce Clippy correctness and dead-code checks
         working-directory: apps/desktop/src-tauri
         run: cargo clippy --all-targets --locked -- -D warnings
@@ -458,7 +462,11 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Linux Rust unit and integration tests (no display required)
         working-directory: apps/desktop/src-tauri
-        run: cargo test --locked
+        run: |
+          cargo test --locked
+          cargo test --locked --example delta_stage
+      - name: Verify native Rust delta staging against Python release codec
+        run: python tools/test_native_delta.py
       - name: Linux Clippy (warnings treated as errors)
         working-directory: apps/desktop/src-tauri
         run: cargo clippy --all-targets --locked -- -D warnings
